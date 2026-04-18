@@ -10,6 +10,10 @@ import {
   reqGetWorkerTokens,
   reqCreateWorkerToken,
   reqDeleteWorkerToken,
+  reqRebootWorker,
+  reqUpgradeRunner,
+  reqStopAllContainers,
+  reqStartAllContainers,
 } from "@/services/workers.service";
 import { reqGetStacks } from "@/services/stacks.service";
 import { PageLoader } from "@/components/ui/loading";
@@ -99,6 +103,10 @@ export default function WorkerDetailPage() {
   const [newTokenName, setNewTokenName] = useState("");
   const [createdToken, setCreatedToken] = useState<string | null>(null);
 
+  // Worker action state
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<string | null>(null);
+
   useEffect(() => {
     const load = async () => {
       const [workerRes, metricsRes, tokensRes, stacksRes] = await Promise.all([
@@ -176,6 +184,20 @@ export default function WorkerDetailPage() {
     }
   };
 
+  const handleWorkerAction = async (action: string) => {
+    setActionLoading(action);
+    setConfirmAction(null);
+    const actionMap: Record<string, (id: number) => Promise<any>> = {
+      reboot: reqRebootWorker,
+      upgrade: reqUpgradeRunner,
+      "stop-all": reqStopAllContainers,
+      "start-all": reqStartAllContainers,
+    };
+    const fn = actionMap[action];
+    if (fn) await fn(id);
+    setActionLoading(null);
+  };
+
   if (loading) return <PageLoader />;
   if (!worker)
     return (
@@ -235,6 +257,86 @@ export default function WorkerDetailPage() {
             </Button>
             <Button variant="ghost" onClick={handleCancel}>
               Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Worker Actions */}
+      {worker.status === "online" && (
+        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5 mb-6">
+          <h2 className="text-sm font-medium text-white mb-4">
+            Worker Actions
+          </h2>
+          {confirmAction && (
+            <div className="mb-4 rounded-lg bg-[#1a1a1a] border border-[#333333] p-4">
+              <p className="text-sm text-white mb-3">
+                {confirmAction === "reboot" &&
+                  "Are you sure you want to reboot this worker's OS? The worker will go offline temporarily."}
+                {confirmAction === "upgrade" &&
+                  "Are you sure you want to upgrade the lattice-runner on this worker? The runner will restart after upgrade."}
+                {confirmAction === "stop-all" &&
+                  "Are you sure you want to stop all containers on this worker?"}
+                {confirmAction === "start-all" &&
+                  "Are you sure you want to start all stopped containers on this worker?"}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant={
+                    confirmAction === "reboot" ? "destructive" : "primary"
+                  }
+                  size="sm"
+                  onClick={() => handleWorkerAction(confirmAction)}
+                  disabled={!!actionLoading}
+                >
+                  {actionLoading === confirmAction ? "Sending..." : "Confirm"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmAction(null)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setConfirmAction("start-all")}
+              disabled={!!actionLoading}
+            >
+              {actionLoading === "start-all"
+                ? "Sending..."
+                : "Start All Containers"}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setConfirmAction("stop-all")}
+              disabled={!!actionLoading}
+            >
+              {actionLoading === "stop-all"
+                ? "Sending..."
+                : "Stop All Containers"}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setConfirmAction("upgrade")}
+              disabled={!!actionLoading}
+            >
+              {actionLoading === "upgrade" ? "Sending..." : "Upgrade Runner"}
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setConfirmAction("reboot")}
+              disabled={!!actionLoading}
+            >
+              {actionLoading === "reboot" ? "Sending..." : "Reboot OS"}
             </Button>
           </div>
         </div>

@@ -187,6 +187,35 @@ export default function StackDetailPage() {
     load();
   }, [id]);
 
+  // Poll while stack is deploying to pick up terminal status
+  useEffect(() => {
+    if (!stack || stack.status !== "deploying") return;
+    const interval = setInterval(async () => {
+      const [stackRes, deploymentsRes, containersRes] = await Promise.all([
+        reqGetStack(id),
+        reqGetDeployments(),
+        reqGetContainers(id),
+      ]);
+      if (stackRes.success) {
+        setStack(stackRes.data);
+        setStackEnvVars(stackRes.data.env_vars ?? "");
+      }
+      if (deploymentsRes.success) {
+        const filtered = (deploymentsRes.data ?? []).filter(
+          (d) => d.stack_id === id,
+        );
+        setDeployments(filtered);
+        // Auto-refresh logs for the selected deployment
+        if (selectedDeployment) {
+          const logsRes = await reqGetDeploymentLogs(selectedDeployment);
+          if (logsRes.success) setDeploymentLogs(logsRes.data ?? []);
+        }
+      }
+      if (containersRes.success) setContainers(containersRes.data ?? []);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [stack?.status, id, selectedDeployment]);
+
   const refreshContainers = async () => {
     const res = await reqGetContainers(id);
     if (res.success) setContainers(res.data ?? []);

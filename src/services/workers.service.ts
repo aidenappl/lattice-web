@@ -57,3 +57,27 @@ export const reqGetWorkerMetrics = (id: number) =>
         method: "GET",
         url: `/admin/workers/${id}/metrics`,
     });
+
+export const reqRebootWorker = (id: number) =>
+    fetchApi<void>({
+        method: "POST",
+        url: `/admin/workers/${id}/reboot`,
+    });
+
+export const reqUpgradeRunner = (id: number) =>
+    fetchApi<void>({
+        method: "POST",
+        url: `/admin/workers/${id}/upgrade`,
+    });
+
+export const reqStopAllContainers = (id: number) =>
+    fetchApi<void>({
+        method: "POST",
+        url: `/admin/workers/${id}/stop-all`,
+    });
+
+export const reqStartAllContainers = (id: number) =>
+    fetchApi<void>({
+        method: "POST",
+        url: `/admin/workers/${id}/start-all`,
+    });
