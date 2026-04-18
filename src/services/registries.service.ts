@@ -16,7 +16,7 @@ export const reqGetRegistry = (id: number) =>
 export const reqCreateRegistry = (data: {
     name: string;
     url: string;
-    type: string;
+    type: "dockerhub" | "ghcr" | "custom";
     username?: string;
     password?: string;
 }) =>

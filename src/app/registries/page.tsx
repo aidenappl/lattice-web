@@ -24,7 +24,7 @@ export default function RegistriesPage() {
   // Create form
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
-  const [type, setType] = useState("custom");
+  const [type, setType] = useState<"dockerhub" | "ghcr" | "custom">("custom");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -184,7 +184,7 @@ export default function RegistriesPage() {
               <select
                 id="reg-type"
                 value={type}
-                onChange={(e) => setType(e.target.value)}
+                onChange={(e) => setType(e.target.value as "dockerhub" | "ghcr" | "custom")}
                 className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
               >
                 <option value="custom">Custom Registry</option>
@@ -221,10 +221,10 @@ export default function RegistriesPage() {
               {testStatus === "testing" ? "Testing..." : "Test Connection"}
             </Button>
             {testStatus === "success" && (
-              <span className="text-sm text-green-400">Connected successfully</span>
+              <span className="text-sm text-[#4ade80]">Connected successfully</span>
             )}
             {testStatus === "error" && (
-              <span className="text-sm text-red-400">{testError}</span>
+              <span className="text-sm text-[#f87171]">{testError}</span>
             )}
           </div>
 
@@ -262,7 +262,7 @@ export default function RegistriesPage() {
                   <td className="px-4 py-3 text-sm text-[#888888]">{reg.type}</td>
                   <td className="px-4 py-3 text-sm text-[#888888]">
                     {reg.username ? (
-                      <span className="text-green-400">{reg.username}</span>
+                      <span className="text-[#4ade80]">{reg.username}</span>
                     ) : (
                       <span className="text-[#555555]">none</span>
                     )}

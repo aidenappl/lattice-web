@@ -113,10 +113,10 @@ export default function DeploymentDetailPage() {
             })}
             {(isFailed || isRolledBack) && (
               <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-500/20 text-red-400 ring-1 ring-red-500/30 text-xs font-medium">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ef4444]/20 text-[#f87171] ring-1 ring-red-500/30 text-xs font-medium">
                   !
                 </div>
-                <p className="text-sm font-medium text-red-400 capitalize">{deployment.status.replace("_", " ")}</p>
+                <p className="text-sm font-medium text-[#f87171] capitalize">{deployment.status.replace("_", " ")}</p>
               </div>
             )}
           </div>

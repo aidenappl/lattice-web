@@ -134,7 +134,7 @@ export default function NewStackPage() {
             <label className="text-sm text-[#888888]">Auto Deploy</label>
           </div>
 
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-xs text-[#f87171]">{error}</p>}
 
           <div className="flex gap-3 pt-2">
             <Button type="submit" disabled={submitting || !name.trim()}>

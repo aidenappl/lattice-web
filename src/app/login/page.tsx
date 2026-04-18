@@ -30,7 +30,7 @@ export default function LoginPage() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0a0a] p-4">
       <div className="w-full max-w-md">
-        <div className="rounded-xl border border-[#222222] bg-[#111111] p-8 shadow-2xl">
+        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-8 shadow-2xl">
           {/* Logo */}
           <div className="flex items-center justify-center gap-3.5 mb-8">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#3b82f6]">
@@ -68,7 +68,7 @@ export default function LoginPage() {
             />
 
             {error && (
-              <p className="text-xs text-red-400">{error}</p>
+              <p className="text-xs text-[#f87171]">{error}</p>
             )}
 
             <Button type="submit" size="lg" className="w-full mt-2" disabled={loading}>

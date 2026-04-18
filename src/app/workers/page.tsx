@@ -128,7 +128,7 @@ export default function WorkersPage() {
             <div className="border-t border-[#1a1a1a] pt-3">
               <p className="text-xs text-[#555555] uppercase tracking-wider mb-1">Or configure manually</p>
               <pre className="text-xs text-[#888888] font-mono whitespace-pre-wrap select-all">
-{`ORCHESTRATOR_URL=wss://lattice-api.appleby.cloud/ws/worker
+{`ORCHESTRATOR_URL=${(process.env.NEXT_PUBLIC_LATTICE_API ?? "").replace(/^http/, "ws")}/ws/worker
 WORKER_TOKEN=${createdToken}
 WORKER_NAME=${createdWorker.name}`}
               </pre>

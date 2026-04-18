@@ -117,7 +117,7 @@ export default function SettingsPage() {
               </select>
             </div>
           </div>
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-xs text-[#f87171]">{error}</p>}
           <Button type="submit" disabled={submitting || !email.trim() || !password.trim()}>
             {submitting ? "Creating..." : "Create User"}
           </Button>
@@ -159,7 +159,7 @@ export default function SettingsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant={user.active ? "success" : "error"}>
-                      <span className={`h-1.5 w-1.5 rounded-full ${user.active ? "bg-[#22c55e]" : "bg-red-500"}`} />
+                      <span className={`h-1.5 w-1.5 rounded-full ${user.active ? "bg-[#22c55e]" : "bg-[#ef4444]"}`} />
                       {user.active ? "active" : "inactive"}
                     </Badge>
                   </td>

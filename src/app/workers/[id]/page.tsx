@@ -217,7 +217,7 @@ export default function WorkerDetailPage() {
                 </div>
                 <div>
                   <p className="text-xs text-[#555555] uppercase tracking-wider">Disk</p>
-                  <p className="text-lg font-semibold text-yellow-400 mt-1">
+                  <p className="text-lg font-semibold text-[#eab308] mt-1">
                     {latestMetric.disk_used_mb != null && latestMetric.disk_total_mb != null
                       ? `${latestMetric.disk_used_mb} / ${latestMetric.disk_total_mb} MB`
                       : "-"}

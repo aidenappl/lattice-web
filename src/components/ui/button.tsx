@@ -19,7 +19,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       secondary:
         "border border-[#2a2a2a] bg-[#111111] text-white hover:bg-[#161616] hover:border-[#333333]",
       destructive:
-        "bg-red-600/10 border border-red-600/30 text-red-400 hover:bg-red-600/20 hover:border-red-600/50",
+        "bg-red-600/10 border border-red-600/30 text-[#f87171] hover:bg-red-600/20 hover:border-red-600/50",
       ghost: "text-[#888888] hover:bg-[#161616] hover:text-white",
     };
 

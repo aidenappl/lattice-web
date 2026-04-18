@@ -44,13 +44,13 @@ export default function DashboardPage() {
       label: "Deployments",
       value: overview?.recent_deployment_count ?? 0,
       sub: "recent",
-      color: "text-yellow-400",
+      color: "text-[#eab308]",
     },
   ];
 
   return (
     <div>
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-xl font-semibold text-white">Dashboard</h1>
         <p className="text-sm text-[#888888] mt-1">Overview of your infrastructure</p>
       </div>

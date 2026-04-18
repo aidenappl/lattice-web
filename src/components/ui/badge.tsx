@@ -14,8 +14,8 @@ export function Badge({
   const variants = {
     default: "text-[#888888]",
     success: "text-[#22c55e]",
-    warning: "text-yellow-400",
-    error: "text-red-400",
+    warning: "text-[#eab308]",
+    error: "text-[#ef4444]",
   };
 
   return (
@@ -53,31 +53,34 @@ const statusVariantMap: Record<StatusType, "success" | "error" | "warning" | "de
   rolled_back: "default",
 };
 
-const statusColorMap: Record<StatusType, string> = {
+const statusDotMap: Record<StatusType, string> = {
   online: "bg-[#22c55e]",
   running: "bg-[#22c55e]",
   active: "bg-[#22c55e]",
   deployed: "bg-[#22c55e]",
   approved: "bg-[#22c55e]",
-  offline: "bg-red-500",
-  error: "bg-red-500",
-  failed: "bg-red-500",
-  deploying: "bg-yellow-400",
-  pending: "bg-yellow-400",
+  offline: "bg-[#ef4444]",
+  error: "bg-[#ef4444]",
+  failed: "bg-[#ef4444]",
+  deploying: "bg-[#eab308]",
+  pending: "bg-[#eab308]",
   stopped: "bg-[#888888]",
   maintenance: "bg-[#888888]",
   rolled_back: "bg-[#888888]",
 };
 
+function isStatusType(s: string): s is StatusType {
+  return s in statusVariantMap;
+}
+
 export function StatusBadge({ status }: { status: string }) {
-  const s = status as StatusType;
-  const variant = statusVariantMap[s] ?? "default";
-  const dotColor = statusColorMap[s] ?? "bg-[#888888]";
+  const variant = isStatusType(status) ? statusVariantMap[status] : "default";
+  const dotColor = isStatusType(status) ? statusDotMap[status] : "bg-[#888888]";
 
   return (
     <Badge variant={variant}>
       <span className={cn("h-1.5 w-1.5 rounded-full", dotColor)} />
-      {status.replace("_", " ")}
+      {status.replace(/_/g, " ")}
     </Badge>
   );
 }
