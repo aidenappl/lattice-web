@@ -320,7 +320,13 @@ export default function StackDetailPage() {
       recreate: reqRecreateContainer,
     };
     await actionFns[action]?.(containerId);
-    setActionLoading((prev) => ({ ...prev, [key]: false }));
+    // Give the worker a moment to execute, then refresh
+    setTimeout(async () => {
+      await refreshContainers();
+      const stackRes = await reqGetStack(id);
+      if (stackRes.success) setStack(stackRes.data);
+      setActionLoading((prev) => ({ ...prev, [key]: false }));
+    }, 2000);
   };
 
   const handleSaveEnvVars = async () => {
@@ -395,7 +401,11 @@ export default function StackDetailPage() {
             onClick={handleDeploy}
             disabled={deploying || stack.status === "deploying"}
           >
-            {deploying ? "Deploying..." : "Deploy"}
+            {deploying
+              ? "Deploying..."
+              : stack.status === "failed"
+                ? "Redeploy"
+                : "Deploy"}
           </Button>
           <Button
             variant="secondary"

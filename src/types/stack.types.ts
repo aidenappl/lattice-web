@@ -3,7 +3,7 @@ export type Stack = {
     name: string;
     description: string | null;
     worker_id: number | null;
-    status: "active" | "stopped" | "deploying" | "error";
+    status: "active" | "stopped" | "deploying" | "deployed" | "failed" | "error";
     deployment_strategy: "rolling" | "blue-green" | "canary";
     auto_deploy: boolean;
     env_vars: string | null;
