@@ -4,15 +4,24 @@ import { useEffect, useState } from "react";
 import { reqGetOverview, OverviewData } from "@/services/admin.service";
 import { PageLoader } from "@/components/ui/loading";
 
+const WEB_VERSION = "v0.0.1";
+
 export default function DashboardPage() {
   const [overview, setOverview] = useState<OverviewData | null>(null);
+  const [apiVersion, setApiVersion] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
-      const res = await reqGetOverview();
-      if (res.success) {
-        setOverview(res.data);
+      const [overviewRes, versionRes] = await Promise.all([
+        reqGetOverview(),
+        fetch(`${process.env.NEXT_PUBLIC_LATTICE_API}/version`).then(r => r.json()).catch(() => null),
+      ]);
+      if (overviewRes.success) {
+        setOverview(overviewRes.data);
+      }
+      if (versionRes?.version) {
+        setApiVersion(versionRes.version);
       }
       setLoading(false);
     };
@@ -70,6 +79,12 @@ export default function DashboardPage() {
             <p className="text-xs text-[#555555] mt-1">{stat.sub}</p>
           </div>
         ))}
+      </div>
+
+      {/* Version Info */}
+      <div className="mt-8 flex items-center gap-6 text-xs text-[#555555] font-mono">
+        <span>Web {WEB_VERSION}</span>
+        <span>API {apiVersion ?? "..."}</span>
       </div>
     </div>
   );

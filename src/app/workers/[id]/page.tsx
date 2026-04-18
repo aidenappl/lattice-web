@@ -14,15 +14,53 @@ import {
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 
-function formatDisk(usedMB: number, totalMB: number): string {
-  if (totalMB >= 1024) {
-    return `${(usedMB / 1024).toFixed(1)} / ${(totalMB / 1024).toFixed(1)} GB`;
-  }
-  return `${Math.round(usedMB)} / ${Math.round(totalMB)} MB`;
-}
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate, timeAgo } from "@/lib/utils";
+
+function formatDisk(usedMB: number, totalMB: number): string {
+  if (totalMB >= 1024) return `${(usedMB / 1024).toFixed(1)} / ${(totalMB / 1024).toFixed(1)} GB`;
+  return `${Math.round(usedMB)} / ${Math.round(totalMB)} MB`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(2)} GB`;
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${bytes} B`;
+}
+
+function formatUptime(seconds: number): string {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function barColor(pct: number): string {
+  if (pct > 90) return "bg-[#ef4444]";
+  if (pct > 70) return "bg-[#eab308]";
+  return "bg-[#3b82f6]";
+}
+
+function MetricCard({ label, value, sub, color, percent }: {
+  label: string; value: string; sub?: string; color: string; percent?: number;
+}) {
+  return (
+    <div>
+      <p className="text-xs text-[#555555] uppercase tracking-wider">{label}</p>
+      <p className={`text-lg font-semibold mt-1 ${color}`}>{value}</p>
+      {sub && <p className="text-xs text-[#555555] mt-0.5">{sub}</p>}
+      {percent != null && (
+        <div className="h-1 bg-[#1a1a1a] rounded-full mt-2 overflow-hidden">
+          <div className={`h-full rounded-full ${barColor(percent)}`} style={{ width: `${Math.min(percent, 100)}%` }} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function WorkerDetailPage() {
   const params = useParams();
@@ -191,6 +229,10 @@ export default function WorkerDetailPage() {
                 <p className="text-sm text-[#888888] mt-1 font-mono">{worker.docker_version ?? "Unknown"}</p>
               </div>
               <div>
+                <p className="text-xs text-[#555555] uppercase tracking-wider">Runner Version</p>
+                <p className="text-sm text-[#888888] mt-1 font-mono">{worker.runner_version ?? "Unknown"}</p>
+              </div>
+              <div>
                 <p className="text-xs text-[#555555] uppercase tracking-wider">Last Heartbeat</p>
                 <p className="text-sm text-[#888888] mt-1">{worker.last_heartbeat_at ? timeAgo(worker.last_heartbeat_at) : "Never"}</p>
               </div>
@@ -209,30 +251,71 @@ export default function WorkerDetailPage() {
           {latestMetric && (
             <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
               <h2 className="text-sm font-medium text-white mb-4">Latest Metrics</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                <MetricCard
+                  label="CPU"
+                  value={`${latestMetric.cpu_percent?.toFixed(1) ?? "-"}%`}
+                  sub={latestMetric.cpu_cores ? `${latestMetric.cpu_cores} cores` : undefined}
+                  color="text-[#3b82f6]"
+                  percent={latestMetric.cpu_percent ?? undefined}
+                />
+                <MetricCard
+                  label="Memory"
+                  value={latestMetric.memory_used_mb != null && latestMetric.memory_total_mb != null
+                    ? `${Math.round(latestMetric.memory_used_mb)} / ${Math.round(latestMetric.memory_total_mb)} MB` : "-"}
+                  color="text-[#a855f7]"
+                  percent={latestMetric.memory_used_mb != null && latestMetric.memory_total_mb
+                    ? (latestMetric.memory_used_mb / latestMetric.memory_total_mb) * 100 : undefined}
+                />
+                <MetricCard
+                  label="Disk"
+                  value={latestMetric.disk_used_mb != null && latestMetric.disk_total_mb != null
+                    ? formatDisk(latestMetric.disk_used_mb, latestMetric.disk_total_mb) : "-"}
+                  color="text-[#eab308]"
+                  percent={latestMetric.disk_used_mb != null && latestMetric.disk_total_mb
+                    ? (latestMetric.disk_used_mb / latestMetric.disk_total_mb) * 100 : undefined}
+                />
+                <MetricCard
+                  label="Containers"
+                  value={latestMetric.container_running_count != null
+                    ? `${latestMetric.container_running_count} / ${latestMetric.container_count ?? 0}`
+                    : `${latestMetric.container_count ?? "-"}`}
+                  sub="running / total"
+                  color="text-[#22c55e]"
+                />
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div>
-                  <p className="text-xs text-[#555555] uppercase tracking-wider">CPU</p>
-                  <p className="text-lg font-semibold text-[#3b82f6] mt-1">{latestMetric.cpu_percent?.toFixed(1) ?? "-"}%</p>
-                </div>
-                <div>
-                  <p className="text-xs text-[#555555] uppercase tracking-wider">Memory</p>
-                  <p className="text-lg font-semibold text-[#a855f7] mt-1">
-                    {latestMetric.memory_used_mb != null && latestMetric.memory_total_mb != null
-                      ? `${Math.round(latestMetric.memory_used_mb)} / ${Math.round(latestMetric.memory_total_mb)} MB`
-                      : "-"}
+                  <p className="text-xs text-[#555555] uppercase tracking-wider">Load Average</p>
+                  <p className="text-sm text-[#888888] mt-1 font-mono">
+                    {latestMetric.load_avg_1?.toFixed(2) ?? "-"} / {latestMetric.load_avg_5?.toFixed(2) ?? "-"} / {latestMetric.load_avg_15?.toFixed(2) ?? "-"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#555555] uppercase tracking-wider">Disk</p>
-                  <p className="text-lg font-semibold text-[#eab308] mt-1">
-                    {latestMetric.disk_used_mb != null && latestMetric.disk_total_mb != null
-                      ? formatDisk(latestMetric.disk_used_mb, latestMetric.disk_total_mb)
-                      : "-"}
+                  <p className="text-xs text-[#555555] uppercase tracking-wider">Swap</p>
+                  <p className="text-sm text-[#888888] mt-1">
+                    {latestMetric.swap_total_mb != null && latestMetric.swap_total_mb > 0
+                      ? `${Math.round(latestMetric.swap_used_mb ?? 0)} / ${Math.round(latestMetric.swap_total_mb)} MB`
+                      : "None"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#555555] uppercase tracking-wider">Containers</p>
-                  <p className="text-lg font-semibold text-[#22c55e] mt-1">{latestMetric.container_count ?? "-"}</p>
+                  <p className="text-xs text-[#555555] uppercase tracking-wider">Network</p>
+                  <p className="text-sm text-[#888888] mt-1 font-mono">
+                    {latestMetric.network_rx_bytes != null ? formatBytes(latestMetric.network_rx_bytes) : "-"} rx
+                  </p>
+                  <p className="text-sm text-[#888888] font-mono">
+                    {latestMetric.network_tx_bytes != null ? formatBytes(latestMetric.network_tx_bytes) : "-"} tx
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#555555] uppercase tracking-wider">System</p>
+                  <p className="text-sm text-[#888888] mt-1">
+                    {latestMetric.uptime_seconds != null ? formatUptime(latestMetric.uptime_seconds) : "-"} uptime
+                  </p>
+                  <p className="text-sm text-[#888888]">
+                    {latestMetric.process_count ?? "-"} processes
+                  </p>
                 </div>
               </div>
             </div>

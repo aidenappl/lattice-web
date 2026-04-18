@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/store/hooks";
 
+const APP_VERSION = "v0.0.1";
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API;
 
 const navigation = [
@@ -147,6 +148,11 @@ export function Navbar() {
                   </svg>
                   Sign Out
                 </a>
+                <div className="border-t border-[#1a1a1a] mt-1 pt-1 px-3 py-1.5">
+                  <p className="text-[10px] text-[#555555] font-mono">
+                    {APP_VERSION}
+                  </p>
+                </div>
               </div>
             )}
           </div>
