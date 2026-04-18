@@ -13,6 +13,13 @@ import {
 } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
+
+function formatDisk(usedMB: number, totalMB: number): string {
+  if (totalMB >= 1024) {
+    return `${(usedMB / 1024).toFixed(1)} / ${(totalMB / 1024).toFixed(1)} GB`;
+  }
+  return `${Math.round(usedMB)} / ${Math.round(totalMB)} MB`;
+}
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate, timeAgo } from "@/lib/utils";
@@ -211,7 +218,7 @@ export default function WorkerDetailPage() {
                   <p className="text-xs text-[#555555] uppercase tracking-wider">Memory</p>
                   <p className="text-lg font-semibold text-[#a855f7] mt-1">
                     {latestMetric.memory_used_mb != null && latestMetric.memory_total_mb != null
-                      ? `${latestMetric.memory_used_mb} / ${latestMetric.memory_total_mb} MB`
+                      ? `${Math.round(latestMetric.memory_used_mb)} / ${Math.round(latestMetric.memory_total_mb)} MB`
                       : "-"}
                   </p>
                 </div>
@@ -219,7 +226,7 @@ export default function WorkerDetailPage() {
                   <p className="text-xs text-[#555555] uppercase tracking-wider">Disk</p>
                   <p className="text-lg font-semibold text-[#eab308] mt-1">
                     {latestMetric.disk_used_mb != null && latestMetric.disk_total_mb != null
-                      ? `${latestMetric.disk_used_mb} / ${latestMetric.disk_total_mb} MB`
+                      ? formatDisk(latestMetric.disk_used_mb, latestMetric.disk_total_mb)
                       : "-"}
                   </p>
                 </div>
