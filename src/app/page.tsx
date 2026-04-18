@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { reqGetOverview, OverviewData } from "@/services/admin.service";
 import { PageLoader } from "@/components/ui/loading";
-
-const WEB_VERSION = "v0.0.2";
+import { APP_VERSION } from "@/lib/version";
 
 export default function DashboardPage() {
   const [overview, setOverview] = useState<OverviewData | null>(null);
@@ -89,7 +88,7 @@ export default function DashboardPage() {
 
       {/* Version Info */}
       <div className="mt-8 flex items-center gap-6 text-xs text-[#555555] font-mono">
-        <span>Web {WEB_VERSION}</span>
+        <span>Web {APP_VERSION}</span>
         <span>API {apiVersion ?? "..."}</span>
       </div>
     </div>

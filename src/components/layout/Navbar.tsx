@@ -5,8 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/store/hooks";
-
-const APP_VERSION = "v0.0.2";
+import { APP_VERSION } from "@/lib/version";
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API;
 
 const navigation = [
