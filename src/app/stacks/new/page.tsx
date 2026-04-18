@@ -7,6 +7,7 @@ import { reqGetWorkers } from "@/services/workers.service";
 import { reqCreateStack, reqImportCompose } from "@/services/stacks.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CodeEditor } from "@/components/ui/code-editor";
 
 function extractStackName(yaml: string, filename?: string): string {
   // Try filename first (strip extension)
@@ -306,19 +307,17 @@ export default function NewStackPage() {
                 </div>
               ) : (
                 <div className="relative">
-                  <textarea
-                    id="compose"
+                  <CodeEditor
                     rows={16}
+                    language="yaml"
                     placeholder={`version: "3"\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"`}
                     value={composeYaml.trim() === "" ? "" : composeYaml}
-                    onChange={(e) => {
-                      setComposeYaml(e.target.value);
-                      if (!name && e.target.value) {
-                        setName(extractStackName(e.target.value));
+                    onChange={(v) => {
+                      setComposeYaml(v);
+                      if (!name && v) {
+                        setName(extractStackName(v));
                       }
                     }}
-                    className="w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 py-2 text-sm text-white placeholder:text-[#555555] focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50 resize-none font-mono"
-                    autoFocus
                   />
                   <button
                     type="button"
