@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Worker } from "@/types";
 import { reqGetWorkers } from "@/services/workers.service";
-import { reqCreateStack } from "@/services/stacks.service";
+import { reqCreateStack, reqImportCompose } from "@/services/stacks.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -16,6 +16,8 @@ export default function NewStackPage() {
   const [workerId, setWorkerId] = useState<string>("");
   const [strategy, setStrategy] = useState("rolling");
   const [autoDeploy, setAutoDeploy] = useState(false);
+  const [mode, setMode] = useState<"manual" | "compose">("manual");
+  const [composeYaml, setComposeYaml] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -32,18 +34,32 @@ export default function NewStackPage() {
     setError("");
     setSubmitting(true);
 
-    const res = await reqCreateStack({
-      name,
-      description: description || undefined,
-      worker_id: workerId ? Number(workerId) : undefined,
-      deployment_strategy: strategy,
-      auto_deploy: autoDeploy,
-    });
-
-    if (res.success) {
-      router.push(`/stacks/${res.data.id}`);
+    if (mode === "compose") {
+      const res = await reqImportCompose({
+        name,
+        description: description || undefined,
+        worker_id: workerId ? Number(workerId) : undefined,
+        deployment_strategy: strategy,
+        compose_yaml: composeYaml,
+      });
+      if (res.success) {
+        router.push(`/stacks/${res.data.id}`);
+      } else {
+        setError(res.error_message || "Failed to import compose file");
+      }
     } else {
-      setError(res.error_message || "Failed to create stack");
+      const res = await reqCreateStack({
+        name,
+        description: description || undefined,
+        worker_id: workerId ? Number(workerId) : undefined,
+        deployment_strategy: strategy,
+        auto_deploy: autoDeploy,
+      });
+      if (res.success) {
+        router.push(`/stacks/${res.data.id}`);
+      } else {
+        setError(res.error_message || "Failed to create stack");
+      }
     }
     setSubmitting(false);
   };
@@ -52,11 +68,42 @@ export default function NewStackPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-white">Create Stack</h1>
-        <p className="text-sm text-[#888888] mt-1">Define a new container stack</p>
+        <p className="text-sm text-[#888888] mt-1">
+          Define a new container stack
+        </p>
       </div>
 
       <div className="max-w-xl">
-        <form onSubmit={handleSubmit} className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6 space-y-5">
+        <form
+          onSubmit={handleSubmit}
+          className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6 space-y-5"
+        >
+          {/* Mode Toggle */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("manual")}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                mode === "manual"
+                  ? "bg-white text-black"
+                  : "bg-[#161616] text-[#888888] hover:text-white"
+              }`}
+            >
+              Manual Setup
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("compose")}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                mode === "compose"
+                  ? "bg-white text-black"
+                  : "bg-[#161616] text-[#888888] hover:text-white"
+              }`}
+            >
+              Import Compose
+            </button>
+          </div>
+
           <Input
             id="name"
             label="Name"
@@ -67,7 +114,10 @@ export default function NewStackPage() {
           />
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="description" className="text-xs font-medium text-[#888888] uppercase tracking-wider">
+            <label
+              htmlFor="description"
+              className="text-xs font-medium text-[#888888] uppercase tracking-wider"
+            >
               Description
             </label>
             <textarea
@@ -81,7 +131,10 @@ export default function NewStackPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="worker" className="text-xs font-medium text-[#888888] uppercase tracking-wider">
+            <label
+              htmlFor="worker"
+              className="text-xs font-medium text-[#888888] uppercase tracking-wider"
+            >
               Worker
             </label>
             <select
@@ -100,7 +153,10 @@ export default function NewStackPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="strategy" className="text-xs font-medium text-[#888888] uppercase tracking-wider">
+            <label
+              htmlFor="strategy"
+              className="text-xs font-medium text-[#888888] uppercase tracking-wider"
+            >
               Deployment Strategy
             </label>
             <select
@@ -134,11 +190,43 @@ export default function NewStackPage() {
             <label className="text-sm text-[#888888]">Auto Deploy</label>
           </div>
 
+          {/* Compose YAML */}
+          {mode === "compose" && (
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="compose"
+                className="text-xs font-medium text-[#888888] uppercase tracking-wider"
+              >
+                Docker Compose YAML
+              </label>
+              <textarea
+                id="compose"
+                rows={12}
+                placeholder={`version: "3"\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"`}
+                value={composeYaml}
+                onChange={(e) => setComposeYaml(e.target.value)}
+                className="w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 py-2 text-sm text-white placeholder:text-[#555555] focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50 resize-none font-mono"
+                required
+              />
+            </div>
+          )}
+
           {error && <p className="text-xs text-[#f87171]">{error}</p>}
 
           <div className="flex gap-3 pt-2">
-            <Button type="submit" disabled={submitting || !name.trim()}>
-              {submitting ? "Creating..." : "Create Stack"}
+            <Button
+              type="submit"
+              disabled={
+                submitting ||
+                !name.trim() ||
+                (mode === "compose" && !composeYaml.trim())
+              }
+            >
+              {submitting
+                ? "Creating..."
+                : mode === "compose"
+                  ? "Import Stack"
+                  : "Create Stack"}
             </Button>
             <Button type="button" variant="ghost" onClick={() => router.back()}>
               Cancel

@@ -6,6 +6,7 @@ export type Stack = {
     status: "active" | "stopped" | "deploying" | "error";
     deployment_strategy: "rolling" | "blue-green" | "canary";
     auto_deploy: boolean;
+    env_vars: string | null;
     active: boolean;
     inserted_at: string;
     updated_at: string;
@@ -42,4 +43,13 @@ export type Registry = {
     active: boolean;
     inserted_at: string;
     updated_at: string;
+};
+
+export type ContainerLog = {
+    id: number;
+    container_id: number | null;
+    worker_id: number;
+    stream: "stdout" | "stderr";
+    message: string;
+    recorded_at: string;
 };

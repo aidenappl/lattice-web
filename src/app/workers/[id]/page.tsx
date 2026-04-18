@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { Worker, WorkerToken, WorkerMetrics } from "@/types";
+import { useParams, useRouter } from "next/navigation";
+import { Worker, WorkerToken, WorkerMetrics, Stack } from "@/types";
 import {
   reqGetWorker,
   reqUpdateWorker,
@@ -11,6 +11,7 @@ import {
   reqCreateWorkerToken,
   reqDeleteWorkerToken,
 } from "@/services/workers.service";
+import { reqGetStacks } from "@/services/stacks.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 
@@ -19,7 +20,8 @@ import { Input } from "@/components/ui/input";
 import { formatDate, timeAgo } from "@/lib/utils";
 
 function formatDisk(usedMB: number, totalMB: number): string {
-  if (totalMB >= 1024) return `${(usedMB / 1024).toFixed(1)} / ${(totalMB / 1024).toFixed(1)} GB`;
+  if (totalMB >= 1024)
+    return `${(usedMB / 1024).toFixed(1)} / ${(totalMB / 1024).toFixed(1)} GB`;
   return `${Math.round(usedMB)} / ${Math.round(totalMB)} MB`;
 }
 
@@ -45,8 +47,18 @@ function barColor(pct: number): string {
   return "bg-[#3b82f6]";
 }
 
-function MetricCard({ label, value, sub, color, percent }: {
-  label: string; value: string; sub?: string; color: string; percent?: number;
+function MetricCard({
+  label,
+  value,
+  sub,
+  color,
+  percent,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  color: string;
+  percent?: number;
 }) {
   return (
     <div>
@@ -55,7 +67,10 @@ function MetricCard({ label, value, sub, color, percent }: {
       {sub && <p className="text-xs text-[#555555] mt-0.5">{sub}</p>}
       {percent != null && (
         <div className="h-1 bg-[#1a1a1a] rounded-full mt-2 overflow-hidden">
-          <div className={`h-full rounded-full ${barColor(percent)}`} style={{ width: `${Math.min(percent, 100)}%` }} />
+          <div
+            className={`h-full rounded-full ${barColor(percent)}`}
+            style={{ width: `${Math.min(percent, 100)}%` }}
+          />
         </div>
       )}
     </div>
@@ -64,11 +79,13 @@ function MetricCard({ label, value, sub, color, percent }: {
 
 export default function WorkerDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = Number(params.id);
 
   const [worker, setWorker] = useState<Worker | null>(null);
   const [tokens, setTokens] = useState<WorkerToken[]>([]);
   const [metrics, setMetrics] = useState<WorkerMetrics[]>([]);
+  const [stacks, setStacks] = useState<Stack[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Edit state
@@ -84,10 +101,11 @@ export default function WorkerDetailPage() {
 
   useEffect(() => {
     const load = async () => {
-      const [workerRes, metricsRes, tokensRes] = await Promise.all([
+      const [workerRes, metricsRes, tokensRes, stacksRes] = await Promise.all([
         reqGetWorker(id),
         reqGetWorkerMetrics(id),
         reqGetWorkerTokens(id),
+        reqGetStacks(),
       ]);
       if (workerRes.success) {
         setWorker(workerRes.data);
@@ -97,6 +115,10 @@ export default function WorkerDetailPage() {
       }
       if (metricsRes.success) setMetrics(metricsRes.data ?? []);
       if (tokensRes.success) setTokens(tokensRes.data ?? []);
+      if (stacksRes.success)
+        setStacks(
+          (stacksRes.data ?? []).filter((s: Stack) => s.worker_id === id),
+        );
       setLoading(false);
     };
     load();
@@ -155,7 +177,12 @@ export default function WorkerDetailPage() {
   };
 
   if (loading) return <PageLoader />;
-  if (!worker) return <div className="text-center text-sm text-[#555555] py-12">Worker not found</div>;
+  if (!worker)
+    return (
+      <div className="text-center text-sm text-[#555555] py-12">
+        Worker not found
+      </div>
+    );
 
   const latestMetric = metrics.length > 0 ? metrics[0] : null;
 
@@ -200,7 +227,10 @@ export default function WorkerDetailPage() {
             />
           </div>
           <div className="flex gap-2">
-            <Button onClick={handleSave} disabled={saving || !editName.trim() || !editHostname.trim()}>
+            <Button
+              onClick={handleSave}
+              disabled={saving || !editName.trim() || !editHostname.trim()}
+            >
               {saving ? "Saving..." : "Save Changes"}
             </Button>
             <Button variant="ghost" onClick={handleCancel}>
@@ -217,32 +247,62 @@ export default function WorkerDetailPage() {
             <h2 className="text-sm font-medium text-white mb-4">Worker Info</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-xs text-[#555555] uppercase tracking-wider">IP Address</p>
-                <p className="text-sm text-[#888888] mt-1 font-mono">{worker.ip_address ?? "Unknown"}</p>
+                <p className="text-xs text-[#555555] uppercase tracking-wider">
+                  IP Address
+                </p>
+                <p className="text-sm text-[#888888] mt-1 font-mono">
+                  {worker.ip_address ?? "Unknown"}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-[#555555] uppercase tracking-wider">OS / Arch</p>
-                <p className="text-sm text-[#888888] mt-1">{worker.os ?? "Unknown"} / {worker.arch ?? "Unknown"}</p>
+                <p className="text-xs text-[#555555] uppercase tracking-wider">
+                  OS / Arch
+                </p>
+                <p className="text-sm text-[#888888] mt-1">
+                  {worker.os ?? "Unknown"} / {worker.arch ?? "Unknown"}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-[#555555] uppercase tracking-wider">Docker Version</p>
-                <p className="text-sm text-[#888888] mt-1 font-mono">{worker.docker_version ?? "Unknown"}</p>
+                <p className="text-xs text-[#555555] uppercase tracking-wider">
+                  Docker Version
+                </p>
+                <p className="text-sm text-[#888888] mt-1 font-mono">
+                  {worker.docker_version ?? "Unknown"}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-[#555555] uppercase tracking-wider">Runner Version</p>
-                <p className="text-sm text-[#888888] mt-1 font-mono">{worker.runner_version ?? "Unknown"}</p>
+                <p className="text-xs text-[#555555] uppercase tracking-wider">
+                  Runner Version
+                </p>
+                <p className="text-sm text-[#888888] mt-1 font-mono">
+                  {worker.runner_version ?? "Unknown"}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-[#555555] uppercase tracking-wider">Last Heartbeat</p>
-                <p className="text-sm text-[#888888] mt-1">{worker.last_heartbeat_at ? timeAgo(worker.last_heartbeat_at) : "Never"}</p>
+                <p className="text-xs text-[#555555] uppercase tracking-wider">
+                  Last Heartbeat
+                </p>
+                <p className="text-sm text-[#888888] mt-1">
+                  {worker.last_heartbeat_at
+                    ? timeAgo(worker.last_heartbeat_at)
+                    : "Never"}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-[#555555] uppercase tracking-wider">Labels</p>
-                <p className="text-sm text-[#888888] mt-1">{worker.labels ?? "None"}</p>
+                <p className="text-xs text-[#555555] uppercase tracking-wider">
+                  Labels
+                </p>
+                <p className="text-sm text-[#888888] mt-1">
+                  {worker.labels ?? "None"}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-[#555555] uppercase tracking-wider">Created</p>
-                <p className="text-sm text-[#888888] mt-1">{formatDate(worker.inserted_at)}</p>
+                <p className="text-xs text-[#555555] uppercase tracking-wider">
+                  Created
+                </p>
+                <p className="text-sm text-[#888888] mt-1">
+                  {formatDate(worker.inserted_at)}
+                </p>
               </div>
             </div>
           </div>
@@ -250,68 +310,119 @@ export default function WorkerDetailPage() {
           {/* Metrics */}
           {latestMetric && (
             <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
-              <h2 className="text-sm font-medium text-white mb-4">Latest Metrics</h2>
+              <h2 className="text-sm font-medium text-white mb-4">
+                Latest Metrics
+              </h2>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
                 <MetricCard
                   label="CPU"
                   value={`${latestMetric.cpu_percent?.toFixed(1) ?? "-"}%`}
-                  sub={latestMetric.cpu_cores ? `${latestMetric.cpu_cores} cores` : undefined}
+                  sub={
+                    latestMetric.cpu_cores
+                      ? `${latestMetric.cpu_cores} cores`
+                      : undefined
+                  }
                   color="text-[#3b82f6]"
                   percent={latestMetric.cpu_percent ?? undefined}
                 />
                 <MetricCard
                   label="Memory"
-                  value={latestMetric.memory_used_mb != null && latestMetric.memory_total_mb != null
-                    ? `${Math.round(latestMetric.memory_used_mb)} / ${Math.round(latestMetric.memory_total_mb)} MB` : "-"}
+                  value={
+                    latestMetric.memory_used_mb != null &&
+                    latestMetric.memory_total_mb != null
+                      ? `${Math.round(latestMetric.memory_used_mb)} / ${Math.round(latestMetric.memory_total_mb)} MB`
+                      : "-"
+                  }
                   color="text-[#a855f7]"
-                  percent={latestMetric.memory_used_mb != null && latestMetric.memory_total_mb
-                    ? (latestMetric.memory_used_mb / latestMetric.memory_total_mb) * 100 : undefined}
+                  percent={
+                    latestMetric.memory_used_mb != null &&
+                    latestMetric.memory_total_mb
+                      ? (latestMetric.memory_used_mb /
+                          latestMetric.memory_total_mb) *
+                        100
+                      : undefined
+                  }
                 />
                 <MetricCard
                   label="Disk"
-                  value={latestMetric.disk_used_mb != null && latestMetric.disk_total_mb != null
-                    ? formatDisk(latestMetric.disk_used_mb, latestMetric.disk_total_mb) : "-"}
+                  value={
+                    latestMetric.disk_used_mb != null &&
+                    latestMetric.disk_total_mb != null
+                      ? formatDisk(
+                          latestMetric.disk_used_mb,
+                          latestMetric.disk_total_mb,
+                        )
+                      : "-"
+                  }
                   color="text-[#eab308]"
-                  percent={latestMetric.disk_used_mb != null && latestMetric.disk_total_mb
-                    ? (latestMetric.disk_used_mb / latestMetric.disk_total_mb) * 100 : undefined}
+                  percent={
+                    latestMetric.disk_used_mb != null &&
+                    latestMetric.disk_total_mb
+                      ? (latestMetric.disk_used_mb /
+                          latestMetric.disk_total_mb) *
+                        100
+                      : undefined
+                  }
                 />
                 <MetricCard
                   label="Containers"
-                  value={latestMetric.container_running_count != null
-                    ? `${latestMetric.container_running_count} / ${latestMetric.container_count ?? 0}`
-                    : `${latestMetric.container_count ?? "-"}`}
+                  value={
+                    latestMetric.container_running_count != null
+                      ? `${latestMetric.container_running_count} / ${latestMetric.container_count ?? 0}`
+                      : `${latestMetric.container_count ?? "-"}`
+                  }
                   sub="running / total"
                   color="text-[#22c55e]"
                 />
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div>
-                  <p className="text-xs text-[#555555] uppercase tracking-wider">Load Average</p>
+                  <p className="text-xs text-[#555555] uppercase tracking-wider">
+                    Load Average
+                  </p>
                   <p className="text-sm text-[#888888] mt-1 font-mono">
-                    {latestMetric.load_avg_1?.toFixed(2) ?? "-"} / {latestMetric.load_avg_5?.toFixed(2) ?? "-"} / {latestMetric.load_avg_15?.toFixed(2) ?? "-"}
+                    {latestMetric.load_avg_1?.toFixed(2) ?? "-"} /{" "}
+                    {latestMetric.load_avg_5?.toFixed(2) ?? "-"} /{" "}
+                    {latestMetric.load_avg_15?.toFixed(2) ?? "-"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#555555] uppercase tracking-wider">Swap</p>
+                  <p className="text-xs text-[#555555] uppercase tracking-wider">
+                    Swap
+                  </p>
                   <p className="text-sm text-[#888888] mt-1">
-                    {latestMetric.swap_total_mb != null && latestMetric.swap_total_mb > 0
+                    {latestMetric.swap_total_mb != null &&
+                    latestMetric.swap_total_mb > 0
                       ? `${Math.round(latestMetric.swap_used_mb ?? 0)} / ${Math.round(latestMetric.swap_total_mb)} MB`
                       : "None"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#555555] uppercase tracking-wider">Network</p>
+                  <p className="text-xs text-[#555555] uppercase tracking-wider">
+                    Network
+                  </p>
                   <p className="text-sm text-[#888888] mt-1 font-mono">
-                    {latestMetric.network_rx_bytes != null ? formatBytes(latestMetric.network_rx_bytes) : "-"} rx
+                    {latestMetric.network_rx_bytes != null
+                      ? formatBytes(latestMetric.network_rx_bytes)
+                      : "-"}{" "}
+                    rx
                   </p>
                   <p className="text-sm text-[#888888] font-mono">
-                    {latestMetric.network_tx_bytes != null ? formatBytes(latestMetric.network_tx_bytes) : "-"} tx
+                    {latestMetric.network_tx_bytes != null
+                      ? formatBytes(latestMetric.network_tx_bytes)
+                      : "-"}{" "}
+                    tx
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#555555] uppercase tracking-wider">System</p>
+                  <p className="text-xs text-[#555555] uppercase tracking-wider">
+                    System
+                  </p>
                   <p className="text-sm text-[#888888] mt-1">
-                    {latestMetric.uptime_seconds != null ? formatUptime(latestMetric.uptime_seconds) : "-"} uptime
+                    {latestMetric.uptime_seconds != null
+                      ? formatUptime(latestMetric.uptime_seconds)
+                      : "-"}{" "}
+                    uptime
                   </p>
                   <p className="text-sm text-[#888888]">
                     {latestMetric.process_count ?? "-"} processes
@@ -322,10 +433,43 @@ export default function WorkerDetailPage() {
           )}
         </div>
 
-        {/* Token Management */}
+        {/* Sidebar */}
         <div className="space-y-6">
+          {/* Associated Stacks */}
           <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
-            <h2 className="text-sm font-medium text-white mb-4">Worker Tokens</h2>
+            <h2 className="text-sm font-medium text-white mb-4">
+              Associated Stacks
+            </h2>
+            <div className="space-y-2">
+              {stacks.length === 0 ? (
+                <p className="text-xs text-[#555555] py-4 text-center">
+                  No stacks assigned to this worker
+                </p>
+              ) : (
+                stacks.map((stack) => (
+                  <button
+                    key={stack.id}
+                    onClick={() => router.push(`/stacks/${stack.id}`)}
+                    className="w-full flex items-center justify-between rounded-lg bg-[#161616] px-3 py-2 hover:bg-[#1a1a1a] transition-colors text-left"
+                  >
+                    <div>
+                      <p className="text-sm text-white">{stack.name}</p>
+                      <p className="text-xs text-[#555555]">
+                        {stack.deployment_strategy}
+                      </p>
+                    </div>
+                    <StatusBadge status={stack.status} />
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Worker Tokens */}
+          <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
+            <h2 className="text-sm font-medium text-white mb-4">
+              Worker Tokens
+            </h2>
 
             {/* Create Token */}
             <div className="flex gap-2 mb-4">
@@ -335,32 +479,51 @@ export default function WorkerDetailPage() {
                 onChange={(e) => setNewTokenName(e.target.value)}
                 className="flex-1"
               />
-              <Button size="md" onClick={handleCreateToken} disabled={!newTokenName.trim()}>
+              <Button
+                size="md"
+                onClick={handleCreateToken}
+                disabled={!newTokenName.trim()}
+              >
                 Create
               </Button>
             </div>
 
             {createdToken && (
               <div className="mb-4 rounded-lg border border-[#22c55e]/30 bg-[#22c55e]/5 p-3">
-                <p className="text-xs text-[#22c55e] mb-1 font-medium">Token created — copy it now, it won&apos;t be shown again:</p>
-                <p className="text-xs text-white font-mono break-all select-all">{createdToken}</p>
+                <p className="text-xs text-[#22c55e] mb-1 font-medium">
+                  Token created — copy it now, it won&apos;t be shown again:
+                </p>
+                <p className="text-xs text-white font-mono break-all select-all">
+                  {createdToken}
+                </p>
               </div>
             )}
 
             {/* Token List */}
             <div className="space-y-2">
               {tokens.length === 0 ? (
-                <p className="text-xs text-[#555555] py-4 text-center">No tokens yet</p>
+                <p className="text-xs text-[#555555] py-4 text-center">
+                  No tokens yet
+                </p>
               ) : (
                 tokens.map((token) => (
-                  <div key={token.id} className="flex items-center justify-between rounded-lg bg-[#161616] px-3 py-2">
+                  <div
+                    key={token.id}
+                    className="flex items-center justify-between rounded-lg bg-[#161616] px-3 py-2"
+                  >
                     <div>
                       <p className="text-sm text-white">{token.name}</p>
                       <p className="text-xs text-[#555555]">
-                        {token.last_used_at ? `Used ${timeAgo(token.last_used_at)}` : "Never used"}
+                        {token.last_used_at
+                          ? `Used ${timeAgo(token.last_used_at)}`
+                          : "Never used"}
                       </p>
                     </div>
-                    <Button variant="destructive" size="sm" onClick={() => handleDeleteToken(token.id)}>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDeleteToken(token.id)}
+                    >
                       Delete
                     </Button>
                   </div>
