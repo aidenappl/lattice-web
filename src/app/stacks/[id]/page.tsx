@@ -197,6 +197,13 @@ export default function StackDetailPage() {
     load();
   }, [id]);
 
+  // Auto-select first container for logs when containers load
+  useEffect(() => {
+    if (containers.length > 0 && selectedContainer === null) {
+      setSelectedContainer(containers[0].id);
+    }
+  }, [containers, selectedContainer]);
+
   // Poll while stack is deploying to pick up terminal status
   useEffect(() => {
     if (!stack || stack.status !== "deploying") return;

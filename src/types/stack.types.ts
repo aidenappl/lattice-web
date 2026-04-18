@@ -49,6 +49,7 @@ export type Registry = {
 export type ContainerLog = {
     id: number;
     container_id: number | null;
+    container_name: string | null;
     worker_id: number;
     stream: "stdout" | "stderr";
     message: string;
