@@ -157,7 +157,7 @@ export default function WorkerDetailPage() {
   if (loading) return <PageLoader />;
   if (!worker) return <div className="text-center text-sm text-[#555555] py-12">Worker not found</div>;
 
-  const latestMetric = metrics.length > 0 ? metrics[metrics.length - 1] : null;
+  const latestMetric = metrics.length > 0 ? metrics[0] : null;
 
   return (
     <div>
