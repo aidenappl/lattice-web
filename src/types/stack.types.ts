@@ -19,7 +19,7 @@ export type Container = {
     name: string;
     image: string;
     tag: string;
-    status: "running" | "stopped" | "error" | "pending";
+    status: "running" | "stopped" | "error" | "pending" | "paused";
     port_mappings: string | null;
     env_vars: string | null;
     volumes: string | null;
@@ -29,6 +29,8 @@ export type Container = {
     restart_policy: string | null;
     command: string | null;
     entrypoint: string | null;
+    health_check: string | null;
+    health_status: "healthy" | "unhealthy" | "starting" | "none";
     registry_id: number | null;
     active: boolean;
     inserted_at: string;

@@ -32,25 +32,47 @@ export function Badge({
 }
 
 type StatusType =
-  | "online" | "offline" | "maintenance"
-  | "running" | "stopped" | "error" | "pending"
-  | "active" | "deploying"
-  | "deployed" | "failed" | "rolled_back" | "approved";
+  | "online"
+  | "offline"
+  | "maintenance"
+  | "running"
+  | "stopped"
+  | "error"
+  | "pending"
+  | "paused"
+  | "active"
+  | "deploying"
+  | "deployed"
+  | "failed"
+  | "rolled_back"
+  | "approved"
+  | "healthy"
+  | "unhealthy"
+  | "starting"
+  | "none";
 
-const statusVariantMap: Record<StatusType, "success" | "error" | "warning" | "default"> = {
+const statusVariantMap: Record<
+  StatusType,
+  "success" | "error" | "warning" | "default"
+> = {
   online: "success",
   running: "success",
   active: "success",
   deployed: "success",
   approved: "success",
+  healthy: "success",
   offline: "error",
   error: "error",
   failed: "error",
+  unhealthy: "error",
   deploying: "warning",
   pending: "warning",
+  starting: "warning",
   stopped: "default",
   maintenance: "default",
   rolled_back: "default",
+  paused: "default",
+  none: "default",
 };
 
 const statusDotMap: Record<StatusType, string> = {
@@ -59,14 +81,19 @@ const statusDotMap: Record<StatusType, string> = {
   active: "bg-[#22c55e]",
   deployed: "bg-[#22c55e]",
   approved: "bg-[#22c55e]",
+  healthy: "bg-[#22c55e]",
   offline: "bg-[#ef4444]",
   error: "bg-[#ef4444]",
   failed: "bg-[#ef4444]",
+  unhealthy: "bg-[#ef4444]",
   deploying: "bg-[#eab308]",
   pending: "bg-[#eab308]",
+  starting: "bg-[#eab308]",
   stopped: "bg-[#888888]",
   maintenance: "bg-[#888888]",
   rolled_back: "bg-[#888888]",
+  paused: "bg-[#888888]",
+  none: "bg-[#888888]",
 };
 
 function isStatusType(s: string): s is StatusType {

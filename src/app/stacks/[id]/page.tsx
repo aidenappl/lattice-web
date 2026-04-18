@@ -36,6 +36,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CodeEditor } from "@/components/ui/code-editor";
+import { EnvVarEditor } from "@/components/ui/env-var-editor";
 import { formatDate, timeAgo } from "@/lib/utils";
 
 type ContainerForm = {
@@ -162,6 +163,10 @@ export default function StackDetailPage() {
   // Delete stack
   const [deleting, setDeleting] = useState(false);
 
+  // Deploy button state
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
+  const [forceDeployHovered, setForceDeployHovered] = useState(false);
+
   // Stack settings edit state
   const [editingStack, setEditingStack] = useState(false);
   const [editStackName, setEditStackName] = useState("");
@@ -185,11 +190,33 @@ export default function StackDetailPage() {
         setStackEnvVars(stackRes.data.env_vars ?? "");
         setComposeYaml(stackRes.data.compose_yaml ?? "");
       }
-      if (containersRes.success) setContainers(containersRes.data ?? []);
+      const loadedContainers = containersRes.success
+        ? (containersRes.data ?? [])
+        : [];
+      if (containersRes.success) setContainers(loadedContainers);
+
       if (deploymentsRes.success) {
-        setDeployments(
-          (deploymentsRes.data ?? []).filter((d) => d.stack_id === id),
+        const filtered = (deploymentsRes.data ?? []).filter(
+          (d) => d.stack_id === id,
         );
+        setDeployments(filtered);
+
+        // Compute whether any container was modified after the last deployment.
+        const latestDeploy = [...filtered].sort(
+          (a, b) =>
+            new Date(b.inserted_at).getTime() -
+            new Date(a.inserted_at).getTime(),
+        )[0];
+        if (!latestDeploy) {
+          setHasPendingChanges(loadedContainers.length > 0);
+        } else {
+          const deployTime = new Date(latestDeploy.inserted_at).getTime();
+          setHasPendingChanges(
+            loadedContainers.some(
+              (c) => new Date(c.updated_at).getTime() > deployTime,
+            ),
+          );
+        }
       }
       if (workersRes.success) setWorkers(workersRes.data ?? []);
       setLoading(false);
@@ -242,6 +269,7 @@ export default function StackDetailPage() {
     setDeploying(true);
     const res = await reqDeployStack(id);
     if (res.success) {
+      setHasPendingChanges(false);
       const stackRes = await reqGetStack(id);
       if (stackRes.success) setStack(stackRes.data);
       // Refresh deployments list
@@ -378,13 +406,17 @@ export default function StackDetailPage() {
     }
     setShowContainerForm(false);
     setContainerFormSubmitting(false);
+    setHasPendingChanges(true);
     await refreshContainers();
   };
 
   const handleDeleteContainer = async (containerId: number) => {
     if (!confirm("Delete this container?")) return;
     const res = await reqDeleteContainer(containerId);
-    if (res.success) await refreshContainers();
+    if (res.success) {
+      setHasPendingChanges(true);
+      await refreshContainers();
+    }
   };
 
   const handleContainerAction = async (containerId: number, action: string) => {
@@ -411,7 +443,10 @@ export default function StackDetailPage() {
     const res = await reqUpdateStack(id, {
       env_vars: stackEnvVars || undefined,
     });
-    if (res.success) setStack(res.data);
+    if (res.success) {
+      setStack(res.data);
+      setHasPendingChanges(true);
+    }
     setSavingEnvVars(false);
   };
 
@@ -421,6 +456,7 @@ export default function StackDetailPage() {
     const res = await reqUpdateCompose(id, { compose_yaml: composeYaml });
     if (res.success) {
       setStack(res.data);
+      setHasPendingChanges(true);
       await refreshContainers();
     } else {
       setComposeError(res.error_message || "Failed to update compose");
@@ -474,16 +510,35 @@ export default function StackDetailPage() {
           >
             Env Vars
           </Button>
-          <Button
-            onClick={handleDeploy}
-            disabled={deploying || stack.status === "deploying"}
-          >
-            {deploying
-              ? "Deploying..."
-              : stack.status === "failed"
-                ? "Redeploy"
-                : "Deploy"}
-          </Button>
+          {(() => {
+            const isDeploying = deploying || stack.status === "deploying";
+            const isFailed = stack.status === "failed";
+            const needsDeploy = hasPendingChanges || isFailed;
+            const showForce = !needsDeploy && !isDeploying;
+            return (
+              <div className="relative">
+                <Button
+                  onClick={handleDeploy}
+                  disabled={isDeploying}
+                  onMouseEnter={() => showForce && setForceDeployHovered(true)}
+                  onMouseLeave={() => setForceDeployHovered(false)}
+                  className={
+                    showForce
+                      ? "opacity-40 hover:opacity-60 transition-opacity"
+                      : ""
+                  }
+                >
+                  {isDeploying
+                    ? "Deploying..."
+                    : forceDeployHovered
+                      ? "Force Deploy"
+                      : isFailed
+                        ? "Redeploy"
+                        : "Deploy"}
+                </Button>
+              </div>
+            );
+          })()}
           <Button
             variant="secondary"
             onClick={handleDeleteStack}
@@ -663,20 +718,10 @@ export default function StackDetailPage() {
           {/* Stack Environment Variables */}
           {showEnvVars && (
             <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
-              <h2 className="text-sm font-medium text-white mb-3">
+              <h2 className="text-sm font-medium text-white mb-4">
                 Stack Environment Variables
               </h2>
-              <p className="text-xs text-[#555555] mb-3">
-                JSON object of key-value pairs injected into all containers
-                during deploy. Container-level env vars override these.
-              </p>
-              <CodeEditor
-                rows={6}
-                value={stackEnvVars}
-                onChange={setStackEnvVars}
-                language="json"
-                placeholder='{"NODE_ENV": "production", "LOG_LEVEL": "info"}'
-              />
+              <EnvVarEditor value={stackEnvVars} onChange={setStackEnvVars} />
               <div className="mt-3 flex justify-end">
                 <Button
                   size="sm"

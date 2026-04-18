@@ -12,6 +12,7 @@ const navigation = [
   { name: "Dashboard", href: "/" },
   { name: "Workers", href: "/workers" },
   { name: "Stacks", href: "/stacks" },
+  { name: "Containers", href: "/containers" },
   { name: "Deployments", href: "/deployments" },
   { name: "Registries", href: "/registries" },
   { name: "Settings", href: "/settings" },

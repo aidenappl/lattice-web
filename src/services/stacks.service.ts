@@ -39,6 +39,21 @@ export const reqDeployStack = (id: number) =>
         url: `/admin/stacks/${id}/deploy`,
     });
 
+// --- Containers ---
+
+export const reqGetAllContainers = (params?: { stack_id?: number; worker_id?: number }) =>
+    fetchApi<Container[]>({
+        method: "GET",
+        url: "/admin/containers",
+        params,
+    });
+
+export const reqGetContainer = (id: number) =>
+    fetchApi<Container>({
+        method: "GET",
+        url: `/admin/containers/${id}`,
+    });
+
 export const reqGetContainers = (stackId: number) =>
     fetchApi<Container[]>({
         method: "GET",
@@ -72,16 +87,40 @@ export const reqGetContainerLogs = (containerId: number, params?: { limit?: numb
         params,
     });
 
+export const reqStartContainer = (id: number) =>
+    fetchApi<void>({
+        method: "POST",
+        url: `/admin/containers/${id}/start`,
+    });
+
 export const reqStopContainer = (id: number) =>
     fetchApi<void>({
         method: "POST",
         url: `/admin/containers/${id}/stop`,
     });
 
+export const reqKillContainer = (id: number) =>
+    fetchApi<void>({
+        method: "POST",
+        url: `/admin/containers/${id}/kill`,
+    });
+
 export const reqRestartContainer = (id: number) =>
     fetchApi<void>({
         method: "POST",
         url: `/admin/containers/${id}/restart`,
+    });
+
+export const reqPauseContainer = (id: number) =>
+    fetchApi<void>({
+        method: "POST",
+        url: `/admin/containers/${id}/pause`,
+    });
+
+export const reqUnpauseContainer = (id: number) =>
+    fetchApi<void>({
+        method: "POST",
+        url: `/admin/containers/${id}/unpause`,
     });
 
 export const reqRemoveContainer = (id: number) =>
