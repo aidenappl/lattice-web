@@ -10,3 +10,12 @@ export type Deployment = {
     inserted_at: string;
     updated_at: string;
 };
+
+export type DeploymentLog = {
+    id: number;
+    deployment_id: number;
+    level: string;
+    stage: string | null;
+    message: string;
+    recorded_at: string;
+};

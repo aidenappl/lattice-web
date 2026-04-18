@@ -2,7 +2,14 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Stack, Container, Deployment, ContainerLog, Worker } from "@/types";
+import {
+  Stack,
+  Container,
+  Deployment,
+  DeploymentLog,
+  ContainerLog,
+  Worker,
+} from "@/types";
 import {
   reqGetStack,
   reqGetContainers,
@@ -12,13 +19,17 @@ import {
   reqUpdateContainer,
   reqDeleteContainer,
   reqUpdateStack,
+  reqDeleteStack,
   reqUpdateCompose,
   reqStopContainer,
   reqRestartContainer,
   reqRemoveContainer,
   reqRecreateContainer,
 } from "@/services/stacks.service";
-import { reqGetDeployments } from "@/services/deployments.service";
+import {
+  reqGetDeployments,
+  reqGetDeploymentLogs,
+} from "@/services/deployments.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
@@ -139,6 +150,17 @@ export default function StackDetailPage() {
   const [savingCompose, setSavingCompose] = useState(false);
   const [composeError, setComposeError] = useState("");
 
+  // Deployment logs
+  const [selectedDeployment, setSelectedDeployment] = useState<number | null>(
+    null,
+  );
+  const [deploymentLogs, setDeploymentLogs] = useState<DeploymentLog[]>([]);
+  const [deploymentLogsLoading, setDeploymentLogsLoading] = useState(false);
+  const deploymentLogsEndRef = useRef<HTMLDivElement>(null);
+
+  // Delete stack
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => {
     const load = async () => {
       const [stackRes, containersRes, deploymentsRes, workersRes] =
@@ -176,8 +198,45 @@ export default function StackDetailPage() {
     if (res.success) {
       const stackRes = await reqGetStack(id);
       if (stackRes.success) setStack(stackRes.data);
+      // Refresh deployments list
+      const deploymentsRes = await reqGetDeployments();
+      if (deploymentsRes.success) {
+        setDeployments(
+          (deploymentsRes.data ?? []).filter((d) => d.stack_id === id),
+        );
+      }
     }
     setDeploying(false);
+  };
+
+  const handleDeleteStack = async () => {
+    if (
+      !confirm(
+        "Are you sure you want to delete this stack? This cannot be undone.",
+      )
+    )
+      return;
+    setDeleting(true);
+    const res = await reqDeleteStack(id);
+    if (res.success) {
+      router.push("/stacks");
+    }
+    setDeleting(false);
+  };
+
+  const loadDeploymentLogs = async (deploymentId: number) => {
+    setSelectedDeployment(deploymentId);
+    setDeploymentLogsLoading(true);
+    const res = await reqGetDeploymentLogs(deploymentId);
+    if (res.success) {
+      setDeploymentLogs(res.data ?? []);
+      setTimeout(
+        () =>
+          deploymentLogsEndRef.current?.scrollIntoView({ behavior: "smooth" }),
+        50,
+      );
+    }
+    setDeploymentLogsLoading(false);
   };
 
   const loadLogs = useCallback(async (containerId: number, stream?: string) => {
@@ -337,6 +396,14 @@ export default function StackDetailPage() {
             disabled={deploying || stack.status === "deploying"}
           >
             {deploying ? "Deploying..." : "Deploy"}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={handleDeleteStack}
+            disabled={deleting}
+            className="text-red-400 hover:text-red-300 border-red-900/50 hover:border-red-800"
+          >
+            {deleting ? "Deleting..." : "Delete"}
           </Button>
         </div>
       </div>
@@ -862,31 +929,86 @@ export default function StackDetailPage() {
             <h2 className="text-sm font-medium text-white mb-4">
               Deployment History
             </h2>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {deployments.length === 0 ? (
                 <p className="text-xs text-[#555555] text-center py-4">
                   No deployments yet
                 </p>
               ) : (
                 deployments.slice(0, 10).map((d) => (
-                  <div
+                  <button
                     key={d.id}
-                    className="flex items-center justify-between rounded-lg bg-[#161616] px-3 py-2"
+                    onClick={() => loadDeploymentLogs(d.id)}
+                    className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-left transition-colors ${
+                      selectedDeployment === d.id
+                        ? "bg-[#1e1e1e] border border-[#333333]"
+                        : "bg-[#161616] hover:bg-[#1a1a1a] border border-transparent"
+                    }`}
                   >
                     <div>
                       <StatusBadge status={d.status} />
                       <p className="text-xs text-[#555555] mt-1">
-                        {d.strategy}
+                        {d.strategy} #{d.id}
                       </p>
                     </div>
                     <p className="text-xs text-[#555555]">
                       {timeAgo(d.inserted_at)}
                     </p>
-                  </div>
+                  </button>
                 ))
               )}
             </div>
           </div>
+
+          {/* Deployment Logs */}
+          {selectedDeployment && (
+            <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-medium text-white">
+                  Deployment #{selectedDeployment} Logs
+                </h2>
+                <button
+                  onClick={() => loadDeploymentLogs(selectedDeployment)}
+                  className="text-xs text-[#555555] hover:text-[#888888] transition-colors"
+                >
+                  Refresh
+                </button>
+              </div>
+              {deploymentLogsLoading ? (
+                <p className="text-xs text-[#555555] text-center py-4">
+                  Loading logs...
+                </p>
+              ) : deploymentLogs.length === 0 ? (
+                <p className="text-xs text-[#555555] text-center py-4">
+                  No logs yet
+                </p>
+              ) : (
+                <div className="space-y-1 max-h-[500px] overflow-y-auto font-mono text-xs">
+                  {deploymentLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className={`flex gap-2 px-2 py-1 rounded ${
+                        log.level === "error"
+                          ? "bg-red-950/30 text-red-400"
+                          : "text-[#888888]"
+                      }`}
+                    >
+                      <span className="text-[#444444] shrink-0 tabular-nums">
+                        {new Date(log.recorded_at).toLocaleTimeString()}
+                      </span>
+                      {log.stage && (
+                        <span className="text-[#666666] shrink-0">
+                          [{log.stage}]
+                        </span>
+                      )}
+                      <span className="break-all">{log.message}</span>
+                    </div>
+                  ))}
+                  <div ref={deploymentLogsEndRef} />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

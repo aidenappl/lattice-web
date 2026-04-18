@@ -1,4 +1,4 @@
-import { Deployment } from "@/types";
+import { Deployment, DeploymentLog } from "@/types";
 import { fetchApi } from "./api.service";
 
 export const reqGetDeployments = () =>
@@ -11,6 +11,12 @@ export const reqGetDeployment = (id: number) =>
     fetchApi<Deployment>({
         method: "GET",
         url: `/admin/deployments/${id}`,
+    });
+
+export const reqGetDeploymentLogs = (id: number) =>
+    fetchApi<DeploymentLog[]>({
+        method: "GET",
+        url: `/admin/deployments/${id}/logs`,
     });
 
 export const reqApproveDeployment = (id: number) =>
