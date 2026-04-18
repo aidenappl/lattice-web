@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { reqGetOverview, OverviewData } from "@/services/admin.service";
 import { PageLoader } from "@/components/ui/loading";
 
-const WEB_VERSION = "v0.0.1";
+const WEB_VERSION = "v0.0.2";
 
 export default function DashboardPage() {
   const [overview, setOverview] = useState<OverviewData | null>(null);
@@ -15,7 +15,9 @@ export default function DashboardPage() {
     const load = async () => {
       const [overviewRes, versionRes] = await Promise.all([
         reqGetOverview(),
-        fetch(`${process.env.NEXT_PUBLIC_LATTICE_API}/version`).then(r => r.json()).catch(() => null),
+        fetch(`${process.env.NEXT_PUBLIC_LATTICE_API}/version`)
+          .then((r) => r.json())
+          .catch(() => null),
       ]);
       if (overviewRes.success) {
         setOverview(overviewRes.data);
@@ -33,7 +35,9 @@ export default function DashboardPage() {
   const stats = [
     {
       label: "Workers",
-      value: overview ? `${overview.online_workers} / ${overview.total_workers}` : "0 / 0",
+      value: overview
+        ? `${overview.online_workers} / ${overview.total_workers}`
+        : "0 / 0",
       sub: "online / total",
       color: "text-[#22c55e]",
     },
@@ -61,7 +65,9 @@ export default function DashboardPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-white">Dashboard</h1>
-        <p className="text-sm text-[#888888] mt-1">Overview of your infrastructure</p>
+        <p className="text-sm text-[#888888] mt-1">
+          Overview of your infrastructure
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

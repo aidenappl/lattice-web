@@ -16,9 +16,9 @@ Management frontend for the Lattice orchestrator platform. Provides a dashboard 
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|---|---|---|
-| `NEXT_PUBLIC_LATTICE_API` | Yes | Lattice API base URL (e.g. `http://localhost:8000`) |
+| Variable                  | Required | Description                                         |
+| ------------------------- | -------- | --------------------------------------------------- |
+| `NEXT_PUBLIC_LATTICE_API` | Yes      | Lattice API base URL (e.g. `http://localhost:8000`) |
 
 ---
 
@@ -53,19 +53,19 @@ npm run dev
 
 ## Pages
 
-| Route | Description |
-|---|---|
-| `/` | Dashboard with overview statistics and version info |
-| `/login` | Dual auth login (local + Forta OAuth) |
-| `/workers` | Worker list with status and metrics |
-| `/workers/[id]` | Worker detail, tokens, metrics, and runner version |
-| `/stacks` | Stack list with status overview |
-| `/stacks/new` | Create new stack |
-| `/stacks/[id]` | Stack detail, containers, and deploy |
-| `/deployments` | Deployment history |
-| `/deployments/[id]` | Deployment detail with progress |
-| `/registries` | Docker registry management |
-| `/settings` | User management |
+| Route               | Description                                         |
+| ------------------- | --------------------------------------------------- |
+| `/`                 | Dashboard with overview statistics and version info |
+| `/login`            | Dual auth login (local + Forta OAuth)               |
+| `/workers`          | Worker list with status and metrics                 |
+| `/workers/[id]`     | Worker detail, tokens, metrics, and runner version  |
+| `/stacks`           | Stack list with status overview                     |
+| `/stacks/new`       | Create new stack                                    |
+| `/stacks/[id]`      | Stack detail, containers, and deploy                |
+| `/deployments`      | Deployment history                                  |
+| `/deployments/[id]` | Deployment detail with progress                     |
+| `/registries`       | Docker registry management                          |
+| `/settings`         | User management                                     |
 
 ---
 
@@ -75,7 +75,7 @@ The web app exposes its version via an API route:
 
 ```
 GET /api/version
-{"version":"v0.0.1"}
+{"version":"v0.0.2"}
 ```
 
 The version is hardcoded in the source. The dashboard page also displays both the web version and the API version (fetched from the backend's `GET /version` endpoint).

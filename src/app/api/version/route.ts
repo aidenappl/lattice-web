@@ -1,3 +1,3 @@
 export async function GET() {
-  return Response.json({ version: "v0.0.1" });
+  return Response.json({ version: "v0.0.2" });
 }
