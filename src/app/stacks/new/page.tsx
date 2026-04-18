@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Worker } from "@/types";
 import { reqGetWorkers } from "@/services/workers.service";
@@ -8,8 +8,24 @@ import { reqCreateStack, reqImportCompose } from "@/services/stacks.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+function extractStackName(yaml: string, filename?: string): string {
+  // Try filename first (strip extension)
+  if (filename) {
+    const base = filename
+      .replace(/\.(ya?ml)$/i, "")
+      .replace(/docker-compose\.?/i, "")
+      .trim();
+    if (base) return base;
+  }
+  // Try to extract first service name from YAML
+  const match = yaml.match(/services:\s*\n\s+(\S+):/);
+  if (match) return match[1];
+  return "";
+}
+
 export default function NewStackPage() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -20,6 +36,7 @@ export default function NewStackPage() {
   const [composeYaml, setComposeYaml] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -63,6 +80,38 @@ export default function NewStackPage() {
     }
     setSubmitting(false);
   };
+
+  const handleFile = (file: File) => {
+    if (!file.name.match(/\.(ya?ml)$/i)) {
+      setError("Please drop a .yml or .yaml file");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      setComposeYaml(content);
+      setMode("compose");
+      if (!name) {
+        setName(extractStackName(content, file.name));
+      }
+      setError("");
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
+
+  const handleDragLeave = () => setDragOver(false);
 
   return (
     <div>
@@ -110,7 +159,7 @@ export default function NewStackPage() {
             placeholder="my-stack"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            required
+            required={mode === "manual"}
           />
 
           <div className="flex flex-col gap-1.5">
@@ -199,15 +248,87 @@ export default function NewStackPage() {
               >
                 Docker Compose YAML
               </label>
-              <textarea
-                id="compose"
-                rows={12}
-                placeholder={`version: "3"\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"`}
-                value={composeYaml}
-                onChange={(e) => setComposeYaml(e.target.value)}
-                className="w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 py-2 text-sm text-white placeholder:text-[#555555] focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50 resize-none font-mono"
-                required
-              />
+              {!composeYaml ? (
+                <div
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed px-4 py-10 cursor-pointer transition-colors ${
+                    dragOver
+                      ? "border-[#3b82f6] bg-[#3b82f6]/5"
+                      : "border-[#2a2a2a] bg-[#161616] hover:border-[#444444]"
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".yml,.yaml"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFile(file);
+                    }}
+                  />
+                  <svg
+                    className="w-8 h-8 text-[#555555] mb-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                    />
+                  </svg>
+                  <p className="text-sm text-[#888888]">
+                    Drop a{" "}
+                    <span className="text-white font-medium">
+                      docker-compose.yml
+                    </span>{" "}
+                    file here
+                  </p>
+                  <p className="text-xs text-[#555555] mt-1">
+                    or click to browse — or paste below
+                  </p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setComposeYaml(" ");
+                    }}
+                    className="mt-3 text-xs text-[#3b82f6] hover:text-[#60a5fa] transition-colors"
+                  >
+                    Paste manually instead
+                  </button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <textarea
+                    id="compose"
+                    rows={16}
+                    placeholder={`version: "3"\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"`}
+                    value={composeYaml.trim() === "" ? "" : composeYaml}
+                    onChange={(e) => {
+                      setComposeYaml(e.target.value);
+                      if (!name && e.target.value) {
+                        setName(extractStackName(e.target.value));
+                      }
+                    }}
+                    className="w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 py-2 text-sm text-white placeholder:text-[#555555] focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50 resize-none font-mono"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setComposeYaml("")}
+                    className="absolute top-2 right-2 text-xs text-[#555555] hover:text-white transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -218,7 +339,7 @@ export default function NewStackPage() {
               type="submit"
               disabled={
                 submitting ||
-                !name.trim() ||
+                (mode === "manual" && !name.trim()) ||
                 (mode === "compose" && !composeYaml.trim())
               }
             >
