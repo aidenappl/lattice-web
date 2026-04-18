@@ -12,6 +12,7 @@ import {
   reqUpdateContainer,
   reqDeleteContainer,
   reqUpdateStack,
+  reqUpdateCompose,
   reqStopContainer,
   reqRestartContainer,
   reqRemoveContainer,
@@ -132,6 +133,12 @@ export default function StackDetailPage() {
   const [stackEnvVars, setStackEnvVars] = useState("");
   const [savingEnvVars, setSavingEnvVars] = useState(false);
 
+  // Compose editor
+  const [showCompose, setShowCompose] = useState(false);
+  const [composeYaml, setComposeYaml] = useState("");
+  const [savingCompose, setSavingCompose] = useState(false);
+  const [composeError, setComposeError] = useState("");
+
   useEffect(() => {
     const load = async () => {
       const [stackRes, containersRes, deploymentsRes, workersRes] =
@@ -144,6 +151,7 @@ export default function StackDetailPage() {
       if (stackRes.success) {
         setStack(stackRes.data);
         setStackEnvVars(stackRes.data.env_vars ?? "");
+        setComposeYaml(stackRes.data.compose_yaml ?? "");
       }
       if (containersRes.success) setContainers(containersRes.data ?? []);
       if (deploymentsRes.success) {
@@ -265,6 +273,19 @@ export default function StackDetailPage() {
     setSavingEnvVars(false);
   };
 
+  const handleSaveCompose = async () => {
+    setSavingCompose(true);
+    setComposeError("");
+    const res = await reqUpdateCompose(id, { compose_yaml: composeYaml });
+    if (res.success) {
+      setStack(res.data);
+      await refreshContainers();
+    } else {
+      setComposeError(res.error_message || "Failed to update compose");
+    }
+    setSavingCompose(false);
+  };
+
   const workerName = (wId: number | null) => {
     if (!wId) return "Unassigned";
     const w = workers.find((w) => w.id === wId);
@@ -295,7 +316,19 @@ export default function StackDetailPage() {
         <div className="flex gap-2">
           <Button
             variant="secondary"
-            onClick={() => setShowEnvVars(!showEnvVars)}
+            onClick={() => {
+              setShowCompose(!showCompose);
+              if (showEnvVars) setShowEnvVars(false);
+            }}
+          >
+            Compose
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setShowEnvVars(!showEnvVars);
+              if (showCompose) setShowCompose(false);
+            }}
           >
             Env Vars
           </Button>
@@ -383,6 +416,38 @@ export default function StackDetailPage() {
                   disabled={savingEnvVars}
                 >
                   {savingEnvVars ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Compose Editor */}
+          {showCompose && (
+            <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
+              <h2 className="text-sm font-medium text-white mb-3">
+                Docker Compose
+              </h2>
+              <p className="text-xs text-[#555555] mb-3">
+                Edit the compose YAML and save to replace all containers with
+                the updated definition.
+              </p>
+              <textarea
+                rows={20}
+                value={composeYaml}
+                onChange={(e) => setComposeYaml(e.target.value)}
+                placeholder={`version: "3"\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"`}
+                className="w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 py-2 text-sm text-white placeholder:text-[#555555] focus:border-[#444444] focus:outline-none font-mono resize-none"
+              />
+              {composeError && (
+                <p className="text-xs text-[#f87171] mt-2">{composeError}</p>
+              )}
+              <div className="mt-3 flex justify-end">
+                <Button
+                  size="sm"
+                  onClick={handleSaveCompose}
+                  disabled={savingCompose || !composeYaml.trim()}
+                >
+                  {savingCompose ? "Saving..." : "Save & Sync Containers"}
                 </Button>
               </div>
             </div>

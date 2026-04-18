@@ -7,6 +7,7 @@ export type Stack = {
     deployment_strategy: "rolling" | "blue-green" | "canary";
     auto_deploy: boolean;
     env_vars: string | null;
+    compose_yaml: string | null;
     active: boolean;
     inserted_at: string;
     updated_at: string;

@@ -102,3 +102,10 @@ export const reqImportCompose = (data: { name: string; description?: string; wor
         url: "/admin/stacks/import",
         data,
     });
+
+export const reqUpdateCompose = (id: number, data: { compose_yaml: string }) =>
+    fetchApi<Stack>({
+        method: "PUT",
+        url: `/admin/stacks/${id}/compose`,
+        data,
+    });
