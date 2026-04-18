@@ -28,9 +28,9 @@ export default function StackDetailPage() {
         reqGetDeployments(),
       ]);
       if (stackRes.success) setStack(stackRes.data);
-      if (containersRes.success) setContainers(containersRes.data);
+      if (containersRes.success) setContainers(containersRes.data ?? []);
       if (deploymentsRes.success) {
-        setDeployments(deploymentsRes.data.filter((d) => d.stack_id === id));
+        setDeployments((deploymentsRes.data ?? []).filter((d) => d.stack_id === id));
       }
       setLoading(false);
     };

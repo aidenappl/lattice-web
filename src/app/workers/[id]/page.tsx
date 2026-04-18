@@ -3,7 +3,14 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Worker, WorkerToken, WorkerMetrics } from "@/types";
-import { reqGetWorker, reqGetWorkerMetrics, reqCreateWorkerToken, reqDeleteWorkerToken } from "@/services/workers.service";
+import {
+  reqGetWorker,
+  reqUpdateWorker,
+  reqGetWorkerMetrics,
+  reqGetWorkerTokens,
+  reqCreateWorkerToken,
+  reqDeleteWorkerToken,
+} from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,28 +25,79 @@ export default function WorkerDetailPage() {
   const [tokens, setTokens] = useState<WorkerToken[]>([]);
   const [metrics, setMetrics] = useState<WorkerMetrics[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Edit state
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editHostname, setEditHostname] = useState("");
+  const [editLabels, setEditLabels] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Token state
   const [newTokenName, setNewTokenName] = useState("");
   const [createdToken, setCreatedToken] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
-      const [workerRes, metricsRes] = await Promise.all([
+      const [workerRes, metricsRes, tokensRes] = await Promise.all([
         reqGetWorker(id),
         reqGetWorkerMetrics(id),
+        reqGetWorkerTokens(id),
       ]);
-      if (workerRes.success) setWorker(workerRes.data);
-      if (metricsRes.success) setMetrics(metricsRes.data);
+      if (workerRes.success) {
+        setWorker(workerRes.data);
+        setEditName(workerRes.data.name);
+        setEditHostname(workerRes.data.hostname);
+        setEditLabels(workerRes.data.labels ?? "");
+      }
+      if (metricsRes.success) setMetrics(metricsRes.data ?? []);
+      if (tokensRes.success) setTokens(tokensRes.data ?? []);
       setLoading(false);
     };
     load();
   }, [id]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const res = await reqUpdateWorker(id, {
+      name: editName.trim(),
+      hostname: editHostname.trim(),
+      labels: editLabels.trim() || undefined,
+    });
+    if (res.success) {
+      setWorker(res.data);
+      setEditing(false);
+    }
+    setSaving(false);
+  };
+
+  const handleCancel = () => {
+    if (worker) {
+      setEditName(worker.name);
+      setEditHostname(worker.hostname);
+      setEditLabels(worker.labels ?? "");
+    }
+    setEditing(false);
+  };
 
   const handleCreateToken = async () => {
     if (!newTokenName.trim()) return;
     const res = await reqCreateWorkerToken(id, newTokenName.trim());
     if (res.success) {
       setCreatedToken(res.data.token);
-      setTokens((prev) => [...prev, res.data]);
+      // Add the token to the list (res.data has all WorkerToken fields + token)
+      setTokens((prev) => [
+        {
+          id: res.data.id,
+          worker_id: res.data.worker_id,
+          name: res.data.name,
+          last_used_at: res.data.last_used_at,
+          active: res.data.active,
+          inserted_at: res.data.inserted_at,
+          updated_at: res.data.updated_at,
+        },
+        ...prev,
+      ]);
       setNewTokenName("");
     }
   };
@@ -59,16 +117,56 @@ export default function WorkerDetailPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold text-white">{worker.name}</h1>
           <StatusBadge status={worker.status} />
         </div>
-        <p className="text-sm text-[#888888] mt-1 font-mono">{worker.hostname}</p>
+        {!editing && (
+          <Button variant="secondary" onClick={() => setEditing(true)}>
+            Edit Worker
+          </Button>
+        )}
       </div>
 
+      {/* Edit form */}
+      {editing && (
+        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5 mb-6">
+          <h2 className="text-sm font-medium text-white mb-4">Edit Worker</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <Input
+              id="edit-name"
+              label="Name"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+            />
+            <Input
+              id="edit-hostname"
+              label="Hostname"
+              value={editHostname}
+              onChange={(e) => setEditHostname(e.target.value)}
+            />
+            <Input
+              id="edit-labels"
+              label="Labels"
+              placeholder="e.g. env=production,region=us-east"
+              value={editLabels}
+              onChange={(e) => setEditLabels(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleSave} disabled={saving || !editName.trim() || !editHostname.trim()}>
+              {saving ? "Saving..." : "Save Changes"}
+            </Button>
+            <Button variant="ghost" onClick={handleCancel}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Info Panel */}
+        {/* Info + Metrics */}
         <div className="lg:col-span-2 space-y-6">
           <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
             <h2 className="text-sm font-medium text-white mb-4">Worker Info</h2>
@@ -154,15 +252,15 @@ export default function WorkerDetailPage() {
 
             {createdToken && (
               <div className="mb-4 rounded-lg border border-[#22c55e]/30 bg-[#22c55e]/5 p-3">
-                <p className="text-xs text-[#22c55e] mb-1 font-medium">Token created - copy it now, it won&apos;t be shown again:</p>
-                <p className="text-xs text-white font-mono break-all">{createdToken}</p>
+                <p className="text-xs text-[#22c55e] mb-1 font-medium">Token created — copy it now, it won&apos;t be shown again:</p>
+                <p className="text-xs text-white font-mono break-all select-all">{createdToken}</p>
               </div>
             )}
 
             {/* Token List */}
             <div className="space-y-2">
               {tokens.length === 0 ? (
-                <p className="text-xs text-[#555555] py-4 text-center">No tokens</p>
+                <p className="text-xs text-[#555555] py-4 text-center">No tokens yet</p>
               ) : (
                 tokens.map((token) => (
                   <div key={token.id} className="flex items-center justify-between rounded-lg bg-[#161616] px-3 py-2">

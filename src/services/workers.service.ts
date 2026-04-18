@@ -33,6 +33,12 @@ export const reqDeleteWorker = (id: number) =>
         url: `/admin/workers/${id}`,
     });
 
+export const reqGetWorkerTokens = (workerId: number) =>
+    fetchApi<WorkerToken[]>({
+        method: "GET",
+        url: `/admin/workers/${workerId}/tokens`,
+    });
+
 export const reqCreateWorkerToken = (workerId: number, name: string) =>
     fetchApi<WorkerToken & { token: string }>({
         method: "POST",

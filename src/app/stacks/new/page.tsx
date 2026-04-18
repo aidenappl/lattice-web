@@ -22,7 +22,7 @@ export default function NewStackPage() {
   useEffect(() => {
     const load = async () => {
       const res = await reqGetWorkers();
-      if (res.success) setWorkers(res.data);
+      if (res.success) setWorkers(res.data ?? []);
     };
     load();
   }, []);
@@ -88,7 +88,7 @@ export default function NewStackPage() {
               id="worker"
               value={workerId}
               onChange={(e) => setWorkerId(e.target.value)}
-              className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
+              className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
             >
               <option value="">Select a worker...</option>
               {workers.map((w) => (
@@ -107,7 +107,7 @@ export default function NewStackPage() {
               id="strategy"
               value={strategy}
               onChange={(e) => setStrategy(e.target.value)}
-              className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
+              className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
             >
               <option value="rolling">Rolling</option>
               <option value="blue-green">Blue-Green</option>

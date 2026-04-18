@@ -16,7 +16,7 @@ export default function DeploymentsPage() {
     const load = async () => {
       const res = await reqGetDeployments();
       if (res.success) {
-        setDeployments(res.data);
+        setDeployments(res.data ?? []);
       }
       setLoading(false);
     };

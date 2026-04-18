@@ -6,7 +6,6 @@ import { Stack } from "@/types";
 import { reqGetStacks } from "@/services/stacks.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 
 export default function StacksPage() {
   const [stacks, setStacks] = useState<Stack[]>([]);
@@ -16,7 +15,7 @@ export default function StacksPage() {
     const load = async () => {
       const res = await reqGetStacks();
       if (res.success) {
-        setStacks(res.data);
+        setStacks(res.data ?? []);
       }
       setLoading(false);
     };
@@ -32,8 +31,11 @@ export default function StacksPage() {
           <h1 className="text-xl font-semibold text-white">Stacks</h1>
           <p className="text-sm text-[#888888] mt-1">Manage your container stacks</p>
         </div>
-        <Link href="/stacks/new">
-          <Button size="md">New Stack</Button>
+        <Link
+          href="/stacks/new"
+          className="inline-flex items-center justify-center font-medium rounded-lg transition-colors cursor-pointer focus:outline-none bg-white text-black hover:bg-zinc-100 h-8 px-3.5 text-sm"
+        >
+          New Stack
         </Link>
       </div>
 

@@ -12,7 +12,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ref,
   ) => {
     const baseStyles =
-      "inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed";
+      "inline-flex items-center justify-center font-medium rounded-lg transition-colors cursor-pointer focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed";
 
     const variants = {
       primary: "bg-white text-black hover:bg-zinc-100",

@@ -24,26 +24,26 @@ export default function DashboardPage() {
   const stats = [
     {
       label: "Workers",
-      value: overview ? `${overview.workers_online} / ${overview.workers_total}` : "0 / 0",
+      value: overview ? `${overview.online_workers} / ${overview.total_workers}` : "0 / 0",
       sub: "online / total",
       color: "text-[#22c55e]",
     },
     {
-      label: "Containers",
-      value: overview?.containers_running ?? 0,
-      sub: "running",
+      label: "Stacks",
+      value: overview?.active_stacks ?? 0,
+      sub: "active",
       color: "text-[#3b82f6]",
     },
     {
-      label: "Stacks",
-      value: overview?.stacks_active ?? 0,
-      sub: "active",
+      label: "Total Stacks",
+      value: overview?.total_stacks ?? 0,
+      sub: "configured",
       color: "text-[#a855f7]",
     },
     {
-      label: "Recent Deployments",
-      value: overview?.recent_deployments ?? 0,
-      sub: "last 24h",
+      label: "Deployments",
+      value: overview?.recent_deployment_count ?? 0,
+      sub: "recent",
       color: "text-yellow-400",
     },
   ];

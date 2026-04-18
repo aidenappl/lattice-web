@@ -38,7 +38,7 @@ export type Registry = {
     name: string;
     url: string;
     type: "dockerhub" | "ghcr" | "custom";
-    keyring_secret_key: string | null;
+    username: string | null;
     active: boolean;
     inserted_at: string;
     updated_at: string;

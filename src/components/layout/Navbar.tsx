@@ -93,7 +93,7 @@ export function Navbar() {
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="flex items-center gap-2 rounded-lg p-1.5 transition-colors hover:bg-[#161616]"
+              className="flex items-center gap-2 rounded-lg p-1.5 transition-colors hover:bg-[#161616] cursor-pointer"
             >
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#2a2a2a] text-xs font-medium text-white">
                 {initials}
@@ -127,7 +127,7 @@ export function Navbar() {
                 </div>
                 <a
                   href={`${API_URL}/auth/logout`}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-[#1a1a1a] transition-colors"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-[#1a1a1a] transition-colors cursor-pointer"
                   onClick={() => setMenuOpen(false)}
                 >
                   <svg
@@ -152,7 +152,7 @@ export function Navbar() {
           {/* Mobile hamburger */}
           <button
             onClick={() => setMobileNavOpen(!mobileNavOpen)}
-            className="flex md:hidden h-9 w-9 items-center justify-center rounded-lg text-[#888888] hover:bg-[#161616] hover:text-white transition-colors"
+            className="flex md:hidden h-9 w-9 items-center justify-center rounded-lg text-[#888888] hover:bg-[#161616] hover:text-white transition-colors cursor-pointer"
             aria-label="Toggle menu"
           >
             {mobileNavOpen ? (

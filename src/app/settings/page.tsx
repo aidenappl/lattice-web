@@ -22,7 +22,7 @@ export default function SettingsPage() {
 
   const load = async () => {
     const res = await reqGetUsers();
-    if (res.success) setUsers(res.data);
+    if (res.success) setUsers(res.data ?? []);
     setLoading(false);
   };
 
@@ -110,7 +110,7 @@ export default function SettingsPage() {
                 id="user-role"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
-                className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
+                className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
               >
                 <option value="viewer">Viewer</option>
                 <option value="admin">Admin</option>

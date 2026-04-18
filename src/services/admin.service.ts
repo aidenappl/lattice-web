@@ -2,11 +2,11 @@ import { User } from "@/types";
 import { fetchApi } from "./api.service";
 
 export type OverviewData = {
-    workers_online: number;
-    workers_total: number;
-    containers_running: number;
-    stacks_active: number;
-    recent_deployments: number;
+    total_workers: number;
+    online_workers: number;
+    total_stacks: number;
+    active_stacks: number;
+    recent_deployment_count: number;
 };
 
 export type AuditLogEntry = {
