@@ -46,6 +46,14 @@ import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
 import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { Alert } from "@/components/ui/alert";
+import {
+  LogViewer,
+  LogLimit,
+  sortLogs,
+  downloadLogsAsTxt,
+  isNewSession,
+  syntheticId,
+} from "@/components/ui/log-viewer";
 
 export default function StackDetailPage() {
   const params = useParams();
@@ -76,7 +84,11 @@ export default function StackDetailPage() {
   const [logs, setLogs] = useState<ContainerLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [streamFilter, setStreamFilter] = useState<string>("all");
-  const logsEndRef = useRef<HTMLDivElement>(null);
+  const [logLimit, setLogLimit] = useState<LogLimit>(250);
+
+  // Refs to allow WS handler to access current state without stale closures
+  const selectedContainerNameRef = useRef<string>("");
+  const logLimitRef = useRef<LogLimit>(250);
 
   // Stack env vars
   const [showEnvVars, setShowEnvVars] = useState(false);
@@ -220,20 +232,65 @@ export default function StackDetailPage() {
     containerNamesRef.current = new Set(containers.map((c) => c.name));
   }, [containers]);
 
+  // Keep refs up-to-date for use inside stable WS callback
+  useEffect(() => {
+    const c = containers.find((cc) => cc.id === selectedContainer);
+    selectedContainerNameRef.current = c?.name ?? "";
+  }, [selectedContainer, containers]);
+  useEffect(() => {
+    logLimitRef.current = logLimit;
+  }, [logLimit]);
+
   const handleSocketEvent = useCallback(
     (event: AdminSocketEvent) => {
+      const payload = event.payload ?? {};
+      const eventName = (payload["container_name"] as string) ?? "";
+
       if (
         event.type === "container_status" ||
         event.type === "container_sync" ||
         event.type === "container_health_status"
       ) {
-        const name = (event.payload?.["container_name"] as string) ?? "";
-        if (containerNamesRef.current.has(name)) {
+        if (containerNamesRef.current.has(eventName)) {
           console.log(
-            `[StackPage] WS ${event.type} for "${name}" — refreshing containers`,
+            `[StackPage] WS ${event.type} for "${eventName}" — refreshing containers`,
           );
           refreshContainers();
         }
+      }
+
+      // Live-stream log lines for the currently selected container
+      if (
+        event.type === "container_logs" &&
+        eventName &&
+        eventName === selectedContainerNameRef.current
+      ) {
+        const message = payload["message"] as string | undefined;
+        const rawStream = (payload["stream"] as string | undefined) ?? "stdout";
+        const stream: "stdout" | "stderr" =
+          rawStream === "stderr" ? "stderr" : "stdout";
+        if (message) {
+          const entry: ContainerLog = {
+            id: syntheticId() as unknown as number,
+            container_id: null,
+            container_name: eventName,
+            worker_id: event.worker_id ?? 0,
+            stream,
+            message,
+            recorded_at: new Date().toISOString(),
+          };
+          const limit = logLimitRef.current;
+          setLogs((prev) => sortLogs([...prev.slice(-(limit - 1)), entry]));
+        }
+      }
+
+      // Worker lifecycle events — reload logs after a short delay
+      if (
+        event.type === "worker_shutdown" ||
+        event.type === "worker_crash" ||
+        event.type === "worker_disconnected"
+      ) {
+        refreshContainers();
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -351,26 +408,68 @@ export default function StackDetailPage() {
     setDeploymentLogsLoading(false);
   };
 
-  const loadLogs = useCallback(async (containerId: number, stream?: string) => {
-    setLogsLoading(true);
-    const params: { limit: number; stream?: string } = { limit: 200 };
-    if (stream && stream !== "all") params.stream = stream;
-    const res = await reqGetContainerLogs(containerId, params);
-    if (res.success) {
-      setLogs((res.data ?? []).reverse());
-      setTimeout(
-        () => logsEndRef.current?.scrollIntoView({ behavior: "smooth" }),
-        50,
-      );
-    }
-    setLogsLoading(false);
-  }, []);
+  const loadLogs = useCallback(
+    async (containerId: number, stream?: string, limit?: number) => {
+      setLogsLoading(true);
+      const params: { limit: number; stream?: string } = {
+        limit: limit ?? logLimitRef.current,
+      };
+      if (stream && stream !== "all") params.stream = stream;
+      const res = await reqGetContainerLogs(containerId, params);
+      if (res.success) {
+        const dbLogs = res.data ?? [];
+        // Message-based dedup (safe against clock skew)
+        const seen = new Set<string>();
+        const unique = dbLogs.filter((l) => {
+          const key = `${l.recorded_at}|${l.message}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        setLogs(sortLogs(unique));
+      }
+      setLogsLoading(false);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (selectedContainer) {
       loadLogs(selectedContainer, streamFilter);
     }
-  }, [selectedContainer, streamFilter, loadLogs]);
+  }, [selectedContainer, streamFilter, logLimit, loadLogs]);
+
+  // ─── Download handlers ─────────────────────────────────────────────────────
+
+  const handleDownloadVisible = () => {
+    const c = containers.find((cc) => cc.id === selectedContainer);
+    const name = c?.name ?? String(selectedContainer);
+    downloadLogsAsTxt(logs, `${name}-logs-visible.txt`);
+  };
+
+  const handleDownloadLastRun = () => {
+    let startIdx = 0;
+    for (let i = logs.length - 1; i > 0; i--) {
+      if (isNewSession(logs[i - 1], logs[i])) {
+        startIdx = i;
+        break;
+      }
+    }
+    const c = containers.find((cc) => cc.id === selectedContainer);
+    const name = c?.name ?? String(selectedContainer);
+    downloadLogsAsTxt(logs.slice(startIdx), `${name}-logs-last-run.txt`);
+  };
+
+  const handleDownloadAll = async () => {
+    if (!selectedContainer) return;
+    const res = await reqGetContainerLogs(selectedContainer, { limit: 9999 });
+    if (res.success) {
+      const all = sortLogs((res.data ?? []).slice());
+      const c = containers.find((cc) => cc.id === selectedContainer);
+      const name = c?.name ?? String(selectedContainer);
+      downloadLogsAsTxt(all, `${name}-logs-all.txt`);
+    }
+  };
 
   const handleDeleteContainer = async (containerId: number) => {
     const confirmed = await showConfirm({
@@ -1124,7 +1223,7 @@ export default function StackDetailPage() {
                 {selectedContainer && (
                   <button
                     onClick={() => loadLogs(selectedContainer, streamFilter)}
-                    className="text-xs text-[#3b82f6] hover:text-[#60a5fa] transition-colors"
+                    className="text-xs text-[#3b82f6] hover:text-[#60a5fa] transition-colors cursor-pointer"
                   >
                     Refresh
                   </button>
@@ -1139,42 +1238,16 @@ export default function StackDetailPage() {
               <div className="px-5 py-8 text-center text-sm text-muted">
                 Loading logs...
               </div>
-            ) : logs.length === 0 ? (
-              <div className="px-5 py-8 text-center text-sm text-muted">
-                No logs available
-              </div>
             ) : (
-              <div className="max-h-[400px] overflow-y-auto p-4 font-mono text-xs leading-relaxed">
-                {logs.map((log, i) => (
-                  <div key={log.id}>
-                    {i > 0 &&
-                      new Date(log.recorded_at).getTime() -
-                        new Date(logs[i - 1].recorded_at).getTime() >
-                        5_000 && (
-                        <div className="flex items-center gap-2 px-2 py-2 my-1 select-none">
-                          <div className="flex-1 h-px bg-border-subtle" />
-                          <span className="text-[10px] font-mono text-muted whitespace-nowrap">
-                            new session &middot;{" "}
-                            {new Date(log.recorded_at).toLocaleTimeString([], {
-                              hour12: false,
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              second: "2-digit",
-                            })}
-                          </span>
-                          <div className="flex-1 h-px bg-border-subtle" />
-                        </div>
-                      )}
-                    <div className="flex gap-2 hover:bg-surface-elevated">
-                      <span className="text-muted shrink-0 select-none">
-                        {new Date(log.recorded_at).toLocaleTimeString()}
-                      </span>
-                      <span className="text-secondary">{log.message}</span>
-                    </div>
-                  </div>
-                ))}
-                <div ref={logsEndRef} />
-              </div>
+              <LogViewer
+                logs={logs}
+                logLimit={logLimit}
+                onLimitChange={setLogLimit}
+                onDownloadVisible={handleDownloadVisible}
+                onDownloadLastRun={handleDownloadLastRun}
+                onDownloadAll={handleDownloadAll}
+                loading={logsLoading}
+              />
             )}
           </div>
         </div>

@@ -29,6 +29,15 @@ import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { Alert } from "@/components/ui/alert";
 import { useConfirm } from "@/components/ui/confirm-modal";
+import {
+  LogViewer,
+  LogLimit,
+  isSynthetic,
+  syntheticId,
+  sortLogs,
+  downloadLogsAsTxt,
+  isNewSession,
+} from "@/components/ui/log-viewer";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -99,94 +108,6 @@ function prettyField(raw: string | null): string {
   }
 }
 
-// Marker used to identify synthetic (WS/client-side) log entries.
-// A string UUID stored in the ContainerLog.id field won't collide with
-// integer DB ids and can be detected with typeof.
-const SYNTHETIC_ID_PREFIX = "syn_";
-function isSynthetic(log: ContainerLog): boolean {
-  return (
-    typeof log.id === "string" && String(log.id).startsWith(SYNTHETIC_ID_PREFIX)
-  );
-}
-function syntheticId(): string {
-  return SYNTHETIC_ID_PREFIX + crypto.randomUUID();
-}
-
-// ─── Log limit options ────────────────────────────────────────────────────────
-const LOG_LIMIT_OPTIONS = [100, 250, 500, 1000] as const;
-type LogLimit = (typeof LOG_LIMIT_OPTIONS)[number];
-
-// Sort a log array chronologically in-place (mutates).
-function sortLogs(arr: ContainerLog[]): ContainerLog[] {
-  return arr.sort(
-    (a, b) =>
-      new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime(),
-  );
-}
-
-// Download an array of log lines as a timestamped .txt file.
-function downloadLogsAsTxt(lines: ContainerLog[], filename: string) {
-  const text = lines
-    .map(
-      (l) =>
-        `${new Date(l.recorded_at).toISOString()}  [${l.stream.padEnd(6)}]  ${l.message}`,
-    )
-    .join("\n");
-  const blob = new Blob([text], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-const SESSION_GAP_MS = 5_000;
-
-function isNewSession(prev: ContainerLog, curr: ContainerLog): boolean {
-  return (
-    new Date(curr.recorded_at).getTime() -
-      new Date(prev.recorded_at).getTime() >
-    SESSION_GAP_MS
-  );
-}
-
-function SessionBreak({ at }: { at: string }) {
-  return (
-    <div className="flex items-center gap-2 px-2 py-2 my-1 select-none">
-      <div className="flex-1 h-px bg-border-subtle" />
-      <span className="text-[10px] font-mono text-muted whitespace-nowrap">
-        new session &middot;{" "}
-        {new Date(at).toLocaleTimeString([], {
-          hour12: false,
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        })}
-      </span>
-      <div className="flex-1 h-px bg-border-subtle" />
-    </div>
-  );
-}
-
-function LogLine({ line }: { line: ContainerLog }) {
-  return (
-    <div className="flex gap-2 text-xs font-mono hover:bg-surface-elevated px-2 py-0.5 rounded">
-      <span className="text-dimmed shrink-0 select-none w-40">
-        {line.recorded_at
-          ? new Date(line.recorded_at).toLocaleTimeString([], {
-              hour12: false,
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            })
-          : ""}
-      </span>
-      <span className="text-subtle">{line.message}</span>
-    </div>
-  );
-}
-
 type Tab = "logs" | "details" | "health";
 
 // ─── main page ────────────────────────────────────────────────────────────────
@@ -225,7 +146,6 @@ export default function ContainerDetailPage() {
   const [editRegistryId, setEditRegistryId] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const logsEndRef = useRef<HTMLDivElement>(null);
   const containerNameRef = useRef<string>("");
   const showConfirm = useConfirm();
 
@@ -412,11 +332,6 @@ export default function ContainerDetailPage() {
     }, 10000);
     return () => clearInterval(interval);
   }, [loadContainer, loadLogs, tab]);
-
-  useEffect(() => {
-    if (tab === "logs")
-      logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs, tab, loading]);
 
   const runAction = async (
     action: string,
@@ -1155,74 +1070,15 @@ export default function ContainerDetailPage() {
 
         {/* LOGS TAB */}
         {tab === "logs" && (
-          <div className="flex flex-col">
-            {/* Log toolbar */}
-            <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border-subtle bg-surface">
-              <span className="text-xs text-muted font-mono shrink-0">
-                {logs.length} line{logs.length !== 1 ? "s" : ""}
-              </span>
-              <div className="flex items-center gap-2">
-                {/* Limit selector */}
-                <select
-                  value={logLimit}
-                  onChange={(e) =>
-                    setLogLimit(Number(e.target.value) as LogLimit)
-                  }
-                  className="text-xs bg-surface border border-border-subtle rounded px-2 py-1 text-muted cursor-pointer focus:outline-none focus:border-border-strong"
-                >
-                  {LOG_LIMIT_OPTIONS.map((n) => (
-                    <option key={n} value={n}>
-                      {n} lines
-                    </option>
-                  ))}
-                </select>
-                {/* Download buttons */}
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={handleDownloadVisible}
-                    title="Download visible logs as .txt"
-                    className="text-xs text-muted hover:text-primary px-2 py-1 border border-border-subtle rounded hover:border-border-strong transition-colors cursor-pointer"
-                  >
-                    ↓ Visible
-                  </button>
-                  <button
-                    onClick={handleDownloadLastRun}
-                    title="Download logs since last session start as .txt"
-                    className="text-xs text-muted hover:text-primary px-2 py-1 border border-border-subtle rounded hover:border-border-strong transition-colors cursor-pointer"
-                  >
-                    ↓ Last Run
-                  </button>
-                  <button
-                    onClick={handleDownloadAll}
-                    title="Download all logs from the database as .txt"
-                    className="text-xs text-muted hover:text-primary px-2 py-1 border border-border-subtle rounded hover:border-border-strong transition-colors cursor-pointer"
-                  >
-                    ↓ All Time
-                  </button>
-                </div>
-              </div>
-            </div>
-            {/* Log pane */}
-            <div className="bg-background-alt min-h-[320px] max-h-[520px] overflow-y-auto p-3">
-              {logs.length === 0 ? (
-                <p className="text-xs text-dimmed font-mono p-2">
-                  No logs available
-                </p>
-              ) : (
-                <>
-                  {logs.map((line, i) => (
-                    <div key={String(line.id)}>
-                      {i > 0 && isNewSession(logs[i - 1], line) && (
-                        <SessionBreak at={line.recorded_at} />
-                      )}
-                      <LogLine line={line} />
-                    </div>
-                  ))}
-                  <div ref={logsEndRef} />
-                </>
-              )}
-            </div>
-          </div>
+          <LogViewer
+            logs={logs}
+            logLimit={logLimit}
+            onLimitChange={setLogLimit}
+            onDownloadVisible={handleDownloadVisible}
+            onDownloadLastRun={handleDownloadLastRun}
+            onDownloadAll={handleDownloadAll}
+            loading={loading}
+          />
         )}
 
         {/* DETAILS TAB */}
