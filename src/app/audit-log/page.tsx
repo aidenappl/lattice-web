@@ -18,7 +18,9 @@ const actionColors: Record<string, string> = {
 };
 
 function actionColor(action: string): string {
-  const key = Object.keys(actionColors).find((k) => action.toLowerCase().includes(k));
+  const key = Object.keys(actionColors).find((k) =>
+    action.toLowerCase().includes(k),
+  );
   return key ? actionColors[key] : "text-[#888888]";
 }
 
@@ -30,8 +32,15 @@ export default function AuditLogPage() {
   const [actionFilter, setActionFilter] = useState("all");
 
   useEffect(() => {
+    document.title = "Lattice - Audit Log";
+  }, []);
+
+  useEffect(() => {
     const load = async () => {
-      const [logRes, usersRes] = await Promise.all([reqGetAuditLog(), reqGetUsers()]);
+      const [logRes, usersRes] = await Promise.all([
+        reqGetAuditLog(),
+        reqGetUsers(),
+      ]);
       if (logRes.success) setEntries(logRes.data ?? []);
       if (usersRes.success) setUsers(usersRes.data ?? []);
       setLoading(false);
@@ -40,11 +49,14 @@ export default function AuditLogPage() {
   }, []);
 
   const userMap = new Map(users.map((u) => [u.id, u.name || u.email]));
-  const resourceTypes = [...new Set(entries.map((e) => e.resource_type))].sort();
+  const resourceTypes = [
+    ...new Set(entries.map((e) => e.resource_type)),
+  ].sort();
   const actions = [...new Set(entries.map((e) => e.action))].sort();
 
   const filtered = entries.filter((e) => {
-    if (resourceFilter !== "all" && e.resource_type !== resourceFilter) return false;
+    if (resourceFilter !== "all" && e.resource_type !== resourceFilter)
+      return false;
     if (actionFilter !== "all" && e.action !== actionFilter) return false;
     return true;
   });
@@ -56,7 +68,9 @@ export default function AuditLogPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white">Audit Log</h1>
-          <p className="text-sm text-[#888888] mt-1">Track all actions performed in the system</p>
+          <p className="text-sm text-[#888888] mt-1">
+            Track all actions performed in the system
+          </p>
         </div>
         <div className="flex gap-2">
           <select
@@ -90,37 +104,72 @@ export default function AuditLogPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-[#1a1a1a]">
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Time</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">User</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Action</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Resource</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Details</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">IP</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Time
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                User
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Action
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Resource
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Details
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                IP
+              </th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center text-sm text-[#555555]">
+                <td
+                  colSpan={6}
+                  className="px-4 py-12 text-center text-sm text-[#555555]"
+                >
                   No audit log entries found
                 </td>
               </tr>
             ) : (
               filtered.map((entry) => (
-                <tr key={entry.id} className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#161616] transition-colors">
-                  <td className="px-4 py-3 text-sm text-[#555555] whitespace-nowrap">{formatDate(entry.inserted_at)}</td>
+                <tr
+                  key={entry.id}
+                  className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#161616] transition-colors"
+                >
+                  <td className="px-4 py-3 text-sm text-[#555555] whitespace-nowrap">
+                    {formatDate(entry.inserted_at)}
+                  </td>
                   <td className="px-4 py-3 text-sm text-[#888888]">
-                    {entry.user_id ? userMap.get(entry.user_id) ?? `User #${entry.user_id}` : "System"}
+                    {entry.user_id
+                      ? (userMap.get(entry.user_id) ?? `User #${entry.user_id}`)
+                      : "System"}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-sm font-medium ${actionColor(entry.action)}`}>{entry.action}</span>
+                    <span
+                      className={`text-sm font-medium ${actionColor(entry.action)}`}
+                    >
+                      {entry.action}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-[#888888]">
                     {entry.resource_type}
-                    {entry.resource_id != null && <span className="text-[#555555]"> #{entry.resource_id}</span>}
+                    {entry.resource_id != null && (
+                      <span className="text-[#555555]">
+                        {" "}
+                        #{entry.resource_id}
+                      </span>
+                    )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#555555] max-w-xs truncate">{entry.details ?? "-"}</td>
-                  <td className="px-4 py-3 text-sm text-[#555555] font-mono">{entry.ip_address ?? "-"}</td>
+                  <td className="px-4 py-3 text-sm text-[#555555] max-w-xs truncate">
+                    {entry.details ?? "-"}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-[#555555] font-mono">
+                    {entry.ip_address ?? "-"}
+                  </td>
                 </tr>
               ))
             )}

@@ -4,7 +4,12 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Deployment, DeploymentLog, Stack } from "@/types";
-import { reqGetDeployment, reqGetDeploymentLogs, reqApproveDeployment, reqRollbackDeployment } from "@/services/deployments.service";
+import {
+  reqGetDeployment,
+  reqGetDeploymentLogs,
+  reqApproveDeployment,
+  reqRollbackDeployment,
+} from "@/services/deployments.service";
 import { reqGetStacks } from "@/services/stacks.service";
 import { reqGetUsers } from "@/services/admin.service";
 import { PageLoader } from "@/components/ui/loading";
@@ -24,11 +29,17 @@ export default function DeploymentDetailPage() {
   const [deployment, setDeployment] = useState<Deployment | null>(null);
   const [logs, setLogs] = useState<DeploymentLog[]>([]);
   const [stacks, setStacks] = useState<Stack[]>([]);
-  const [users, setUsers] = useState<{ id: number; name: string | null; email: string }[]>([]);
+  const [users, setUsers] = useState<
+    { id: number; name: string | null; email: string }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const showConfirm = useConfirm();
+
+  useEffect(() => {
+    if (deployment) document.title = `Lattice - Deployment #${deployment.id}`;
+  }, [deployment]);
 
   useEffect(() => {
     const load = async () => {
@@ -58,7 +69,9 @@ export default function DeploymentDetailPage() {
       // Update deployment status if present
       const status = payload["status"] as string | undefined;
       if (status) {
-        setDeployment((prev) => prev ? { ...prev, status: status as Deployment["status"] } : prev);
+        setDeployment((prev) =>
+          prev ? { ...prev, status: status as Deployment["status"] } : prev,
+        );
       }
 
       // Append log entry if message present
@@ -75,7 +88,10 @@ export default function DeploymentDetailPage() {
             recorded_at: new Date().toISOString(),
           },
         ]);
-        setTimeout(() => logsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+        setTimeout(
+          () => logsEndRef.current?.scrollIntoView({ behavior: "smooth" }),
+          50,
+        );
       }
     },
     [id],
@@ -116,7 +132,8 @@ export default function DeploymentDetailPage() {
   const handleRollback = async () => {
     const ok = await showConfirm({
       title: "Rollback deployment",
-      message: "This will roll back the deployment. Any changes made by this deployment will be reverted.",
+      message:
+        "This will roll back the deployment. Any changes made by this deployment will be reverted.",
       confirmLabel: "Rollback",
       variant: "danger",
     });
@@ -128,9 +145,16 @@ export default function DeploymentDetailPage() {
   };
 
   if (loading) return <PageLoader />;
-  if (!deployment) return <div className="text-center text-sm text-[#555555] py-12">Deployment not found</div>;
+  if (!deployment)
+    return (
+      <div className="text-center text-sm text-[#555555] py-12">
+        Deployment not found
+      </div>
+    );
 
-  const currentStepIndex = timelineSteps.indexOf(deployment.status as typeof timelineSteps[number]);
+  const currentStepIndex = timelineSteps.indexOf(
+    deployment.status as (typeof timelineSteps)[number],
+  );
   const isFailed = deployment.status === "failed";
   const isRolledBack = deployment.status === "rolled_back";
 
@@ -140,14 +164,19 @@ export default function DeploymentDetailPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-white">Deployment #{deployment.id}</h1>
+            <h1 className="text-xl font-semibold text-white">
+              Deployment #{deployment.id}
+            </h1>
             <StatusBadge status={deployment.status} />
           </div>
           <p className="text-sm text-[#888888] mt-1">
-            <Link href={`/stacks/${deployment.stack_id}`} className="text-[#3b82f6] hover:underline">
+            <Link
+              href={`/stacks/${deployment.stack_id}`}
+              className="text-[#3b82f6] hover:underline"
+            >
               {stackName ?? `Stack #${deployment.stack_id}`}
-            </Link>
-            {" "}&middot; {deployment.strategy}
+            </Link>{" "}
+            &middot; {deployment.strategy}
           </p>
         </div>
         <div className="flex gap-2">
@@ -156,8 +185,13 @@ export default function DeploymentDetailPage() {
               {acting ? "Approving..." : "Approve"}
             </Button>
           )}
-          {(deployment.status === "deployed" || deployment.status === "deploying") && (
-            <Button variant="destructive" onClick={handleRollback} disabled={acting}>
+          {(deployment.status === "deployed" ||
+            deployment.status === "deploying") && (
+            <Button
+              variant="destructive"
+              onClick={handleRollback}
+              disabled={acting}
+            >
               {acting ? "Rolling back..." : "Rollback"}
             </Button>
           )}
@@ -167,7 +201,9 @@ export default function DeploymentDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Timeline */}
         <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
-          <h2 className="text-sm font-medium text-white mb-6">Status Timeline</h2>
+          <h2 className="text-sm font-medium text-white mb-6">
+            Status Timeline
+          </h2>
           <div className="space-y-4">
             {timelineSteps.map((step, i) => {
               const isCompleted = currentStepIndex >= i;
@@ -187,7 +223,12 @@ export default function DeploymentDetailPage() {
                     {i + 1}
                   </div>
                   <div>
-                    <p className={cn("text-sm font-medium capitalize", isCompleted ? "text-white" : "text-[#555555]")}>
+                    <p
+                      className={cn(
+                        "text-sm font-medium capitalize",
+                        isCompleted ? "text-white" : "text-[#555555]",
+                      )}
+                    >
                       {step}
                     </p>
                   </div>
@@ -199,7 +240,9 @@ export default function DeploymentDetailPage() {
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ef4444]/20 text-[#f87171] ring-1 ring-red-500/30 text-xs font-medium">
                   !
                 </div>
-                <p className="text-sm font-medium text-[#f87171] capitalize">{deployment.status.replace("_", " ")}</p>
+                <p className="text-sm font-medium text-[#f87171] capitalize">
+                  {deployment.status.replace("_", " ")}
+                </p>
               </div>
             )}
           </div>
@@ -210,28 +253,64 @@ export default function DeploymentDetailPage() {
           <h2 className="text-sm font-medium text-white mb-4">Details</h2>
           <div className="space-y-4">
             <div>
-              <p className="text-xs text-[#555555] uppercase tracking-wider">Strategy</p>
-              <p className="text-sm text-[#888888] mt-1">{deployment.strategy}</p>
+              <p className="text-xs text-[#555555] uppercase tracking-wider">
+                Strategy
+              </p>
+              <p className="text-sm text-[#888888] mt-1">
+                {deployment.strategy}
+              </p>
             </div>
             <div>
-              <p className="text-xs text-[#555555] uppercase tracking-wider">Triggered By</p>
-              <p className="text-sm text-[#888888] mt-1">{triggeredByUser ? triggeredByUser.name || triggeredByUser.email : deployment.triggered_by ? `User #${deployment.triggered_by}` : "System"}</p>
+              <p className="text-xs text-[#555555] uppercase tracking-wider">
+                Triggered By
+              </p>
+              <p className="text-sm text-[#888888] mt-1">
+                {triggeredByUser
+                  ? triggeredByUser.name || triggeredByUser.email
+                  : deployment.triggered_by
+                    ? `User #${deployment.triggered_by}`
+                    : "System"}
+              </p>
             </div>
             <div>
-              <p className="text-xs text-[#555555] uppercase tracking-wider">Approved By</p>
-              <p className="text-sm text-[#888888] mt-1">{approvedByUser ? approvedByUser.name || approvedByUser.email : deployment.approved_by ? `User #${deployment.approved_by}` : "-"}</p>
+              <p className="text-xs text-[#555555] uppercase tracking-wider">
+                Approved By
+              </p>
+              <p className="text-sm text-[#888888] mt-1">
+                {approvedByUser
+                  ? approvedByUser.name || approvedByUser.email
+                  : deployment.approved_by
+                    ? `User #${deployment.approved_by}`
+                    : "-"}
+              </p>
             </div>
             <div>
-              <p className="text-xs text-[#555555] uppercase tracking-wider">Started At</p>
-              <p className="text-sm text-[#888888] mt-1">{deployment.started_at ? formatDate(deployment.started_at) : "-"}</p>
+              <p className="text-xs text-[#555555] uppercase tracking-wider">
+                Started At
+              </p>
+              <p className="text-sm text-[#888888] mt-1">
+                {deployment.started_at
+                  ? formatDate(deployment.started_at)
+                  : "-"}
+              </p>
             </div>
             <div>
-              <p className="text-xs text-[#555555] uppercase tracking-wider">Completed At</p>
-              <p className="text-sm text-[#888888] mt-1">{deployment.completed_at ? formatDate(deployment.completed_at) : "-"}</p>
+              <p className="text-xs text-[#555555] uppercase tracking-wider">
+                Completed At
+              </p>
+              <p className="text-sm text-[#888888] mt-1">
+                {deployment.completed_at
+                  ? formatDate(deployment.completed_at)
+                  : "-"}
+              </p>
             </div>
             <div>
-              <p className="text-xs text-[#555555] uppercase tracking-wider">Created</p>
-              <p className="text-sm text-[#888888] mt-1">{formatDate(deployment.inserted_at)}</p>
+              <p className="text-xs text-[#555555] uppercase tracking-wider">
+                Created
+              </p>
+              <p className="text-sm text-[#888888] mt-1">
+                {formatDate(deployment.inserted_at)}
+              </p>
             </div>
           </div>
         </div>
@@ -262,7 +341,11 @@ export default function DeploymentDetailPage() {
                 )}
                 <span
                   className={cn(
-                    log.level === "error" ? "text-[#f87171]" : log.level === "warn" ? "text-[#eab308]" : "text-[#d4d4d4]",
+                    log.level === "error"
+                      ? "text-[#f87171]"
+                      : log.level === "warn"
+                        ? "text-[#eab308]"
+                        : "text-[#d4d4d4]",
                   )}
                 >
                   {log.message}

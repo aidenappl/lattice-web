@@ -166,6 +166,10 @@ export default function WorkerDetailPage() {
   };
 
   useEffect(() => {
+    if (worker) document.title = `Lattice - ${worker.name}`;
+  }, [worker]);
+
+  useEffect(() => {
     load();
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -312,11 +316,33 @@ export default function WorkerDetailPage() {
   };
 
   const handleWorkerAction = async (action: string) => {
-    const confirmMessages: Record<string, { title: string; message: string; variant: "danger" | "warning" }> = {
-      reboot: { title: "Reboot worker", message: "Are you sure you want to reboot this worker's OS? The worker will go offline temporarily.", variant: "danger" },
-      upgrade: { title: "Upgrade runner", message: "Are you sure you want to upgrade the lattice-runner on this worker? The runner will restart after upgrade.", variant: "warning" },
-      "stop-all": { title: "Stop all containers", message: "Are you sure you want to stop all containers on this worker?", variant: "warning" },
-      "start-all": { title: "Start all containers", message: "Are you sure you want to start all stopped containers on this worker?", variant: "warning" },
+    const confirmMessages: Record<
+      string,
+      { title: string; message: string; variant: "danger" | "warning" }
+    > = {
+      reboot: {
+        title: "Reboot worker",
+        message:
+          "Are you sure you want to reboot this worker's OS? The worker will go offline temporarily.",
+        variant: "danger",
+      },
+      upgrade: {
+        title: "Upgrade runner",
+        message:
+          "Are you sure you want to upgrade the lattice-runner on this worker? The runner will restart after upgrade.",
+        variant: "warning",
+      },
+      "stop-all": {
+        title: "Stop all containers",
+        message: "Are you sure you want to stop all containers on this worker?",
+        variant: "warning",
+      },
+      "start-all": {
+        title: "Start all containers",
+        message:
+          "Are you sure you want to start all stopped containers on this worker?",
+        variant: "warning",
+      },
     };
     const conf = confirmMessages[action];
     if (conf) {
@@ -338,7 +364,8 @@ export default function WorkerDetailPage() {
   const handleDeleteWorker = async () => {
     const confirmed = await showConfirm({
       title: "Delete worker",
-      message: "Are you sure you want to delete this worker? This cannot be undone. All tokens for this worker will also be deleted.",
+      message:
+        "Are you sure you want to delete this worker? This cannot be undone. All tokens for this worker will also be deleted.",
       confirmLabel: "Delete",
       variant: "danger",
     });

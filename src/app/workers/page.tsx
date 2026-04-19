@@ -3,7 +3,11 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Worker } from "@/types";
-import { reqGetWorkers, reqCreateWorker, reqCreateWorkerToken } from "@/services/workers.service";
+import {
+  reqGetWorkers,
+  reqCreateWorker,
+  reqCreateWorkerToken,
+} from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +30,10 @@ export default function WorkersPage() {
   const [createdToken, setCreatedToken] = useState<string | null>(null);
 
   useEffect(() => {
+    document.title = "Lattice - Workers";
+  }, []);
+
+  useEffect(() => {
     const load = async () => {
       const res = await reqGetWorkers();
       if (res.success) setWorkers(res.data ?? []);
@@ -35,34 +43,41 @@ export default function WorkersPage() {
   }, []);
 
   // Live updates via WebSocket
-  const handleSocketEvent = useCallback(
-    (event: AdminSocketEvent) => {
-      if (event.type === "worker_heartbeat" && event.worker_id) {
-        setWorkers((prev) =>
-          prev.map((w) =>
-            w.id === event.worker_id
-              ? { ...w, status: "online", last_heartbeat_at: new Date().toISOString() }
-              : w,
-          ),
-        );
-      }
-      if (event.type === "worker_connected" && event.worker_id) {
-        setWorkers((prev) =>
-          prev.map((w) =>
-            w.id === event.worker_id
-              ? { ...w, status: "online", last_heartbeat_at: new Date().toISOString() }
-              : w,
-          ),
-        );
-      }
-      if (event.type === "worker_disconnected" && event.worker_id) {
-        setWorkers((prev) =>
-          prev.map((w) => (w.id === event.worker_id ? { ...w, status: "offline" } : w)),
-        );
-      }
-    },
-    [],
-  );
+  const handleSocketEvent = useCallback((event: AdminSocketEvent) => {
+    if (event.type === "worker_heartbeat" && event.worker_id) {
+      setWorkers((prev) =>
+        prev.map((w) =>
+          w.id === event.worker_id
+            ? {
+                ...w,
+                status: "online",
+                last_heartbeat_at: new Date().toISOString(),
+              }
+            : w,
+        ),
+      );
+    }
+    if (event.type === "worker_connected" && event.worker_id) {
+      setWorkers((prev) =>
+        prev.map((w) =>
+          w.id === event.worker_id
+            ? {
+                ...w,
+                status: "online",
+                last_heartbeat_at: new Date().toISOString(),
+              }
+            : w,
+        ),
+      );
+    }
+    if (event.type === "worker_disconnected" && event.worker_id) {
+      setWorkers((prev) =>
+        prev.map((w) =>
+          w.id === event.worker_id ? { ...w, status: "offline" } : w,
+        ),
+      );
+    }
+  }, []);
   useAdminSocket(handleSocketEvent);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -71,7 +86,10 @@ export default function WorkersPage() {
     setSubmitting(true);
 
     // Create the worker
-    const workerRes = await reqCreateWorker({ name: name.trim(), hostname: hostname.trim() });
+    const workerRes = await reqCreateWorker({
+      name: name.trim(),
+      hostname: hostname.trim(),
+    });
     if (!workerRes.success) {
       setSubmitting(false);
       return;
@@ -100,16 +118,26 @@ export default function WorkersPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white">Workers</h1>
-          <p className="text-sm text-[#888888] mt-1">Manage your infrastructure workers</p>
+          <p className="text-sm text-[#888888] mt-1">
+            Manage your infrastructure workers
+          </p>
         </div>
-        <Button onClick={() => { setShowForm(!showForm); dismissCreated(); }}>
+        <Button
+          onClick={() => {
+            setShowForm(!showForm);
+            dismissCreated();
+          }}
+        >
           {showForm ? "Cancel" : "Add Worker"}
         </Button>
       </div>
 
       {/* Create form */}
       {showForm && (
-        <form onSubmit={handleCreate} className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6 mb-6 space-y-4">
+        <form
+          onSubmit={handleCreate}
+          className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6 mb-6 space-y-4"
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               id="worker-name"
@@ -128,7 +156,10 @@ export default function WorkersPage() {
               required
             />
           </div>
-          <Button type="submit" disabled={submitting || !name.trim() || !hostname.trim()}>
+          <Button
+            type="submit"
+            disabled={submitting || !name.trim() || !hostname.trim()}
+          >
             {submitting ? "Creating..." : "Create Worker"}
           </Button>
         </form>
@@ -143,7 +174,8 @@ export default function WorkersPage() {
                 Worker &quot;{createdWorker.name}&quot; created
               </h3>
               <p className="text-xs text-[#888888] mt-1">
-                Copy the token below and configure it on your runner. It will not be shown again.
+                Copy the token below and configure it on your runner. It will
+                not be shown again.
               </p>
             </div>
             <Button variant="ghost" size="sm" onClick={dismissCreated}>
@@ -152,23 +184,33 @@ export default function WorkersPage() {
           </div>
           <div className="rounded-lg bg-[#0a0a0a] border border-[#1a1a1a] p-4 space-y-3">
             <div>
-              <p className="text-xs text-[#555555] uppercase tracking-wider mb-1">Quick Install (run on the worker VM)</p>
+              <p className="text-xs text-[#555555] uppercase tracking-wider mb-1">
+                Quick Install (run on the worker VM)
+              </p>
               <pre className="text-xs text-white font-mono whitespace-pre-wrap select-all bg-[#111111] rounded-lg p-3 mt-1">
-{`curl -fsSL ${process.env.NEXT_PUBLIC_LATTICE_API}/install/runner | WORKER_TOKEN=${createdToken} WORKER_NAME=${createdWorker.name} bash`}
+                {`curl -fsSL ${process.env.NEXT_PUBLIC_LATTICE_API}/install/runner | WORKER_TOKEN=${createdToken} WORKER_NAME=${createdWorker.name} bash`}
               </pre>
             </div>
             <div className="border-t border-[#1a1a1a] pt-3">
-              <p className="text-xs text-[#555555] uppercase tracking-wider mb-1">Or configure manually</p>
+              <p className="text-xs text-[#555555] uppercase tracking-wider mb-1">
+                Or configure manually
+              </p>
               <pre className="text-xs text-[#888888] font-mono whitespace-pre-wrap select-all">
-{`ORCHESTRATOR_URL=${(process.env.NEXT_PUBLIC_LATTICE_API ?? "").replace(/^http/, "ws")}/ws/worker
+                {`ORCHESTRATOR_URL=${(process.env.NEXT_PUBLIC_LATTICE_API ?? "").replace(/^http/, "ws")}/ws/worker
 WORKER_TOKEN=${createdToken}
 WORKER_NAME=${createdWorker.name}`}
               </pre>
             </div>
             <div className="border-t border-[#1a1a1a] pt-3">
-              <p className="text-xs text-[#555555] uppercase tracking-wider mb-1">Worker Token</p>
-              <p className="text-xs text-white font-mono break-all select-all">{createdToken}</p>
-              <p className="text-xs text-[#555555] mt-1">This token will not be shown again.</p>
+              <p className="text-xs text-[#555555] uppercase tracking-wider mb-1">
+                Worker Token
+              </p>
+              <p className="text-xs text-white font-mono break-all select-all">
+                {createdToken}
+              </p>
+              <p className="text-xs text-[#555555] mt-1">
+                This token will not be shown again.
+              </p>
             </div>
           </div>
         </div>
@@ -179,39 +221,66 @@ WORKER_NAME=${createdWorker.name}`}
         <table className="w-full">
           <thead>
             <tr className="border-b border-[#1a1a1a]">
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Name</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Hostname</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Status</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">OS / Arch</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Docker</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Last Heartbeat</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Name
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Hostname
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                OS / Arch
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Docker
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Last Heartbeat
+              </th>
             </tr>
           </thead>
           <tbody>
             {workers.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center text-sm text-[#555555]">
+                <td
+                  colSpan={6}
+                  className="px-4 py-12 text-center text-sm text-[#555555]"
+                >
                   No workers found
                 </td>
               </tr>
             ) : (
               workers.map((worker) => (
-                <tr key={worker.id} className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#161616] transition-colors">
+                <tr
+                  key={worker.id}
+                  className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#161616] transition-colors"
+                >
                   <td className="px-4 py-3">
-                    <Link href={`/workers/${worker.id}`} className="text-sm font-medium text-white hover:text-[#3b82f6] transition-colors">
+                    <Link
+                      href={`/workers/${worker.id}`}
+                      className="text-sm font-medium text-white hover:text-[#3b82f6] transition-colors"
+                    >
                       {worker.name}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#888888] font-mono">{worker.hostname}</td>
+                  <td className="px-4 py-3 text-sm text-[#888888] font-mono">
+                    {worker.hostname}
+                  </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={worker.status} />
                   </td>
                   <td className="px-4 py-3 text-sm text-[#888888]">
                     {worker.os ?? "-"} / {worker.arch ?? "-"}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#888888] font-mono">{worker.docker_version ?? "-"}</td>
+                  <td className="px-4 py-3 text-sm text-[#888888] font-mono">
+                    {worker.docker_version ?? "-"}
+                  </td>
                   <td className="px-4 py-3 text-sm text-[#555555]">
-                    {worker.last_heartbeat_at ? timeAgo(worker.last_heartbeat_at) : "Never"}
+                    {worker.last_heartbeat_at
+                      ? timeAgo(worker.last_heartbeat_at)
+                      : "Never"}
                   </td>
                 </tr>
               ))

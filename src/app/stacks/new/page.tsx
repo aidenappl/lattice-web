@@ -1,14 +1,22 @@
 "use client";
 
-import { useEffect, useState, useRef, DragEvent } from "react";
+import { useEffect, useState, useRef, useMemo, DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Worker } from "@/types";
 import { reqGetWorkers } from "@/services/workers.service";
-import { reqImportCompose } from "@/services/stacks.service";
+import {
+  reqImportCompose,
+  reqUpdateStack,
+  reqGetContainers,
+  reqUpdateContainer,
+} from "@/services/stacks.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { Alert } from "@/components/ui/alert";
+import { useConfirm } from "@/components/ui/confirm-modal";
+
+type EnvRow = { id: number; key: string; value: string };
 
 function extractStackName(yaml: string, filename?: string): string {
   if (filename) {
@@ -23,30 +31,108 @@ function extractStackName(yaml: string, filename?: string): string {
   return "";
 }
 
+function extractEnvVarKeys(yaml: string): string[] {
+  const matches = yaml.match(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g) ?? [];
+  return Array.from(new Set(matches.map((m) => m.slice(2, -1))));
+}
+
 export default function NewStackPage() {
   const router = useRouter();
+  const showConfirm = useConfirm();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const envIdCounter = useRef(0);
+
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [workerId, setWorkerId] = useState<string>("");
   const [strategy, setStrategy] = useState("rolling");
   const [composeYaml, setComposeYaml] = useState("");
+  const [envRows, setEnvRows] = useState<EnvRow[]>([]);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
   useEffect(() => {
-    const load = async () => {
-      const res = await reqGetWorkers();
-      if (res.success) setWorkers(res.data ?? []);
-    };
-    load();
+    document.title = "Lattice - Create Stack";
   }, []);
+
+  useEffect(() => {
+    reqGetWorkers().then((res) => {
+      if (res.success) setWorkers(res.data ?? []);
+    });
+  }, []);
+
+  // Auto-populate env rows from ${KEY} references detected in compose YAML
+  useEffect(() => {
+    const detectedKeys = extractEnvVarKeys(composeYaml);
+    setEnvRows((prev) => {
+      const existingKeys = new Set(prev.map((r) => r.key));
+      const toAdd = detectedKeys.filter((k) => !existingKeys.has(k));
+      if (toAdd.length === 0) return prev;
+      return [
+        ...prev,
+        ...toAdd.map((k) => {
+          envIdCounter.current += 1;
+          return { id: envIdCounter.current, key: k, value: "" };
+        }),
+      ];
+    });
+  }, [composeYaml]);
+
+  const envVarMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const row of envRows) {
+      if (row.key.trim()) map[row.key.trim()] = row.value;
+    }
+    return map;
+  }, [envRows]);
+
+  const referencedKeys = useMemo(
+    () => extractEnvVarKeys(composeYaml),
+    [composeYaml],
+  );
+
+  const definedCount = referencedKeys.filter(
+    (k) => k in envVarMap && envVarMap[k].trim() !== "",
+  ).length;
+  const missingCount = referencedKeys.length - definedCount;
+
+  const hasChanges =
+    name.trim() !== "" ||
+    description.trim() !== "" ||
+    composeYaml.trim() !== "" ||
+    envRows.some((r) => r.value.trim() !== "");
+
+  const handleCancel = async () => {
+    if (hasChanges) {
+      const confirmed = await showConfirm({
+        title: "Discard changes?",
+        message:
+          "You have unsaved changes that will be lost. Are you sure you want to leave?",
+        confirmLabel: "Discard",
+        cancelLabel: "Keep editing",
+        variant: "warning",
+      });
+      if (!confirmed) return;
+    }
+    router.back();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    const missingKeys = referencedKeys.filter(
+      (k) => !(k in envVarMap) || envVarMap[k].trim() === "",
+    );
+    if (missingKeys.length > 0) {
+      setError(
+        `The following environment variables are referenced but have no value: ${missingKeys.join(", ")}`,
+      );
+      return;
+    }
+
     setSubmitting(true);
     const res = await reqImportCompose({
       name,
@@ -56,7 +142,51 @@ export default function NewStackPage() {
       compose_yaml: composeYaml,
     });
     if (res.success) {
-      router.push(`/stacks/${res.data.id}`);
+      const stackId = res.data.id;
+
+      // Save env vars to the stack record.
+      if (Object.keys(envVarMap).length > 0) {
+        await reqUpdateStack(stackId, {
+          env_vars: JSON.stringify(envVarMap),
+        });
+      }
+
+      // Resolve ${KEY} placeholders in each container's env_vars.
+      // The import endpoint stores them verbatim from the compose file, but
+      // HandleDeployStack merges stack env vars as base and container env vars
+      // as override — so a container value of "${KEY}" would override the real
+      // stack value and the literal string would reach Docker. We patch them
+      // here so containers hold the resolved values before any deploy.
+      if (Object.keys(envVarMap).length > 0) {
+        const containersRes = await reqGetContainers(stackId);
+        if (containersRes.success && containersRes.data) {
+          const PLACEHOLDER = /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/;
+          for (const container of containersRes.data) {
+            if (!container.env_vars) continue;
+            let envObj: Record<string, string>;
+            try {
+              envObj = JSON.parse(container.env_vars);
+            } catch {
+              continue;
+            }
+            let changed = false;
+            for (const [k, v] of Object.entries(envObj)) {
+              const m = PLACEHOLDER.exec(v);
+              if (m && m[1] in envVarMap && envVarMap[m[1]].trim() !== "") {
+                envObj[k] = envVarMap[m[1]];
+                changed = true;
+              }
+            }
+            if (changed) {
+              await reqUpdateContainer(container.id, {
+                env_vars: JSON.stringify(envObj),
+              });
+            }
+          }
+        }
+      }
+
+      router.push(`/stacks/${stackId}`);
     } else {
       setError(res.error_message || "Failed to import compose file");
     }
@@ -72,9 +202,7 @@ export default function NewStackPage() {
     reader.onload = (e) => {
       const content = e.target?.result as string;
       setComposeYaml(content);
-      if (!name) {
-        setName(extractStackName(content, file.name));
-      }
+      if (!name) setName(extractStackName(content, file.name));
       setError("");
     };
     reader.readAsText(file);
@@ -93,6 +221,26 @@ export default function NewStackPage() {
   };
 
   const handleDragLeave = () => setDragOver(false);
+
+  // ── Env row handlers ────────────────────────────────────────────────────────
+
+  const updateEnvRow = (id: number, field: "key" | "value", val: string) => {
+    setEnvRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, [field]: val } : r)),
+    );
+  };
+
+  const removeEnvRow = (id: number) => {
+    setEnvRows((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  const addEnvRow = () => {
+    envIdCounter.current += 1;
+    setEnvRows((prev) => [
+      ...prev,
+      { id: envIdCounter.current, key: "", value: "" },
+    ]);
+  };
 
   return (
     <div>
@@ -176,7 +324,7 @@ export default function NewStackPage() {
           </div>
         </div>
 
-        {/* Compose YAML editor with drag/drop */}
+        {/* Compose YAML editor */}
         <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6">
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -239,6 +387,7 @@ export default function NewStackPage() {
             <CodeEditor
               rows={20}
               language="yaml"
+              envVars={envVarMap}
               placeholder={`services:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"\n    restart: unless-stopped`}
               value={composeYaml}
               onChange={(v) => {
@@ -249,6 +398,138 @@ export default function NewStackPage() {
               }}
             />
           </div>
+        </div>
+
+        {/* Environment Variables */}
+        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-white">
+                Environment Variables
+              </h2>
+              <p className="text-xs text-[#555555] mt-0.5">
+                Values for{" "}
+                <code className="text-[#888888] font-mono">{"${VAR}"}</code>{" "}
+                references in your compose file
+              </p>
+            </div>
+            {referencedKeys.length > 0 && (
+              <div className="flex items-center gap-3">
+                {definedCount > 0 && (
+                  <span className="flex items-center gap-1 text-xs text-[#22c55e]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e] shrink-0" />
+                    {definedCount} defined
+                  </span>
+                )}
+                {missingCount > 0 && (
+                  <span className="flex items-center gap-1 text-xs text-[#ef4444]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#ef4444] shrink-0" />
+                    {missingCount} missing
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-[#2a2a2a] overflow-hidden">
+            {envRows.length > 0 ? (
+              <>
+                <div className="grid grid-cols-[1fr_1fr_auto] text-xs text-[#555555] uppercase tracking-wider px-3 py-2 border-b border-[#2a2a2a] bg-[#0d0d0d]">
+                  <span>Key</span>
+                  <span>Value</span>
+                  <span />
+                </div>
+                {envRows.map((row) => {
+                  const trimmedKey = row.key.trim();
+                  const isReferenced = referencedKeys.includes(trimmedKey);
+                  const isDefined =
+                    trimmedKey !== "" && row.value.trim() !== "";
+                  const keyColorClass = isReferenced
+                    ? isDefined
+                      ? "text-[#22c55e]"
+                      : "text-[#ef4444]"
+                    : "text-white";
+
+                  return (
+                    <div
+                      key={row.id}
+                      className="grid grid-cols-[1fr_1fr_auto] items-center border-b border-[#1a1a1a] last:border-b-0"
+                    >
+                      <input
+                        type="text"
+                        value={row.key}
+                        onChange={(e) =>
+                          updateEnvRow(row.id, "key", e.target.value)
+                        }
+                        placeholder="KEY"
+                        spellCheck={false}
+                        className={`bg-transparent px-3 py-2 text-sm font-mono placeholder:text-[#333333] focus:outline-none border-r border-[#1a1a1a] ${keyColorClass}`}
+                      />
+                      <input
+                        type="text"
+                        value={row.value}
+                        onChange={(e) =>
+                          updateEnvRow(row.id, "value", e.target.value)
+                        }
+                        placeholder="value"
+                        spellCheck={false}
+                        className="bg-transparent px-3 py-2 text-sm text-white font-mono placeholder:text-[#333333] focus:outline-none border-r border-[#1a1a1a]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeEnvRow(row.id)}
+                        className="px-3 py-2 text-[#555555] hover:text-[#ef4444] transition-colors"
+                        aria-label="Remove variable"
+                      >
+                        <svg
+                          className="h-3.5 w-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  );
+                })}
+              </>
+            ) : (
+              <div className="px-3 py-8 text-center">
+                <p className="text-xs text-[#555555]">
+                  No environment variables. Add one below, or reference{" "}
+                  <code className="font-mono text-[#888888]">{"${VAR}"}</code>{" "}
+                  in your compose file to auto-detect.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={addEnvRow}
+            className="mt-3 flex items-center gap-1.5 text-xs text-[#555555] hover:text-white transition-colors"
+          >
+            <svg
+              className="h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Add variable
+          </button>
         </div>
 
         {error && (
@@ -265,7 +546,7 @@ export default function NewStackPage() {
           >
             Import Stack
           </Button>
-          <Button type="button" variant="ghost" onClick={() => router.back()}>
+          <Button type="button" variant="ghost" onClick={handleCancel}>
             Cancel
           </Button>
         </div>

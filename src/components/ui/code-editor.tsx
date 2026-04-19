@@ -26,31 +26,27 @@ function highlightJSON(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  return escaped
-    // Strings (keys and values) — must come first
-    .replace(
-      /("(?:[^"\\]|\\.)*")\s*:/g,
-      '<span class="json-key">$1</span>:',
-    )
-    .replace(
-      /:\s*("(?:[^"\\]|\\.)*")/g,
-      ': <span class="json-string">$1</span>',
-    )
-    // Standalone strings (in arrays, etc.)
-    .replace(
-      /(?<=[\[,\s])("(?:[^"\\]|\\.)*")(?=[,\]\s])/g,
-      '<span class="json-string">$1</span>',
-    )
-    // Numbers
-    .replace(
-      /(?<=:\s*|[\[,\s])(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=[,\}\]\s])/g,
-      '<span class="json-number">$1</span>',
-    )
-    // Booleans & null
-    .replace(
-      /\b(true|false|null)\b/g,
-      '<span class="json-bool">$1</span>',
-    );
+  return (
+    escaped
+      // Strings (keys and values) — must come first
+      .replace(/("(?:[^"\\]|\\.)*")\s*:/g, '<span class="json-key">$1</span>:')
+      .replace(
+        /:\s*("(?:[^"\\]|\\.)*")/g,
+        ': <span class="json-string">$1</span>',
+      )
+      // Standalone strings (in arrays, etc.)
+      .replace(
+        /(?<=[\[,\s])("(?:[^"\\]|\\.)*")(?=[,\]\s])/g,
+        '<span class="json-string">$1</span>',
+      )
+      // Numbers
+      .replace(
+        /(?<=:\s*|[\[,\s])(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=[,\}\]\s])/g,
+        '<span class="json-number">$1</span>',
+      )
+      // Booleans & null
+      .replace(/\b(true|false|null)\b/g, '<span class="json-bool">$1</span>')
+  );
 }
 
 function highlightYAML(text: string): string {
@@ -85,6 +81,7 @@ interface CodeEditorProps {
   placeholder?: string;
   className?: string;
   language?: "json" | "yaml" | "text";
+  envVars?: Record<string, string>;
 }
 
 export function CodeEditor({
@@ -94,6 +91,7 @@ export function CodeEditor({
   placeholder,
   className,
   language = "json",
+  envVars,
 }: CodeEditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const preRef = useRef<HTMLPreElement>(null);
@@ -106,13 +104,25 @@ export function CodeEditor({
   }, []);
 
   const highlighted = useMemo(() => {
-    if (language === "json") return highlightJSON(value);
-    if (language === "yaml") return highlightYAML(value);
-    return value
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-  }, [value, language]);
+    let html: string;
+    if (language === "json") html = highlightJSON(value);
+    else if (language === "yaml") html = highlightYAML(value);
+    else
+      html = value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    if (envVars !== undefined) {
+      html = html.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, key) => {
+        const defined = key in envVars && envVars[key].trim() !== "";
+        const cls = defined ? "env-var-defined" : "env-var-missing";
+        return `<span class="${cls}">${match}</span>`;
+      });
+    }
+
+    return html;
+  }, [value, language, envVars]);
 
   const insert = useCallback(
     (ta: HTMLTextAreaElement, before: string, after: string = "") => {
@@ -287,12 +297,17 @@ export function CodeEditor({
   );
 
   return (
-    <div className={cn("relative rounded-lg border border-[#2a2a2a] bg-[#0d0d0d] overflow-hidden focus-within:border-[#444444]", className)}>
+    <div
+      className={cn(
+        "relative rounded-lg border border-[#2a2a2a] bg-[#0d0d0d] overflow-hidden focus-within:border-[#444444]",
+        className,
+      )}
+    >
       {/* Highlighted underlay */}
       <pre
         ref={preRef}
         aria-hidden
-        className="absolute inset-0 px-3 py-2 text-sm font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none m-0 [&_.json-key]:text-[#7aa2f7] [&_.json-string]:text-[#9ece6a] [&_.json-number]:text-[#ff9e64] [&_.json-bool]:text-[#ff9e64] [&_.yaml-key]:text-[#7aa2f7] [&_.yaml-colon]:text-[#555555] [&_.yaml-comment]:text-[#555555]"
+        className="absolute inset-0 px-3 py-2 text-sm font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none m-0 [&_.json-key]:text-[#7aa2f7] [&_.json-string]:text-[#9ece6a] [&_.json-number]:text-[#ff9e64] [&_.json-bool]:text-[#ff9e64] [&_.yaml-key]:text-[#7aa2f7] [&_.yaml-colon]:text-[#555555] [&_.yaml-comment]:text-[#555555] [&_.env-var-defined]:text-[#22c55e] [&_.env-var-defined]:font-semibold [&_.env-var-missing]:text-[#ef4444] [&_.env-var-missing]:font-semibold"
         dangerouslySetInnerHTML={{ __html: highlighted + "\n" }}
       />
       {/* Transparent textarea on top for editing */}

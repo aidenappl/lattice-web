@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/store/hooks";
 import { APP_VERSION } from "@/lib/version";
+import { Logo } from "@/components/ui/logo";
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API;
 
 const navigation = [
@@ -57,21 +58,7 @@ export function Navbar() {
         <div className="flex items-center gap-6">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#3b82f6]">
-              <svg
-                className="h-5 w-5 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-                />
-              </svg>
-            </div>
+            <Logo size="sm" />
             <span className="font-semibold text-white">
               Lattice
               <span className="ml-1.5 text-[#888888] font-normal">Admin</span>

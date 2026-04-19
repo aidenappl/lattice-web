@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { reqLogin } from "@/services/auth.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
+import { Logo } from "@/components/ui/logo";
 
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 
@@ -13,6 +14,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    document.title = "Lattice - Login";
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,16 +39,14 @@ export default function LoginPage() {
         <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-8 shadow-2xl">
           {/* Logo */}
           <div className="flex items-center justify-center gap-3.5 mb-8">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#3b82f6]">
-              <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-              </svg>
-            </div>
+            <Logo size="md" />
             <div className="flex flex-col leading-none">
               <span className="text-xl font-semibold text-white tracking-tight">
                 Lattice
               </span>
-              <span className="text-xs text-[#555555] font-medium">Sign in to continue</span>
+              <span className="text-xs text-[#555555] font-medium">
+                Sign in to continue
+              </span>
             </div>
           </div>
 
@@ -68,11 +71,14 @@ export default function LoginPage() {
               required
             />
 
-            {error && (
-              <Alert variant="error">{error}</Alert>
-            )}
+            {error && <Alert variant="error">{error}</Alert>}
 
-            <Button type="submit" size="lg" className="w-full mt-2" disabled={loading}>
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full mt-2"
+              disabled={loading}
+            >
               {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>

@@ -185,7 +185,9 @@ export default function ContainerDetailPage() {
         setEditPortMappings(res.data.port_mappings ?? "");
         setEditVolumes(res.data.volumes ?? "");
         setEditHealthCheck(res.data.health_check ?? "");
-        setEditRegistryId(res.data.registry_id != null ? String(res.data.registry_id) : "");
+        setEditRegistryId(
+          res.data.registry_id != null ? String(res.data.registry_id) : "",
+        );
       }
       if (res.data.stack_id) {
         const sRes = await reqGetStack(res.data.stack_id);
@@ -262,6 +264,10 @@ export default function ContainerDetailPage() {
     [loadContainer, loadLogs, tab],
   );
   useAdminSocket(handleSocketEvent);
+
+  useEffect(() => {
+    if (container) document.title = `Lattice - ${container.name}`;
+  }, [container]);
 
   useEffect(() => {
     loadContainer();
@@ -477,7 +483,12 @@ export default function ContainerDetailPage() {
           loading={actionLoading === "stop"}
           color="text-[#888888] hover:bg-[#2a2a2a]"
           onClick={async () => {
-            const ok = await showConfirm({ title: "Stop container", message: `Stop "${container.name}"? The container will be gracefully shut down.`, confirmLabel: "Stop", variant: "warning" });
+            const ok = await showConfirm({
+              title: "Stop container",
+              message: `Stop "${container.name}"? The container will be gracefully shut down.`,
+              confirmLabel: "Stop",
+              variant: "warning",
+            });
             if (ok) runAction("stop", () => reqStopContainer(container.id));
           }}
         />
@@ -503,7 +514,12 @@ export default function ContainerDetailPage() {
           loading={actionLoading === "kill"}
           color="text-[#ef4444] hover:bg-[#ef4444]/10"
           onClick={async () => {
-            const ok = await showConfirm({ title: "Kill container", message: `Force-kill "${container.name}"? This sends SIGKILL immediately.`, confirmLabel: "Kill", variant: "danger" });
+            const ok = await showConfirm({
+              title: "Kill container",
+              message: `Force-kill "${container.name}"? This sends SIGKILL immediately.`,
+              confirmLabel: "Kill",
+              variant: "danger",
+            });
             if (ok) runAction("kill", () => reqKillContainer(container.id));
           }}
         />
@@ -529,8 +545,14 @@ export default function ContainerDetailPage() {
           loading={actionLoading === "restart"}
           color="text-[#3b82f6] hover:bg-[#3b82f6]/10"
           onClick={async () => {
-            const ok = await showConfirm({ title: "Restart container", message: `Restart "${container.name}"? The container will be stopped and started.`, confirmLabel: "Restart", variant: "warning" });
-            if (ok) runAction("restart", () => reqRestartContainer(container.id));
+            const ok = await showConfirm({
+              title: "Restart container",
+              message: `Restart "${container.name}"? The container will be stopped and started.`,
+              confirmLabel: "Restart",
+              variant: "warning",
+            });
+            if (ok)
+              runAction("restart", () => reqRestartContainer(container.id));
           }}
         />
         {/* Pause */}
@@ -593,8 +615,14 @@ export default function ContainerDetailPage() {
           loading={actionLoading === "recreate"}
           color="text-[#a855f7] hover:bg-[#a855f7]/10"
           onClick={async () => {
-            const ok = await showConfirm({ title: "Recreate container", message: `Recreate "${container.name}"? The container will be removed and created fresh from its config.`, confirmLabel: "Recreate", variant: "warning" });
-            if (ok) runAction("recreate", () => reqRecreateContainer(container.id));
+            const ok = await showConfirm({
+              title: "Recreate container",
+              message: `Recreate "${container.name}"? The container will be removed and created fresh from its config.`,
+              confirmLabel: "Recreate",
+              variant: "warning",
+            });
+            if (ok)
+              runAction("recreate", () => reqRecreateContainer(container.id));
           }}
         />
         {/* Remove */}
@@ -619,7 +647,12 @@ export default function ContainerDetailPage() {
           loading={actionLoading === "remove"}
           color="text-[#ef4444] hover:bg-[#ef4444]/10"
           onClick={async () => {
-            const ok = await showConfirm({ title: "Remove container", message: `Permanently remove "${container.name}" from Docker? This cannot be undone.`, confirmLabel: "Remove", variant: "danger" });
+            const ok = await showConfirm({
+              title: "Remove container",
+              message: `Permanently remove "${container.name}" from Docker? This cannot be undone.`,
+              confirmLabel: "Remove",
+              variant: "danger",
+            });
             if (ok) runAction("remove", () => reqRemoveContainer(container.id));
           }}
         />
@@ -646,7 +679,9 @@ export default function ContainerDetailPage() {
 
         {actionError && (
           <div className="ml-auto">
-            <Alert variant="error" onDismiss={() => setActionError(null)}>{actionError}</Alert>
+            <Alert variant="error" onDismiss={() => setActionError(null)}>
+              {actionError}
+            </Alert>
           </div>
         )}
       </div>
@@ -819,7 +854,9 @@ export default function ContainerDetailPage() {
                 rows={4}
                 value={editHealthCheck}
                 onChange={setEditHealthCheck}
-                placeholder={'{"test": ["CMD", "curl", "-f", "http://localhost"], "interval": "30s", "timeout": "10s", "retries": 3}'}
+                placeholder={
+                  '{"test": ["CMD", "curl", "-f", "http://localhost"], "interval": "30s", "timeout": "10s", "retries": 3}'
+                }
                 language="json"
               />
             </div>

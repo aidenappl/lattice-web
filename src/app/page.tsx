@@ -11,6 +11,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    document.title = "Lattice - Dashboard";
+  }, []);
+
+  useEffect(() => {
     const load = async () => {
       const [overviewRes, versionRes] = await Promise.all([
         reqGetOverview(),

@@ -6,6 +6,7 @@ import { setIsLoading, setIsLogged, setUser } from "./slices/authSlice";
 import { useEffect, useState } from "react";
 import { reqGetSelf } from "@/services/auth.service";
 import { LoadingSpinner } from "@/components/ui/loading";
+import { Logo } from "@/components/ui/logo";
 
 interface StoreProviderProps {
   children: React.ReactNode;
@@ -66,11 +67,7 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0a0a0a] gap-8">
         <div className="flex items-center gap-3.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#3b82f6]">
-            <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-            </svg>
-          </div>
+          <Logo size="md" />
           <div className="flex flex-col leading-none">
             <span className="text-xl font-semibold text-white tracking-tight">
               Lattice

@@ -101,6 +101,10 @@ export default function ContainersPage() {
   useAdminSocket(handleSocketEvent);
 
   useEffect(() => {
+    document.title = "Lattice - Containers";
+  }, []);
+
+  useEffect(() => {
     load();
     const interval = setInterval(load, 15000);
     return () => {
@@ -112,14 +116,32 @@ export default function ContainersPage() {
   const confirmAndRun = async (id: number, action: string) => {
     const container = containers.find((c) => c.id === id);
     const name = container?.name ?? String(id);
-    const confirmMap: Record<string, { title: string; message: string; variant: "danger" | "warning" }> = {
-      stop: { title: "Stop container", message: `Stop "${name}"? The container will be gracefully shut down.`, variant: "warning" },
-      restart: { title: "Restart container", message: `Restart "${name}"? The container will be stopped and started.`, variant: "warning" },
-      recreate: { title: "Recreate container", message: `Recreate "${name}"? The container will be removed and created fresh.`, variant: "warning" },
+    const confirmMap: Record<
+      string,
+      { title: string; message: string; variant: "danger" | "warning" }
+    > = {
+      stop: {
+        title: "Stop container",
+        message: `Stop "${name}"? The container will be gracefully shut down.`,
+        variant: "warning",
+      },
+      restart: {
+        title: "Restart container",
+        message: `Restart "${name}"? The container will be stopped and started.`,
+        variant: "warning",
+      },
+      recreate: {
+        title: "Recreate container",
+        message: `Recreate "${name}"? The container will be removed and created fresh.`,
+        variant: "warning",
+      },
     };
     const conf = confirmMap[action];
     if (conf) {
-      const ok = await showConfirm({ ...conf, confirmLabel: conf.title.split(" ")[0] });
+      const ok = await showConfirm({
+        ...conf,
+        confirmLabel: conf.title.split(" ")[0],
+      });
       if (!ok) return;
     }
     runAction(id, action);

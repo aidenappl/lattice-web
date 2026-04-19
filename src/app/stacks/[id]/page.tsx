@@ -122,6 +122,10 @@ export default function StackDetailPage() {
   const [savingStack, setSavingStack] = useState(false);
 
   useEffect(() => {
+    if (stack) document.title = `Lattice - ${stack.name}`;
+  }, [stack]);
+
+  useEffect(() => {
     const load = async () => {
       const [stackRes, containersRes, deploymentsRes, workersRes] =
         await Promise.all([
@@ -258,6 +262,8 @@ export default function StackDetailPage() {
           (deploymentsRes.data ?? []).filter((d) => d.stack_id === id),
         );
       }
+    } else {
+      toast.error(res.error_message || "Deploy failed");
     }
     setDeploying(false);
   };
@@ -387,10 +393,25 @@ export default function StackDetailPage() {
     const label = action.charAt(0).toUpperCase() + action.slice(1);
 
     // Confirm destructive actions
-    const confirmMap: Record<string, { title: string; message: string; variant: "danger" | "warning" }> = {
-      stop: { title: "Stop container", message: `Stop "${name}"?`, variant: "warning" },
-      recreate: { title: "Recreate container", message: `Recreate "${name}"? It will be removed and created fresh.`, variant: "warning" },
-      remove: { title: "Remove container", message: `Remove "${name}" from Docker? This cannot be undone.`, variant: "danger" },
+    const confirmMap: Record<
+      string,
+      { title: string; message: string; variant: "danger" | "warning" }
+    > = {
+      stop: {
+        title: "Stop container",
+        message: `Stop "${name}"?`,
+        variant: "warning",
+      },
+      recreate: {
+        title: "Recreate container",
+        message: `Recreate "${name}"? It will be removed and created fresh.`,
+        variant: "warning",
+      },
+      remove: {
+        title: "Remove container",
+        message: `Remove "${name}" from Docker? This cannot be undone.`,
+        variant: "danger",
+      },
     };
     const conf = confirmMap[action];
     if (conf) {
@@ -829,7 +850,9 @@ export default function StackDetailPage() {
               />
               {composeError && (
                 <div className="mt-2">
-                  <Alert variant="error" onDismiss={() => setComposeError("")}>{composeError}</Alert>
+                  <Alert variant="error" onDismiss={() => setComposeError("")}>
+                    {composeError}
+                  </Alert>
                 </div>
               )}
               <div className="mt-3 flex justify-between items-center">
@@ -866,14 +889,21 @@ export default function StackDetailPage() {
                   {containers.length} container
                   {containers.length !== 1 ? "s" : ""}
                 </span>
-                <Button size="sm" variant="secondary" onClick={() => setShowCreateContainer(!showCreateContainer)}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setShowCreateContainer(!showCreateContainer)}
+                >
                   {showCreateContainer ? "Cancel" : "Add Container"}
                 </Button>
               </div>
             </div>
 
             {showCreateContainer && (
-              <form onSubmit={handleCreateContainer} className="px-5 py-4 border-b border-[#1a1a1a] bg-[#0d0d0d]">
+              <form
+                onSubmit={handleCreateContainer}
+                className="px-5 py-4 border-b border-[#1a1a1a] bg-[#0d0d0d]"
+              >
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                   <Input
                     id="new-container-name"
@@ -899,7 +929,15 @@ export default function StackDetailPage() {
                     onChange={(e) => setNewContainerTag(e.target.value)}
                   />
                 </div>
-                <Button type="submit" size="sm" disabled={creatingContainer || !newContainerName.trim() || !newContainerImage.trim()}>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={
+                    creatingContainer ||
+                    !newContainerName.trim() ||
+                    !newContainerImage.trim()
+                  }
+                >
                   {creatingContainer ? "Creating..." : "Create Container"}
                 </Button>
               </form>

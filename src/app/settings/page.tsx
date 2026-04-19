@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { User } from "@/types";
-import { reqGetUsers, reqCreateUser, reqUpdateUser } from "@/services/admin.service";
+import {
+  reqGetUsers,
+  reqCreateUser,
+  reqUpdateUser,
+} from "@/services/admin.service";
 import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +31,13 @@ export default function SettingsPage() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    document.title = "Lattice - Settings";
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +86,10 @@ export default function SettingsPage() {
 
       {/* Create User Form */}
       {showForm && (
-        <form onSubmit={handleCreate} className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6 mb-6 space-y-4">
+        <form
+          onSubmit={handleCreate}
+          className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6 mb-6 space-y-4"
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               id="user-email"
@@ -104,7 +117,10 @@ export default function SettingsPage() {
               required
             />
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="user-role" className="text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <label
+                htmlFor="user-role"
+                className="text-xs font-medium text-[#888888] uppercase tracking-wider"
+              >
                 Role
               </label>
               <select
@@ -118,8 +134,15 @@ export default function SettingsPage() {
               </select>
             </div>
           </div>
-          {error && <Alert variant="error" onDismiss={() => setError("")}>{error}</Alert>}
-          <Button type="submit" disabled={submitting || !email.trim() || !password.trim()}>
+          {error && (
+            <Alert variant="error" onDismiss={() => setError("")}>
+              {error}
+            </Alert>
+          )}
+          <Button
+            type="submit"
+            disabled={submitting || !email.trim() || !password.trim()}
+          >
             {submitting ? "Creating..." : "Create User"}
           </Button>
         </form>
@@ -130,41 +153,71 @@ export default function SettingsPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-[#1a1a1a]">
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">User</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Auth Type</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Role</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Status</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Created</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-[#888888] uppercase tracking-wider">Actions</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                User
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Auth Type
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Role
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Created
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
             {users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center text-sm text-[#555555]">
+                <td
+                  colSpan={6}
+                  className="px-4 py-12 text-center text-sm text-[#555555]"
+                >
                   No users found
                 </td>
               </tr>
             ) : (
               users.map((user) => (
-                <tr key={user.id} className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#161616] transition-colors">
+                <tr
+                  key={user.id}
+                  className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#161616] transition-colors"
+                >
                   <td className="px-4 py-3">
-                    <p className="text-sm font-medium text-white">{user.name || user.email}</p>
-                    {user.name && <p className="text-xs text-[#555555]">{user.email}</p>}
+                    <p className="text-sm font-medium text-white">
+                      {user.name || user.email}
+                    </p>
+                    {user.name && (
+                      <p className="text-xs text-[#555555]">{user.email}</p>
+                    )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#888888]">{user.auth_type}</td>
+                  <td className="px-4 py-3 text-sm text-[#888888]">
+                    {user.auth_type}
+                  </td>
                   <td className="px-4 py-3">
-                    <Badge variant={user.role === "admin" ? "warning" : "default"}>
+                    <Badge
+                      variant={user.role === "admin" ? "warning" : "default"}
+                    >
                       {user.role}
                     </Badge>
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant={user.active ? "success" : "error"}>
-                      <span className={`h-1.5 w-1.5 rounded-full ${user.active ? "bg-[#22c55e]" : "bg-[#ef4444]"}`} />
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${user.active ? "bg-[#22c55e]" : "bg-[#ef4444]"}`}
+                      />
                       {user.active ? "active" : "inactive"}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#555555]">{formatDate(user.inserted_at)}</td>
+                  <td className="px-4 py-3 text-sm text-[#555555]">
+                    {formatDate(user.inserted_at)}
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <Button
                       variant={user.active ? "destructive" : "secondary"}

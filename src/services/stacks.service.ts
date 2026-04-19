@@ -135,7 +135,7 @@ export const reqRecreateContainer = (id: number) =>
         url: `/admin/containers/${id}/recreate`,
     });
 
-export const reqImportCompose = (data: { name: string; description?: string; worker_id?: number; deployment_strategy?: string; compose_yaml: string }) =>
+export const reqImportCompose = (data: { name: string; description?: string; worker_id?: number; deployment_strategy?: string; compose_yaml: string; env_vars?: string }) =>
     fetchApi<Stack>({
         method: "POST",
         url: "/admin/stacks/import",

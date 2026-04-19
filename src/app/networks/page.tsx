@@ -52,6 +52,10 @@ export default function NetworksPage() {
   }, []);
 
   useEffect(() => {
+    document.title = "Lattice - Networks";
+  }, []);
+
+  useEffect(() => {
     load();
   }, [load]);
 

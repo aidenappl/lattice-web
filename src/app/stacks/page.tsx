@@ -18,6 +18,10 @@ export default function StacksPage() {
   }, []);
 
   useEffect(() => {
+    document.title = "Lattice - Stacks";
+  }, []);
+
+  useEffect(() => {
     refreshStacks().then(() => setLoading(false));
   }, [refreshStacks]);
 
@@ -43,7 +47,9 @@ export default function StacksPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white">Stacks</h1>
-          <p className="text-sm text-[#888888] mt-1">Manage your container stacks</p>
+          <p className="text-sm text-[#888888] mt-1">
+            Manage your container stacks
+          </p>
         </div>
         <Link
           href="/stacks/new"
@@ -70,7 +76,9 @@ export default function StacksPage() {
                 <StatusBadge status={stack.status} />
               </div>
               {stack.description && (
-                <p className="text-xs text-[#888888] mb-3 line-clamp-2">{stack.description}</p>
+                <p className="text-xs text-[#888888] mb-3 line-clamp-2">
+                  {stack.description}
+                </p>
               )}
               <div className="flex items-center gap-4 text-xs text-[#555555]">
                 <span>Strategy: {stack.deployment_strategy}</span>
