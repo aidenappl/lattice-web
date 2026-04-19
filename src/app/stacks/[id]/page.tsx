@@ -262,7 +262,7 @@ export default function StackDetailPage() {
           );
           refreshContainers();
           // Reload logs when the selected container's status changes
-          // (picks up lifecycle entries like "[lattice] container restarted")
+          // (picks up lifecycle entries from lifecycle_logs table)
           if (eventName === selectedContainerNameRef.current) {
             setTimeout(() => {
               const sel = selectedContainerRef.current;

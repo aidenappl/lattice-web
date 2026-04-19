@@ -377,20 +377,20 @@ export default function ContainerDetailPage() {
       if (res.success) {
         toast.success(`${label} command sent to ${name}`, { id: toastId });
         console.log(`[ContainerInspector] action "${action}" ok for ${name}`);
-        // Inject a synthetic system log so the log viewer shows immediate
-        // feedback; it's preserved across loadLogs() calls until real logs arrive.
+        // Inject a synthetic lifecycle log for immediate feedback.
+        // Uses "lc_" prefix so LogLine renders it with lifecycle styling.
         const lifecycleMsg: Record<string, string> = {
-          restart: "[lattice] container restarting\u2026",
-          start: "[lattice] container starting\u2026",
-          stop: "[lattice] container stopping\u2026",
-          kill: "[lattice] container force-killed",
-          recreate: "[lattice] container recreating\u2026",
+          restart: "container restarting\u2026",
+          start: "container starting\u2026",
+          stop: "container stopping\u2026",
+          kill: "container force-killed",
+          recreate: "container recreating\u2026",
         };
         if (lifecycleMsg[action]) {
           setLogs((prev) => [
             ...prev,
             {
-              id: syntheticId() as unknown as number,
+              id: `lc_${syntheticId()}` as unknown as number,
               container_id: null,
               container_name: containerNameRef.current,
               worker_id: 0,
