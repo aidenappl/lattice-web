@@ -112,6 +112,35 @@ function syntheticId(): string {
   return SYNTHETIC_ID_PREFIX + crypto.randomUUID();
 }
 
+// ─── Log limit options ────────────────────────────────────────────────────────
+const LOG_LIMIT_OPTIONS = [100, 250, 500, 1000] as const;
+type LogLimit = (typeof LOG_LIMIT_OPTIONS)[number];
+
+// Sort a log array chronologically in-place (mutates).
+function sortLogs(arr: ContainerLog[]): ContainerLog[] {
+  return arr.sort(
+    (a, b) =>
+      new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime(),
+  );
+}
+
+// Download an array of log lines as a timestamped .txt file.
+function downloadLogsAsTxt(lines: ContainerLog[], filename: string) {
+  const text = lines
+    .map(
+      (l) =>
+        `${new Date(l.recorded_at).toISOString()}  [${l.stream.padEnd(6)}]  ${l.message}`,
+    )
+    .join("\n");
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 const SESSION_GAP_MS = 5_000;
 
 function isNewSession(prev: ContainerLog, curr: ContainerLog): boolean {
@@ -172,6 +201,7 @@ export default function ContainerDetailPage() {
   const [logs, setLogs] = useState<ContainerLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("logs");
+  const [logLimit, setLogLimit] = useState<LogLimit>(250);
 
   // action state
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -250,7 +280,7 @@ export default function ContainerDetailPage() {
   }, [id, editing]);
 
   const loadLogs = useCallback(async () => {
-    const res = await reqGetContainerLogs(id, { limit: 250 });
+    const res = await reqGetContainerLogs(id, { limit: logLimit });
     if (res.success) {
       const dbLogs = (res.data ?? []).slice().reverse();
       setLogs((prev) => {
@@ -260,7 +290,7 @@ export default function ContainerDetailPage() {
         const pendingSynthetics = prev.filter(
           (l) => isSynthetic(l) && !dbMessages.has(l.message),
         );
-        return [...dbLogs, ...pendingSynthetics];
+        return sortLogs([...dbLogs, ...pendingSynthetics]);
       });
     } else {
       console.warn(
@@ -268,7 +298,7 @@ export default function ContainerDetailPage() {
         res.error_message,
       );
     }
-  }, [id]);
+  }, [id, logLimit]);
 
   // WebSocket: refresh on events matching this container
   const handleSocketEvent = useCallback(
@@ -277,43 +307,97 @@ export default function ContainerDetailPage() {
       const eventName = payload["container_name"] as string | undefined;
       const myName = containerNameRef.current;
 
-      if (!eventName || !myName || eventName !== myName) return;
+      // Container-specific events — match by container_name
+      if (eventName && myName && eventName === myName) {
+        if (
+          event.type === "container_status" ||
+          event.type === "container_sync" ||
+          event.type === "container_health_status"
+        ) {
+          console.log(
+            `[ContainerInspector] WS ${event.type} matched "${myName}"`,
+            payload,
+          );
+          loadContainer();
+          if (tab === "logs") loadLogs();
+        }
 
-      if (
-        event.type === "container_status" ||
-        event.type === "container_sync" ||
-        event.type === "container_health_status"
-      ) {
-        console.log(
-          `[ContainerInspector] WS ${event.type} matched "${myName}"`,
-          payload,
-        );
-        loadContainer();
-        if (tab === "logs") loadLogs();
+        if (event.type === "container_logs") {
+          const message = payload["message"] as string | undefined;
+          const rawStream =
+            (payload["stream"] as string | undefined) ?? "stdout";
+          const stream: "stdout" | "stderr" =
+            rawStream === "stderr" ? "stderr" : "stdout";
+          if (message) {
+            const entry: ContainerLog = {
+              id: syntheticId() as unknown as number, // string UUID; isSynthetic() detects it
+              container_id: null,
+              container_name: myName,
+              worker_id: event.worker_id ?? 0,
+              stream,
+              message,
+              recorded_at: new Date().toISOString(),
+            };
+            // Insert in chronological order and cap at current limit.
+            setLogs((prev) =>
+              sortLogs([...prev.slice(-(logLimit - 1)), entry]),
+            );
+          }
+        }
       }
 
-      if (event.type === "container_logs") {
-        const message = payload["message"] as string | undefined;
-        const rawStream = (payload["stream"] as string | undefined) ?? "stdout";
-        const stream: "stdout" | "stderr" =
-          rawStream === "stderr" ? "stderr" : "stdout";
-        if (message) {
-          const entry: ContainerLog = {
-            id: syntheticId() as unknown as number, // string UUID; isSynthetic() detects it
-            container_id: null,
-            container_name: myName,
-            worker_id: event.worker_id ?? 0,
-            stream,
-            message,
-            recorded_at: new Date().toISOString(),
-          };
-          setLogs((prev) => [...prev.slice(-249), entry]);
+      // Worker-level events: lifecycle logs are written to DB for every
+      // container on the worker, so we reload whenever our worker is affected.
+      if (
+        event.type === "worker_shutdown" ||
+        event.type === "worker_crash" ||
+        event.type === "worker_disconnected"
+      ) {
+        // Only refresh if this container belongs to the affected worker
+        const workerID = event.worker_id;
+        if (workerID != null) {
+          loadContainer();
+          if (tab === "logs") {
+            // Slight delay to allow DB writes to complete before fetching
+            setTimeout(loadLogs, 500);
+          }
         }
       }
     },
-    [loadContainer, loadLogs, tab],
+    [loadContainer, loadLogs, tab, logLimit],
   );
   useAdminSocket(handleSocketEvent);
+
+  // ─── Download handlers ─────────────────────────────────────────────────────
+
+  const handleDownloadVisible = () => {
+    const name = container?.name ?? String(id);
+    downloadLogsAsTxt(logs, `${name}-logs-visible.txt`);
+  };
+
+  const handleDownloadLastRun = () => {
+    // Find the start of the last session (latest session-break boundary).
+    let startIdx = 0;
+    for (let i = logs.length - 1; i > 0; i--) {
+      if (isNewSession(logs[i - 1], logs[i])) {
+        startIdx = i;
+        break;
+      }
+    }
+    const name = container?.name ?? String(id);
+    downloadLogsAsTxt(logs.slice(startIdx), `${name}-logs-last-run.txt`);
+  };
+
+  const handleDownloadAll = async () => {
+    const res = await reqGetContainerLogs(id, { limit: 9999 });
+    if (res.success) {
+      const all = sortLogs((res.data ?? []).slice());
+      const name = container?.name ?? String(id);
+      downloadLogsAsTxt(all, `${name}-logs-all.txt`);
+    }
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (container) document.title = `Lattice - ${container.name}`;
@@ -332,7 +416,7 @@ export default function ContainerDetailPage() {
   useEffect(() => {
     if (tab === "logs")
       logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs, tab]);
+  }, [logs, tab, loading]);
 
   const runAction = async (
     action: string,
@@ -1071,24 +1155,73 @@ export default function ContainerDetailPage() {
 
         {/* LOGS TAB */}
         {tab === "logs" && (
-          <div className="bg-background-alt min-h-[320px] max-h-[520px] overflow-y-auto p-3">
-            {logs.length === 0 ? (
-              <p className="text-xs text-dimmed font-mono p-2">
-                No logs available
-              </p>
-            ) : (
-              <>
-                {logs.map((line, i) => (
-                  <div key={String(line.id)}>
-                    {i > 0 && isNewSession(logs[i - 1], line) && (
-                      <SessionBreak at={line.recorded_at} />
-                    )}
-                    <LogLine line={line} />
-                  </div>
-                ))}
-                <div ref={logsEndRef} />
-              </>
-            )}
+          <div className="flex flex-col">
+            {/* Log toolbar */}
+            <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border-subtle bg-surface">
+              <span className="text-xs text-muted font-mono shrink-0">
+                {logs.length} line{logs.length !== 1 ? "s" : ""}
+              </span>
+              <div className="flex items-center gap-2">
+                {/* Limit selector */}
+                <select
+                  value={logLimit}
+                  onChange={(e) =>
+                    setLogLimit(Number(e.target.value) as LogLimit)
+                  }
+                  className="text-xs bg-surface border border-border-subtle rounded px-2 py-1 text-muted cursor-pointer focus:outline-none focus:border-border-strong"
+                >
+                  {LOG_LIMIT_OPTIONS.map((n) => (
+                    <option key={n} value={n}>
+                      {n} lines
+                    </option>
+                  ))}
+                </select>
+                {/* Download buttons */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleDownloadVisible}
+                    title="Download visible logs as .txt"
+                    className="text-xs text-muted hover:text-primary px-2 py-1 border border-border-subtle rounded hover:border-border-strong transition-colors cursor-pointer"
+                  >
+                    ↓ Visible
+                  </button>
+                  <button
+                    onClick={handleDownloadLastRun}
+                    title="Download logs since last session start as .txt"
+                    className="text-xs text-muted hover:text-primary px-2 py-1 border border-border-subtle rounded hover:border-border-strong transition-colors cursor-pointer"
+                  >
+                    ↓ Last Run
+                  </button>
+                  <button
+                    onClick={handleDownloadAll}
+                    title="Download all logs from the database as .txt"
+                    className="text-xs text-muted hover:text-primary px-2 py-1 border border-border-subtle rounded hover:border-border-strong transition-colors cursor-pointer"
+                  >
+                    ↓ All Time
+                  </button>
+                </div>
+              </div>
+            </div>
+            {/* Log pane */}
+            <div className="bg-background-alt min-h-[320px] max-h-[520px] overflow-y-auto p-3">
+              {logs.length === 0 ? (
+                <p className="text-xs text-dimmed font-mono p-2">
+                  No logs available
+                </p>
+              ) : (
+                <>
+                  {logs.map((line, i) => (
+                    <div key={String(line.id)}>
+                      {i > 0 && isNewSession(logs[i - 1], line) && (
+                        <SessionBreak at={line.recorded_at} />
+                      )}
+                      <LogLine line={line} />
+                    </div>
+                  ))}
+                  <div ref={logsEndRef} />
+                </>
+              )}
+            </div>
           </div>
         )}
 
