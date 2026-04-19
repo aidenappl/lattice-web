@@ -12,7 +12,7 @@ export function Badge({
   className,
 }: BadgeProps) {
   const variants = {
-    default: "text-[#888888]",
+    default: "text-secondary",
     success: "text-[#22c55e]",
     warning: "text-[#eab308]",
     error: "text-[#ef4444]",

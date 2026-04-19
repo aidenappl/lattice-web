@@ -117,8 +117,8 @@ export default function WorkersPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Workers</h1>
-          <p className="text-sm text-[#888888] mt-1">
+          <h1 className="text-xl font-semibold text-primary">Workers</h1>
+          <p className="text-sm text-secondary mt-1">
             Manage your infrastructure workers
           </p>
         </div>
@@ -136,7 +136,7 @@ export default function WorkersPage() {
       {showForm && (
         <form
           onSubmit={handleCreate}
-          className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6 mb-6 space-y-4"
+          className="rounded-xl border border-border-subtle bg-surface p-6 mb-6 space-y-4"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
@@ -173,7 +173,7 @@ export default function WorkersPage() {
               <h3 className="text-sm font-semibold text-[#22c55e]">
                 Worker &quot;{createdWorker.name}&quot; created
               </h3>
-              <p className="text-xs text-[#888888] mt-1">
+              <p className="text-xs text-secondary mt-1">
                 Copy the token below and configure it on your runner. It will
                 not be shown again.
               </p>
@@ -182,33 +182,33 @@ export default function WorkersPage() {
               Dismiss
             </Button>
           </div>
-          <div className="rounded-lg bg-[#0a0a0a] border border-[#1a1a1a] p-4 space-y-3">
+          <div className="rounded-lg bg-background border border-border-subtle p-4 space-y-3">
             <div>
-              <p className="text-xs text-[#555555] uppercase tracking-wider mb-1">
+              <p className="text-xs text-muted uppercase tracking-wider mb-1">
                 Quick Install (run on the worker VM)
               </p>
-              <pre className="text-xs text-white font-mono whitespace-pre-wrap select-all bg-[#111111] rounded-lg p-3 mt-1">
+              <pre className="text-xs text-primary font-mono whitespace-pre-wrap select-all bg-surface rounded-lg p-3 mt-1">
                 {`curl -fsSL ${process.env.NEXT_PUBLIC_LATTICE_API}/install/runner | WORKER_TOKEN=${createdToken} WORKER_NAME=${createdWorker.name} bash`}
               </pre>
             </div>
-            <div className="border-t border-[#1a1a1a] pt-3">
-              <p className="text-xs text-[#555555] uppercase tracking-wider mb-1">
+            <div className="border-t border-border-subtle pt-3">
+              <p className="text-xs text-muted uppercase tracking-wider mb-1">
                 Or configure manually
               </p>
-              <pre className="text-xs text-[#888888] font-mono whitespace-pre-wrap select-all">
+              <pre className="text-xs text-secondary font-mono whitespace-pre-wrap select-all">
                 {`ORCHESTRATOR_URL=${(process.env.NEXT_PUBLIC_LATTICE_API ?? "").replace(/^http/, "ws")}/ws/worker
 WORKER_TOKEN=${createdToken}
 WORKER_NAME=${createdWorker.name}`}
               </pre>
             </div>
-            <div className="border-t border-[#1a1a1a] pt-3">
-              <p className="text-xs text-[#555555] uppercase tracking-wider mb-1">
+            <div className="border-t border-border-subtle pt-3">
+              <p className="text-xs text-muted uppercase tracking-wider mb-1">
                 Worker Token
               </p>
-              <p className="text-xs text-white font-mono break-all select-all">
+              <p className="text-xs text-primary font-mono break-all select-all">
                 {createdToken}
               </p>
-              <p className="text-xs text-[#555555] mt-1">
+              <p className="text-xs text-muted mt-1">
                 This token will not be shown again.
               </p>
             </div>
@@ -217,26 +217,26 @@ WORKER_NAME=${createdWorker.name}`}
       )}
 
       {/* Workers table */}
-      <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] overflow-hidden">
+      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-[#1a1a1a]">
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+            <tr className="border-b border-border-subtle">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Name
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Hostname
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 OS / Arch
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Docker
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Last Heartbeat
               </th>
             </tr>
@@ -246,7 +246,7 @@ WORKER_NAME=${createdWorker.name}`}
               <tr>
                 <td
                   colSpan={6}
-                  className="px-4 py-12 text-center text-sm text-[#555555]"
+                  className="px-4 py-12 text-center text-sm text-muted"
                 >
                   No workers found
                 </td>
@@ -255,29 +255,29 @@ WORKER_NAME=${createdWorker.name}`}
               workers.map((worker) => (
                 <tr
                   key={worker.id}
-                  className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#161616] transition-colors"
+                  className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors"
                 >
                   <td className="px-4 py-3">
                     <Link
                       href={`/workers/${worker.id}`}
-                      className="text-sm font-medium text-white hover:text-[#3b82f6] transition-colors"
+                      className="text-sm font-medium text-primary hover:text-[#3b82f6] transition-colors"
                     >
                       {worker.name}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#888888] font-mono">
+                  <td className="px-4 py-3 text-sm text-secondary font-mono">
                     {worker.hostname}
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={worker.status} />
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#888888]">
+                  <td className="px-4 py-3 text-sm text-secondary">
                     {worker.os ?? "-"} / {worker.arch ?? "-"}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#888888] font-mono">
+                  <td className="px-4 py-3 text-sm text-secondary font-mono">
                     {worker.docker_version ?? "-"}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#555555]">
+                  <td className="px-4 py-3 text-sm text-muted">
                     {worker.last_heartbeat_at
                       ? timeAgo(worker.last_heartbeat_at)
                       : "Never"}

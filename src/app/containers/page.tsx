@@ -216,15 +216,15 @@ export default function ContainersPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Containers</h1>
-          <p className="text-sm text-[#888888] mt-1">
+          <h1 className="text-xl font-semibold text-primary">Containers</h1>
+          <p className="text-sm text-secondary mt-1">
             {containers.length} container{containers.length !== 1 ? "s" : ""}{" "}
             across all stacks
           </p>
         </div>
         <button
           onClick={load}
-          className="inline-flex items-center justify-center font-medium rounded-lg transition-colors cursor-pointer focus:outline-none border border-[#2a2a2a] bg-[#111111] text-white hover:bg-[#1a1a1a] h-8 px-3.5 text-sm gap-1.5"
+          className="inline-flex items-center justify-center font-medium rounded-lg transition-colors cursor-pointer focus:outline-none border border-border-strong bg-surface text-primary hover:bg-surface-active h-8 px-3.5 text-sm gap-1.5"
         >
           <svg
             className="h-3.5 w-3.5"
@@ -250,12 +250,12 @@ export default function ContainersPage() {
           placeholder="Search by name or image…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="h-8 rounded-lg border border-[#2a2a2a] bg-[#111111] px-3 text-sm text-white placeholder-[#555555] focus:border-[#3b82f6] focus:outline-none w-56"
+          className="h-8 rounded-lg border border-border-strong bg-surface px-3 text-sm text-primary placeholder-[#555555] focus:border-[#3b82f6] focus:outline-none w-56"
         />
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="h-8 rounded-lg border border-[#2a2a2a] bg-[#111111] px-3 text-sm text-white focus:border-[#3b82f6] focus:outline-none cursor-pointer"
+          className="h-8 rounded-lg border border-border-strong bg-surface px-3 text-sm text-primary focus:border-[#3b82f6] focus:outline-none cursor-pointer"
         >
           <option value="all">All statuses</option>
           <option value="running">Running</option>
@@ -268,7 +268,7 @@ export default function ContainersPage() {
           <select
             value={filterStack}
             onChange={(e) => setFilterStack(e.target.value)}
-            className="h-8 rounded-lg border border-[#2a2a2a] bg-[#111111] px-3 text-sm text-white focus:border-[#3b82f6] focus:outline-none cursor-pointer"
+            className="h-8 rounded-lg border border-border-strong bg-surface px-3 text-sm text-primary focus:border-[#3b82f6] focus:outline-none cursor-pointer"
           >
             <option value="all">All stacks</option>
             {stacks.map((s) => (
@@ -282,7 +282,7 @@ export default function ContainersPage() {
           <select
             value={filterWorker}
             onChange={(e) => setFilterWorker(e.target.value)}
-            className="h-8 rounded-lg border border-[#2a2a2a] bg-[#111111] px-3 text-sm text-white focus:border-[#3b82f6] focus:outline-none cursor-pointer"
+            className="h-8 rounded-lg border border-border-strong bg-surface px-3 text-sm text-primary focus:border-[#3b82f6] focus:outline-none cursor-pointer"
           >
             <option value="all">All workers</option>
             {workers.map((w) => (
@@ -295,39 +295,39 @@ export default function ContainersPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-12 text-center">
-          <p className="text-sm text-[#555555]">No containers found</p>
+        <div className="rounded-xl border border-border-subtle bg-surface p-12 text-center">
+          <p className="text-sm text-muted">No containers found</p>
         </div>
       ) : (
-        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] overflow-hidden">
+        <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-[#1a1a1a]">
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#555555] uppercase tracking-wider">
+              <tr className="border-b border-border-subtle">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                   Name
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#555555] uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#555555] uppercase tracking-wider hidden sm:table-cell">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden sm:table-cell">
                   Health
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#555555] uppercase tracking-wider hidden md:table-cell">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden md:table-cell">
                   Stack
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#555555] uppercase tracking-wider hidden lg:table-cell">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden lg:table-cell">
                   Worker
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#555555] uppercase tracking-wider hidden lg:table-cell">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden lg:table-cell">
                   Image
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#555555] uppercase tracking-wider hidden xl:table-cell">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden xl:table-cell">
                   Ports
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#555555] uppercase tracking-wider hidden xl:table-cell">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden xl:table-cell">
                   Updated
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-[#555555] uppercase tracking-wider">
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -340,17 +340,17 @@ export default function ContainersPage() {
                   : undefined;
                 const busy = actionLoading[c.id];
                 const workerOnline = worker
-                  ? (workerLiveness[worker.id] ?? false)
+                  ? (workerLiveness[worker.id] ?? true)
                   : true; // unknown → don't block
                 return (
                   <tr
                     key={c.id}
-                    className="hover:bg-[#161616] transition-colors group"
+                    className="hover:bg-surface-elevated transition-colors group"
                   >
                     <td className="px-4 py-3">
                       <Link
                         href={`/containers/${c.id}`}
-                        className="text-sm font-medium text-white hover:text-[#3b82f6] transition-colors"
+                        className="text-sm font-medium text-primary hover:text-[#3b82f6] transition-colors"
                       >
                         {c.name}
                       </Link>
@@ -365,46 +365,46 @@ export default function ContainersPage() {
                       {c.health_status && c.health_status !== "none" ? (
                         <StatusBadge status={c.health_status} />
                       ) : (
-                        <span className="text-xs text-[#444444]">—</span>
+                        <span className="text-xs text-dimmed">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
                       {stack ? (
                         <Link
                           href={`/stacks/${stack.id}`}
-                          className="text-xs text-[#888888] hover:text-white transition-colors"
+                          className="text-xs text-secondary hover:text-primary transition-colors"
                         >
                           {stack.name}
                         </Link>
                       ) : (
-                        <span className="text-xs text-[#444444]">—</span>
+                        <span className="text-xs text-dimmed">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">
                       {worker ? (
                         <Link
                           href={`/workers/${worker.id}`}
-                          className="text-xs text-[#888888] hover:text-white transition-colors"
+                          className="text-xs text-secondary hover:text-primary transition-colors"
                         >
                           {worker.name}
                         </Link>
                       ) : (
-                        <span className="text-xs text-[#444444]">—</span>
+                        <span className="text-xs text-dimmed">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">
-                      <span className="text-xs text-[#888888] font-mono">
+                      <span className="text-xs text-secondary font-mono">
                         {c.image}:{c.tag}
                       </span>
                     </td>
                     <td className="px-4 py-3 hidden xl:table-cell">
-                      <span className="text-xs text-[#888888] font-mono">
+                      <span className="text-xs text-secondary font-mono">
                         {parsePortMappings(c.port_mappings)}
                       </span>
                     </td>
                     <td className="px-4 py-3 hidden xl:table-cell">
                       <span
-                        className={`text-xs ${!workerOnline ? "text-[#7c3a00]" : "text-[#555555]"}`}
+                        className={`text-xs ${!workerOnline ? "text-[#7c3a00]" : "text-muted"}`}
                       >
                         {timeAgo(c.updated_at)}
                       </span>
@@ -456,7 +456,7 @@ export default function ContainersPage() {
                             onClick={() => confirmAndRun(c.id, "stop")}
                             disabled={!!busy || !workerOnline}
                             title={!workerOnline ? "Worker offline" : "Stop"}
-                            className="h-7 w-7 rounded flex items-center justify-center text-[#888888] hover:text-[#ef4444] hover:bg-[#ef4444]/10 disabled:opacity-40 transition-colors cursor-pointer"
+                            className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-[#ef4444] hover:bg-[#ef4444]/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "stop" ? (
                               <svg
@@ -495,7 +495,7 @@ export default function ContainersPage() {
                             onClick={() => confirmAndRun(c.id, "restart")}
                             disabled={!!busy || !workerOnline}
                             title={!workerOnline ? "Worker offline" : "Restart"}
-                            className="h-7 w-7 rounded flex items-center justify-center text-[#888888] hover:text-[#3b82f6] hover:bg-[#3b82f6]/10 disabled:opacity-40 transition-colors cursor-pointer"
+                            className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-[#3b82f6] hover:bg-[#3b82f6]/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "restart" ? (
                               <svg
@@ -539,7 +539,7 @@ export default function ContainersPage() {
                           onClick={() => confirmAndRun(c.id, "recreate")}
                           disabled={!!busy || !workerOnline}
                           title={!workerOnline ? "Worker offline" : "Recreate"}
-                          className="h-7 w-7 rounded flex items-center justify-center text-[#888888] hover:text-[#a855f7] hover:bg-[#a855f7]/10 disabled:opacity-40 transition-colors cursor-pointer"
+                          className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-[#a855f7] hover:bg-[#a855f7]/10 disabled:opacity-40 transition-colors cursor-pointer"
                         >
                           {busy === "recreate" ? (
                             <svg
@@ -581,7 +581,7 @@ export default function ContainersPage() {
                         <Link
                           href={`/containers/${c.id}`}
                           title="View details"
-                          className="h-7 w-7 rounded flex items-center justify-center text-[#555555] hover:text-white hover:bg-[#2a2a2a] transition-colors"
+                          className="h-7 w-7 rounded flex items-center justify-center text-muted hover:text-primary hover:bg-border-strong transition-colors"
                         >
                           <svg
                             className="h-3.5 w-3.5"

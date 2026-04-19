@@ -76,8 +76,8 @@ export default function SettingsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Settings</h1>
-          <p className="text-sm text-[#888888] mt-1">User management</p>
+          <h1 className="text-xl font-semibold text-primary">Settings</h1>
+          <p className="text-sm text-secondary mt-1">User management</p>
         </div>
         <Button onClick={() => setShowForm(!showForm)}>
           {showForm ? "Cancel" : "Create User"}
@@ -88,7 +88,7 @@ export default function SettingsPage() {
       {showForm && (
         <form
           onSubmit={handleCreate}
-          className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6 mb-6 space-y-4"
+          className="rounded-xl border border-border-subtle bg-surface p-6 mb-6 space-y-4"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
@@ -119,7 +119,7 @@ export default function SettingsPage() {
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="user-role"
-                className="text-xs font-medium text-[#888888] uppercase tracking-wider"
+                className="text-xs font-medium text-secondary uppercase tracking-wider"
               >
                 Role
               </label>
@@ -127,7 +127,7 @@ export default function SettingsPage() {
                 id="user-role"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
-                className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
+                className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
               >
                 <option value="viewer">Viewer</option>
                 <option value="admin">Admin</option>
@@ -149,26 +149,26 @@ export default function SettingsPage() {
       )}
 
       {/* Users Table */}
-      <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] overflow-hidden">
+      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-[#1a1a1a]">
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+            <tr className="border-b border-border-subtle">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 User
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Auth Type
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Role
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Created
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-right text-xs font-medium text-secondary uppercase tracking-wider">
                 Actions
               </th>
             </tr>
@@ -178,7 +178,7 @@ export default function SettingsPage() {
               <tr>
                 <td
                   colSpan={6}
-                  className="px-4 py-12 text-center text-sm text-[#555555]"
+                  className="px-4 py-12 text-center text-sm text-muted"
                 >
                   No users found
                 </td>
@@ -187,17 +187,17 @@ export default function SettingsPage() {
               users.map((user) => (
                 <tr
                   key={user.id}
-                  className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#161616] transition-colors"
+                  className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors"
                 >
                   <td className="px-4 py-3">
-                    <p className="text-sm font-medium text-white">
+                    <p className="text-sm font-medium text-primary">
                       {user.name || user.email}
                     </p>
                     {user.name && (
-                      <p className="text-xs text-[#555555]">{user.email}</p>
+                      <p className="text-xs text-muted">{user.email}</p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#888888]">
+                  <td className="px-4 py-3 text-sm text-secondary">
                     {user.auth_type}
                   </td>
                   <td className="px-4 py-3">
@@ -215,7 +215,7 @@ export default function SettingsPage() {
                       {user.active ? "active" : "inactive"}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#555555]">
+                  <td className="px-4 py-3 text-sm text-muted">
                     {formatDate(user.inserted_at)}
                   </td>
                   <td className="px-4 py-3 text-right">

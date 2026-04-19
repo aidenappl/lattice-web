@@ -67,8 +67,8 @@ export default function DashboardPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-white">Dashboard</h1>
-        <p className="text-sm text-[#888888] mt-1">
+        <h1 className="text-xl font-semibold text-primary">Dashboard</h1>
+        <p className="text-sm text-secondary mt-1">
           Overview of your infrastructure
         </p>
       </div>
@@ -77,21 +77,21 @@ export default function DashboardPage() {
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5"
+            className="rounded-xl border border-border-subtle bg-surface p-5"
           >
-            <p className="text-xs font-medium text-[#888888] uppercase tracking-wider mb-3">
+            <p className="text-xs font-medium text-secondary uppercase tracking-wider mb-3">
               {stat.label}
             </p>
             <p className={`text-2xl font-semibold ${stat.color}`}>
               {stat.value}
             </p>
-            <p className="text-xs text-[#555555] mt-1">{stat.sub}</p>
+            <p className="text-xs text-muted mt-1">{stat.sub}</p>
           </div>
         ))}
       </div>
 
       {/* Version Info */}
-      <div className="mt-8 flex items-center gap-6 text-xs text-[#555555] font-mono">
+      <div className="mt-8 flex items-center gap-6 text-xs text-muted font-mono">
         <span>Web {APP_VERSION}</span>
         <span>API {apiVersion ?? "..."}</span>
       </div>

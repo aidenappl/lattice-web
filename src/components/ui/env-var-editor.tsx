@@ -119,7 +119,7 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
     <div>
       {/* Mode toggle */}
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs text-[#555555]">
+        <p className="text-xs text-muted">
           Key-value pairs injected into all containers during deploy.
           Container-level env vars override these.
         </p>
@@ -129,7 +129,7 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
               <button
                 type="button"
                 onClick={handleReformat}
-                className="text-xs text-[#555555] hover:text-[#888888] transition-colors"
+                className="text-xs text-muted hover:text-secondary transition-colors"
               >
                 Reformat
               </button>
@@ -170,9 +170,9 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
           )}
         </div>
       ) : (
-        <div className="rounded-lg border border-[#2a2a2a] overflow-hidden">
+        <div className="rounded-lg border border-border-strong overflow-hidden">
           {rows.length > 0 && (
-            <div className="grid grid-cols-[1fr_1fr_auto] text-xs text-[#555555] uppercase tracking-wider px-3 py-2 border-b border-[#2a2a2a] bg-[#0d0d0d]">
+            <div className="grid grid-cols-[1fr_1fr_auto] text-xs text-muted uppercase tracking-wider px-3 py-2 border-b border-border-strong bg-background-alt">
               <span>Key</span>
               <span>Value</span>
               <span />
@@ -182,7 +182,7 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
             {rows.map((row, i) => (
               <div
                 key={i}
-                className="grid grid-cols-[1fr_1fr_auto] items-center border-b border-[#1a1a1a] last:border-b-0"
+                className="grid grid-cols-[1fr_1fr_auto] items-center border-b border-border-subtle last:border-b-0"
               >
                 <input
                   type="text"
@@ -190,7 +190,7 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
                   onChange={(e) => setRow(i, "key", e.target.value)}
                   placeholder="KEY"
                   spellCheck={false}
-                  className="bg-transparent px-3 py-2 text-sm text-white font-mono placeholder:text-[#333333] focus:outline-none border-r border-[#1a1a1a]"
+                  className="bg-transparent px-3 py-2 text-sm text-primary font-mono placeholder:text-muted focus:outline-none border-r border-border-subtle"
                 />
                 <input
                   type="text"
@@ -198,12 +198,12 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
                   onChange={(e) => setRow(i, "value", e.target.value)}
                   placeholder="value"
                   spellCheck={false}
-                  className="bg-transparent px-3 py-2 text-sm text-[#888888] font-mono placeholder:text-[#333333] focus:outline-none border-r border-[#1a1a1a]"
+                  className="bg-transparent px-3 py-2 text-sm text-secondary font-mono placeholder:text-muted focus:outline-none border-r border-border-subtle"
                 />
                 <button
                   type="button"
                   onClick={() => removeRow(i)}
-                  className="px-3 text-[#444444] hover:text-[#ef4444] transition-colors text-base leading-none"
+                  className="px-3 text-dimmed hover:text-[#ef4444] transition-colors text-base leading-none"
                   aria-label="Remove"
                 >
                   ×
@@ -214,7 +214,7 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
           <button
             type="button"
             onClick={addRow}
-            className="w-full px-3 py-2 text-xs text-[#444444] hover:text-[#888888] hover:bg-[#0d0d0d] transition-colors text-left"
+            className="w-full px-3 py-2 text-xs text-dimmed hover:text-secondary hover:bg-background-alt transition-colors text-left"
           >
             + Add variable
           </button>

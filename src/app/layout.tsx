@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { cookies } from "next/headers";
 import "./globals.css";
 import StoreProvider from "@/store/StoreProvider";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,18 +38,25 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const appearance = cookieStore.get("forta-appearance")?.value;
+  const isDark = appearance === "dark" || (!appearance && true); // default to dark
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} antialiased${isDark ? " dark" : ""}`}
+      suppressHydrationWarning
+    >
+      <body>
         <StoreProvider>
-          <DashboardLayout>{children}</DashboardLayout>
+          <ThemeProvider>
+            <DashboardLayout>{children}</DashboardLayout>
+          </ThemeProvider>
         </StoreProvider>
       </body>
     </html>

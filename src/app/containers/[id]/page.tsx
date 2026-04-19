@@ -99,10 +99,38 @@ function prettyField(raw: string | null): string {
   }
 }
 
+const SESSION_GAP_MS = 5_000;
+
+function isNewSession(prev: ContainerLog, curr: ContainerLog): boolean {
+  return (
+    new Date(curr.recorded_at).getTime() -
+      new Date(prev.recorded_at).getTime() >
+    SESSION_GAP_MS
+  );
+}
+
+function SessionBreak({ at }: { at: string }) {
+  return (
+    <div className="flex items-center gap-2 px-2 py-2 my-1 select-none">
+      <div className="flex-1 h-px bg-border-subtle" />
+      <span className="text-[10px] font-mono text-muted whitespace-nowrap">
+        new session &middot;{" "}
+        {new Date(at).toLocaleTimeString([], {
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })}
+      </span>
+      <div className="flex-1 h-px bg-border-subtle" />
+    </div>
+  );
+}
+
 function LogLine({ line }: { line: ContainerLog }) {
   return (
-    <div className="flex gap-2 text-xs font-mono hover:bg-[#161616] px-2 py-0.5 rounded">
-      <span className="text-[#444444] shrink-0 select-none w-40">
+    <div className="flex gap-2 text-xs font-mono hover:bg-surface-elevated px-2 py-0.5 rounded">
+      <span className="text-dimmed shrink-0 select-none w-40">
         {line.recorded_at
           ? new Date(line.recorded_at).toLocaleTimeString([], {
               hour12: false,
@@ -112,7 +140,7 @@ function LogLine({ line }: { line: ContainerLog }) {
             })
           : ""}
       </span>
-      <span className="text-[#d4d4d4]">{line.message}</span>
+      <span className="text-subtle">{line.message}</span>
     </div>
   );
 }
@@ -210,14 +238,29 @@ export default function ContainerDetailPage() {
 
   const loadLogs = useCallback(async () => {
     const res = await reqGetContainerLogs(id, { limit: 250 });
-    if (res.success)
-      // API returns newest-first; reverse so oldest is at top (standard log tail)
-      setLogs((res.data ?? []).slice().reverse());
-    else
+    if (res.success) {
+      const dbLogs = (res.data ?? []).slice().reverse();
+      setLogs((prev) => {
+        // Preserve synthetic entries (WS/system messages; id > 1e12 = Date.now())
+        // that are newer than the newest persisted log — keeps them visible until
+        // real DB logs catch up after a restart or action.
+        const newestDbMs =
+          dbLogs.length > 0
+            ? new Date(dbLogs[dbLogs.length - 1].recorded_at).getTime()
+            : 0;
+        const synthetics = prev.filter(
+          (l) =>
+            l.id > 1_000_000_000_000 &&
+            new Date(l.recorded_at).getTime() > newestDbMs,
+        );
+        return [...dbLogs, ...synthetics];
+      });
+    } else {
       console.warn(
         `[ContainerInspector] failed to load logs for container ${id}:`,
         res.error_message,
       );
+    }
   }, [id]);
 
   // WebSocket: refresh on events matching this container
@@ -303,6 +346,29 @@ export default function ContainerDetailPage() {
       if (res.success) {
         toast.success(`${label} command sent to ${name}`, { id: toastId });
         console.log(`[ContainerInspector] action "${action}" ok for ${name}`);
+        // Inject a synthetic system log so the log viewer shows immediate
+        // feedback; it's preserved across loadLogs() calls until real logs arrive.
+        const lifecycleMsg: Record<string, string> = {
+          restart: "[lattice] container restarting\u2026",
+          start: "[lattice] container starting\u2026",
+          stop: "[lattice] container stopping\u2026",
+          kill: "[lattice] container force-killed",
+          recreate: "[lattice] container recreating\u2026",
+        };
+        if (lifecycleMsg[action]) {
+          setLogs((prev) => [
+            ...prev,
+            {
+              id: Date.now(),
+              container_id: null,
+              container_name: containerNameRef.current,
+              worker_id: 0,
+              stream: "stdout" as const,
+              message: lifecycleMsg[action],
+              recorded_at: new Date().toISOString(),
+            },
+          ]);
+        }
       } else {
         const msg = res.error_message ?? "Unknown error";
         toast.error(`${label} failed: ${msg}`, { id: toastId });
@@ -323,10 +389,10 @@ export default function ContainerDetailPage() {
     }
 
     setActionLoading(null);
-    setTimeout(() => {
-      loadContainer();
-      loadLogs();
-    }, 2000);
+    // Burst-poll to catch state + log changes — new container logs can take
+    // several seconds to be persisted after a restart.
+    setTimeout(loadContainer, 2000);
+    [2000, 5000, 10000, 20000].forEach((d) => setTimeout(loadLogs, d));
   };
 
   const handleSave = async () => {
@@ -364,8 +430,8 @@ export default function ContainerDetailPage() {
   if (loading) return <PageLoader />;
   if (!container) {
     return (
-      <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-12 text-center">
-        <p className="text-sm text-[#555555]">Container not found</p>
+      <div className="rounded-xl border border-border-subtle bg-surface p-12 text-center">
+        <p className="text-sm text-muted">Container not found</p>
       </div>
     );
   }
@@ -381,7 +447,7 @@ export default function ContainerDetailPage() {
   const isPaused = container.status === "paused";
 
   // Derive liveness values from the already-computed map
-  const workerOnline = worker ? (workerLiveness[worker.id] ?? false) : true;
+  const workerOnline = worker ? (workerLiveness[worker.id] ?? true) : true;
   const staleReason = worker ? workerStaleReason(worker) : null;
   const controlsDisabled = !workerOnline || !!actionLoading;
 
@@ -393,8 +459,11 @@ export default function ContainerDetailPage() {
       )}
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-[#555555] mb-6">
-        <Link href="/containers" className="hover:text-white transition-colors">
+      <div className="flex items-center gap-2 text-sm text-muted mb-6">
+        <Link
+          href="/containers"
+          className="hover:text-primary transition-colors"
+        >
           Containers
         </Link>
         <svg
@@ -410,14 +479,14 @@ export default function ContainerDetailPage() {
             d="M9 5l7 7-7 7"
           />
         </svg>
-        <span className="text-white font-medium">{container.name}</span>
+        <span className="text-primary font-medium">{container.name}</span>
       </div>
 
       {/* Header */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-white">
+            <h1 className="text-xl font-semibold text-primary">
               {container.name}
             </h1>
             <StatusBadge status={container.status} />
@@ -425,7 +494,7 @@ export default function ContainerDetailPage() {
               <StatusBadge status={container.health_status} />
             )}
           </div>
-          <p className="text-sm text-[#888888] mt-1 font-mono">
+          <p className="text-sm text-secondary mt-1 font-mono">
             {container.image}:{container.tag}
           </p>
         </div>
@@ -447,7 +516,7 @@ export default function ContainerDetailPage() {
       )}
 
       {/* Action buttons */}
-      <div className="flex flex-wrap gap-2 mb-6 p-4 rounded-xl border border-[#1a1a1a] bg-[#111111]">
+      <div className="flex flex-wrap gap-2 mb-6 p-4 rounded-xl border border-border-subtle bg-surface">
         {/* Start */}
         <ActionButton
           label="Start"
@@ -481,7 +550,7 @@ export default function ContainerDetailPage() {
           }
           disabled={!isRunning || controlsDisabled}
           loading={actionLoading === "stop"}
-          color="text-[#888888] hover:bg-[#2a2a2a]"
+          color="text-secondary hover:bg-border-strong"
           onClick={async () => {
             const ok = await showConfirm({
               title: "Stop container",
@@ -569,7 +638,7 @@ export default function ContainerDetailPage() {
           }
           disabled={!isRunning || controlsDisabled}
           loading={actionLoading === "pause"}
-          color="text-[#888888] hover:bg-[#2a2a2a]"
+          color="text-secondary hover:bg-border-strong"
           onClick={() =>
             runAction("pause", () => reqPauseContainer(container.id))
           }
@@ -659,7 +728,7 @@ export default function ContainerDetailPage() {
         {/* Edit */}
         <button
           onClick={() => setEditing((e) => !e)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[#2a2a2a] px-3 h-8 text-sm font-medium text-[#888888] hover:text-white hover:bg-[#1a1a1a] transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 h-8 text-sm font-medium text-secondary hover:text-primary hover:bg-surface-active transition-colors cursor-pointer"
         >
           <svg
             className="h-3.5 w-3.5"
@@ -688,11 +757,11 @@ export default function ContainerDetailPage() {
 
       {/* Edit form */}
       {editing && (
-        <div className="mb-6 rounded-xl border border-[#2a2a2a] bg-[#111111] p-5 space-y-4">
-          <h2 className="text-sm font-medium text-white">Edit Container</h2>
+        <div className="mb-6 rounded-xl border border-border-strong bg-surface p-5 space-y-4">
+          <h2 className="text-sm font-medium text-primary">Edit Container</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs text-[#888888] mb-1.5">
+              <label className="block text-xs text-secondary mb-1.5">
                 Name
               </label>
               <input
@@ -702,7 +771,7 @@ export default function ContainerDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-[#888888] mb-1.5">
+              <label className="block text-xs text-secondary mb-1.5">
                 Image
               </label>
               <input
@@ -712,7 +781,7 @@ export default function ContainerDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-[#888888] mb-1.5">Tag</label>
+              <label className="block text-xs text-secondary mb-1.5">Tag</label>
               <input
                 value={editTag}
                 onChange={(e) => setEditTag(e.target.value)}
@@ -720,7 +789,7 @@ export default function ContainerDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-[#888888] mb-1.5">
+              <label className="block text-xs text-secondary mb-1.5">
                 Restart Policy
               </label>
               <select
@@ -735,7 +804,7 @@ export default function ContainerDetailPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-[#888888] mb-1.5">
+              <label className="block text-xs text-secondary mb-1.5">
                 CPU Limit (cores)
               </label>
               <input
@@ -749,7 +818,7 @@ export default function ContainerDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-[#888888] mb-1.5">
+              <label className="block text-xs text-secondary mb-1.5">
                 Memory Limit (MB)
               </label>
               <input
@@ -762,7 +831,7 @@ export default function ContainerDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-[#888888] mb-1.5">
+              <label className="block text-xs text-secondary mb-1.5">
                 Replicas
               </label>
               <input
@@ -774,7 +843,7 @@ export default function ContainerDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-[#888888] mb-1.5">
+              <label className="block text-xs text-secondary mb-1.5">
                 Command
               </label>
               <input
@@ -785,7 +854,7 @@ export default function ContainerDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-[#888888] mb-1.5">
+              <label className="block text-xs text-secondary mb-1.5">
                 Entrypoint
               </label>
               <input
@@ -796,7 +865,7 @@ export default function ContainerDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-[#888888] mb-1.5">
+              <label className="block text-xs text-secondary mb-1.5">
                 Registry ID
               </label>
               <input
@@ -811,7 +880,7 @@ export default function ContainerDetailPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
             <div>
-              <label className="block text-xs text-[#888888] mb-1.5">
+              <label className="block text-xs text-secondary mb-1.5">
                 Environment Variables (JSON)
               </label>
               <CodeEditor
@@ -823,7 +892,7 @@ export default function ContainerDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-[#888888] mb-1.5">
+              <label className="block text-xs text-secondary mb-1.5">
                 Port Mappings (JSON)
               </label>
               <CodeEditor
@@ -835,7 +904,7 @@ export default function ContainerDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-[#888888] mb-1.5">
+              <label className="block text-xs text-secondary mb-1.5">
                 Volumes (JSON)
               </label>
               <CodeEditor
@@ -847,7 +916,7 @@ export default function ContainerDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-[#888888] mb-1.5">
+              <label className="block text-xs text-secondary mb-1.5">
                 Health Check (JSON)
               </label>
               <CodeEditor
@@ -871,7 +940,7 @@ export default function ContainerDetailPage() {
             </button>
             <button
               onClick={() => setEditing(false)}
-              className="inline-flex items-center justify-center h-8 px-4 text-sm font-medium rounded-lg border border-[#2a2a2a] text-[#888888] hover:text-white hover:bg-[#1a1a1a] cursor-pointer transition-colors"
+              className="inline-flex items-center justify-center h-8 px-4 text-sm font-medium rounded-lg border border-border-strong text-secondary hover:text-primary hover:bg-surface-active cursor-pointer transition-colors"
             >
               Cancel
             </button>
@@ -881,8 +950,8 @@ export default function ContainerDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         {/* Status card */}
-        <div className="lg:col-span-2 rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
-          <h2 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-4">
+        <div className="lg:col-span-2 rounded-xl border border-border-subtle bg-surface p-5">
+          <h2 className="text-xs font-medium text-muted uppercase tracking-wider mb-4">
             Container Status
           </h2>
           <dl className="grid grid-cols-2 gap-x-8 gap-y-3">
@@ -938,12 +1007,12 @@ export default function ContainerDetailPage() {
         </div>
 
         {/* Health card */}
-        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
-          <h2 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-4">
+        <div className="rounded-xl border border-border-subtle bg-surface p-5">
+          <h2 className="text-xs font-medium text-muted uppercase tracking-wider mb-4">
             Health
           </h2>
           {container.health_status === "none" && !healthConfig ? (
-            <p className="text-sm text-[#555555]">No health check configured</p>
+            <p className="text-sm text-muted">No health check configured</p>
           ) : (
             <dl className="space-y-3">
               <InfoRow
@@ -972,16 +1041,16 @@ export default function ContainerDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] overflow-hidden">
-        <div className="flex border-b border-[#1a1a1a]">
+      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+        <div className="flex border-b border-border-subtle">
           {(["logs", "details", "health"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-5 py-3 text-sm font-medium capitalize transition-colors cursor-pointer ${
                 tab === t
-                  ? "text-white border-b-2 border-[#3b82f6]"
-                  : "text-[#555555] hover:text-white"
+                  ? "text-primary border-b-2 border-[#3b82f6]"
+                  : "text-muted hover:text-primary"
               }`}
             >
               {t === "health"
@@ -995,15 +1064,20 @@ export default function ContainerDetailPage() {
 
         {/* LOGS TAB */}
         {tab === "logs" && (
-          <div className="bg-[#0d0d0d] min-h-[320px] max-h-[520px] overflow-y-auto p-3">
+          <div className="bg-background-alt min-h-[320px] max-h-[520px] overflow-y-auto p-3">
             {logs.length === 0 ? (
-              <p className="text-xs text-[#444444] font-mono p-2">
+              <p className="text-xs text-dimmed font-mono p-2">
                 No logs available
               </p>
             ) : (
               <>
-                {logs.map((line) => (
-                  <LogLine key={line.id} line={line} />
+                {logs.map((line, i) => (
+                  <div key={line.id}>
+                    {i > 0 && isNewSession(logs[i - 1], line) && (
+                      <SessionBreak at={line.recorded_at} />
+                    )}
+                    <LogLine line={line} />
+                  </div>
                 ))}
                 <div ref={logsEndRef} />
               </>
@@ -1016,27 +1090,27 @@ export default function ContainerDetailPage() {
           <div className="p-5 space-y-6">
             {/* Image */}
             <section>
-              <h3 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-3">
+              <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
                 Image
               </h3>
-              <p className="text-sm text-white font-mono">
+              <p className="text-sm text-primary font-mono">
                 {container.image}:{container.tag}
               </p>
             </section>
 
             {/* Port mappings */}
             <section>
-              <h3 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-3">
+              <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
                 Port Configuration
               </h3>
               {ports.length === 0 ? (
-                <p className="text-sm text-[#555555]">No ports exposed</p>
+                <p className="text-sm text-muted">No ports exposed</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {ports.map((p, i) => (
                     <span
                       key={i}
-                      className="rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 py-1 text-xs font-mono text-white"
+                      className="rounded-lg border border-border-strong bg-surface-elevated px-3 py-1 text-xs font-mono text-primary"
                     >
                       {p.host_port ?? "?"}:{p.container_port ?? "?"}
                       {p.protocol && p.protocol !== "tcp"
@@ -1050,11 +1124,11 @@ export default function ContainerDetailPage() {
 
             {/* Volumes */}
             <section>
-              <h3 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-3">
+              <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
                 Volumes
               </h3>
               {volumes.length === 0 ? (
-                <p className="text-sm text-[#555555]">No volumes mounted</p>
+                <p className="text-sm text-muted">No volumes mounted</p>
               ) : (
                 <div className="space-y-1">
                   {volumes.map((v, i) => (
@@ -1062,9 +1136,9 @@ export default function ContainerDetailPage() {
                       key={i}
                       className="flex items-center gap-2 text-xs font-mono"
                     >
-                      <span className="text-[#888888]">{v.host ?? "?"}</span>
-                      <span className="text-[#444444]">→</span>
-                      <span className="text-white">{v.container ?? "?"}</span>
+                      <span className="text-secondary">{v.host ?? "?"}</span>
+                      <span className="text-dimmed">→</span>
+                      <span className="text-primary">{v.container ?? "?"}</span>
                     </div>
                   ))}
                 </div>
@@ -1074,10 +1148,10 @@ export default function ContainerDetailPage() {
             {/* CMD */}
             {container.command && (
               <section>
-                <h3 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-3">
+                <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
                   CMD
                 </h3>
-                <code className="text-sm text-[#d4d4d4] font-mono">
+                <code className="text-sm text-subtle font-mono">
                   {prettyField(container.command)}
                 </code>
               </section>
@@ -1086,10 +1160,10 @@ export default function ContainerDetailPage() {
             {/* ENTRYPOINT */}
             {container.entrypoint && (
               <section>
-                <h3 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-3">
+                <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
                   ENTRYPOINT
                 </h3>
-                <code className="text-sm text-[#d4d4d4] font-mono">
+                <code className="text-sm text-subtle font-mono">
                   {prettyField(container.entrypoint)}
                 </code>
               </section>
@@ -1097,21 +1171,21 @@ export default function ContainerDetailPage() {
 
             {/* Resource limits */}
             <section>
-              <h3 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-3">
+              <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
                 Resource Limits
               </h3>
               <div className="flex flex-wrap gap-4">
                 <div>
-                  <p className="text-xs text-[#555555]">CPU</p>
-                  <p className="text-sm text-white">
+                  <p className="text-xs text-muted">CPU</p>
+                  <p className="text-sm text-primary">
                     {container.cpu_limit != null
                       ? `${container.cpu_limit} cores`
                       : "unlimited"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#555555]">Memory</p>
-                  <p className="text-sm text-white">
+                  <p className="text-xs text-muted">Memory</p>
+                  <p className="text-sm text-primary">
                     {container.memory_limit != null
                       ? `${container.memory_limit} MB`
                       : "unlimited"}
@@ -1122,23 +1196,21 @@ export default function ContainerDetailPage() {
 
             {/* Environment variables */}
             <section>
-              <h3 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-3">
+              <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
                 Environment Variables
               </h3>
               {Object.keys(envVars).length === 0 ? (
-                <p className="text-sm text-[#555555]">
-                  No environment variables
-                </p>
+                <p className="text-sm text-muted">No environment variables</p>
               ) : (
-                <div className="rounded-lg border border-[#1a1a1a] overflow-hidden">
+                <div className="rounded-lg border border-border-subtle overflow-hidden">
                   <table className="w-full">
                     <tbody className="divide-y divide-[#141414]">
                       {Object.entries(envVars).map(([k, v]) => (
                         <tr key={k}>
-                          <td className="px-3 py-2 text-xs font-mono text-[#888888] w-1/3 align-top">
+                          <td className="px-3 py-2 text-xs font-mono text-secondary w-1/3 align-top">
                             {k}
                           </td>
-                          <td className="px-3 py-2 text-xs font-mono text-white break-all">
+                          <td className="px-3 py-2 text-xs font-mono text-primary break-all">
                             {v}
                           </td>
                         </tr>
@@ -1155,7 +1227,7 @@ export default function ContainerDetailPage() {
         {tab === "health" && (
           <div className="p-5 space-y-4">
             <div>
-              <h3 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-3">
+              <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
                 Health Status
               </h3>
               <StatusBadge status={container.health_status} />
@@ -1164,58 +1236,58 @@ export default function ContainerDetailPage() {
               <>
                 {/* Test command */}
                 <section>
-                  <h3 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-3">
+                  <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
                     Test Command
                   </h3>
-                  <code className="text-sm font-mono text-[#d4d4d4] bg-[#0d0d0d] rounded-lg px-3 py-2 block whitespace-pre-wrap break-all">
+                  <code className="text-sm font-mono text-subtle bg-background-alt rounded-lg px-3 py-2 block whitespace-pre-wrap break-all">
                     {formatTestCommand(healthConfig.test)}
                   </code>
                 </section>
 
                 {/* Config table */}
                 <section>
-                  <h3 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-3">
+                  <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
                     Configuration
                   </h3>
-                  <div className="rounded-lg border border-[#1a1a1a] overflow-hidden">
+                  <div className="rounded-lg border border-border-subtle overflow-hidden">
                     <table className="w-full">
                       <tbody className="divide-y divide-[#141414]">
                         {healthConfig.interval && (
                           <tr>
-                            <td className="px-3 py-2 text-xs font-mono text-[#888888] w-1/3">
+                            <td className="px-3 py-2 text-xs font-mono text-secondary w-1/3">
                               Interval
                             </td>
-                            <td className="px-3 py-2 text-xs font-mono text-white">
+                            <td className="px-3 py-2 text-xs font-mono text-primary">
                               {healthConfig.interval}
                             </td>
                           </tr>
                         )}
                         {healthConfig.timeout && (
                           <tr>
-                            <td className="px-3 py-2 text-xs font-mono text-[#888888] w-1/3">
+                            <td className="px-3 py-2 text-xs font-mono text-secondary w-1/3">
                               Timeout
                             </td>
-                            <td className="px-3 py-2 text-xs font-mono text-white">
+                            <td className="px-3 py-2 text-xs font-mono text-primary">
                               {healthConfig.timeout}
                             </td>
                           </tr>
                         )}
                         {healthConfig.retries != null && (
                           <tr>
-                            <td className="px-3 py-2 text-xs font-mono text-[#888888] w-1/3">
+                            <td className="px-3 py-2 text-xs font-mono text-secondary w-1/3">
                               Retries
                             </td>
-                            <td className="px-3 py-2 text-xs font-mono text-white">
+                            <td className="px-3 py-2 text-xs font-mono text-primary">
                               {healthConfig.retries}
                             </td>
                           </tr>
                         )}
                         {healthConfig.start_period && (
                           <tr>
-                            <td className="px-3 py-2 text-xs font-mono text-[#888888] w-1/3">
+                            <td className="px-3 py-2 text-xs font-mono text-secondary w-1/3">
                               Start Period
                             </td>
-                            <td className="px-3 py-2 text-xs font-mono text-white">
+                            <td className="px-3 py-2 text-xs font-mono text-primary">
                               {healthConfig.start_period}
                             </td>
                           </tr>
@@ -1225,13 +1297,13 @@ export default function ContainerDetailPage() {
                   </div>
                 </section>
 
-                <p className="text-xs text-[#555555]">
+                <p className="text-xs text-muted">
                   Health checks are configured in your compose file and synced
                   automatically.
                 </p>
               </>
             ) : (
-              <p className="text-sm text-[#555555]">
+              <p className="text-sm text-muted">
                 No health check detected. Configure a healthcheck in your
                 compose file and redeploy — Lattice will sync it automatically.
               </p>
@@ -1246,13 +1318,13 @@ export default function ContainerDetailPage() {
 // ─── sub-components ───────────────────────────────────────────────────────────
 
 const inputClass =
-  "w-full rounded-lg border border-[#2a2a2a] bg-[#0d0d0d] px-3 py-1.5 text-sm text-white placeholder-[#444444] focus:border-[#3b82f6] focus:outline-none";
+  "w-full rounded-lg border border-border-strong bg-background-alt px-3 py-1.5 text-sm text-primary placeholder-[#444444] focus:border-[#3b82f6] focus:outline-none";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-xs text-[#555555]">{label}</dt>
-      <dd className="mt-0.5 text-sm text-white">{value}</dd>
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="mt-0.5 text-sm text-primary">{value}</dd>
     </div>
   );
 }
@@ -1276,7 +1348,7 @@ function ActionButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-1.5 rounded-lg border border-[#2a2a2a] px-3 h-8 text-sm font-medium transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${color}`}
+      className={`inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 h-8 text-sm font-medium transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${color}`}
     >
       {loading ? (
         <svg

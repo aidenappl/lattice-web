@@ -215,8 +215,8 @@ export default function RegistriesPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Registries</h1>
-          <p className="text-sm text-[#888888] mt-1">
+          <h1 className="text-xl font-semibold text-primary">Registries</h1>
+          <p className="text-sm text-secondary mt-1">
             Manage container registries
           </p>
         </div>
@@ -234,7 +234,7 @@ export default function RegistriesPage() {
       {showForm && (
         <form
           onSubmit={handleCreate}
-          className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6 mb-6 space-y-4"
+          className="rounded-xl border border-border-subtle bg-surface p-6 mb-6 space-y-4"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
@@ -259,7 +259,7 @@ export default function RegistriesPage() {
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="reg-type"
-                className="text-xs font-medium text-[#888888] uppercase tracking-wider"
+                className="text-xs font-medium text-secondary uppercase tracking-wider"
               >
                 Type
               </label>
@@ -269,7 +269,7 @@ export default function RegistriesPage() {
                 onChange={(e) =>
                   setType(e.target.value as "dockerhub" | "ghcr" | "custom")
                 }
-                className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
+                className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
               >
                 <option value="custom">Custom Registry</option>
                 <option value="dockerhub">Docker Hub</option>
@@ -330,26 +330,26 @@ export default function RegistriesPage() {
       )}
 
       {/* Registries List */}
-      <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] overflow-hidden">
+      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-[#1a1a1a]">
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+            <tr className="border-b border-border-subtle">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Name
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 URL
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Type
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Auth
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Created
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-right text-xs font-medium text-secondary uppercase tracking-wider">
                 Actions
               </th>
             </tr>
@@ -359,7 +359,7 @@ export default function RegistriesPage() {
               <tr>
                 <td
                   colSpan={6}
-                  className="px-4 py-12 text-center text-sm text-[#555555]"
+                  className="px-4 py-12 text-center text-sm text-muted"
                 >
                   No registries configured
                 </td>
@@ -367,24 +367,24 @@ export default function RegistriesPage() {
             ) : (
               registries.map((reg) => (
                 <React.Fragment key={reg.id}>
-                  <tr className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#161616] transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium text-white">
+                  <tr className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors">
+                    <td className="px-4 py-3 text-sm font-medium text-primary">
                       {reg.name}
                     </td>
-                    <td className="px-4 py-3 text-sm text-[#888888] font-mono">
+                    <td className="px-4 py-3 text-sm text-secondary font-mono">
                       {reg.url}
                     </td>
-                    <td className="px-4 py-3 text-sm text-[#888888]">
+                    <td className="px-4 py-3 text-sm text-secondary">
                       {reg.type}
                     </td>
-                    <td className="px-4 py-3 text-sm text-[#888888]">
+                    <td className="px-4 py-3 text-sm text-secondary">
                       {reg.username ? (
                         <span className="text-[#4ade80]">{reg.username}</span>
                       ) : (
-                        <span className="text-[#555555]">none</span>
+                        <span className="text-muted">none</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-[#555555]">
+                    <td className="px-4 py-3 text-sm text-muted">
                       {formatDate(reg.inserted_at)}
                     </td>
                     <td className="px-4 py-3 text-right space-x-2">
@@ -419,7 +419,7 @@ export default function RegistriesPage() {
                     </td>
                   </tr>
                   {editId === reg.id && (
-                    <tr className="border-b border-[#1a1a1a] bg-[#0d0d0d]">
+                    <tr className="border-b border-border-subtle bg-background-alt">
                       <td colSpan={6} className="px-4 py-4">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                           <Input
@@ -435,7 +435,7 @@ export default function RegistriesPage() {
                             onChange={(e) => setEditUrl(e.target.value)}
                           />
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium text-[#888888] uppercase tracking-wider">
+                            <label className="text-xs font-medium text-secondary uppercase tracking-wider">
                               Type
                             </label>
                             <select
@@ -448,7 +448,7 @@ export default function RegistriesPage() {
                                     | "custom",
                                 )
                               }
-                              className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none"
+                              className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none"
                             >
                               <option value="custom">Custom Registry</option>
                               <option value="dockerhub">Docker Hub</option>
@@ -499,20 +499,20 @@ export default function RegistriesPage() {
 
       {/* Browse panel */}
       {browseId !== null && (
-        <div className="mt-4 rounded-xl border border-[#1a1a1a] bg-[#111111] p-6">
-          <h2 className="text-sm font-semibold text-white mb-4">
+        <div className="mt-4 rounded-xl border border-border-subtle bg-surface p-6">
+          <h2 className="text-sm font-semibold text-primary mb-4">
             Browse: {registries.find((r) => r.id === browseId)?.name}
           </h2>
 
           {browseLoading && !selectedRepo ? (
-            <p className="text-sm text-[#555555]">Loading repositories...</p>
+            <p className="text-sm text-muted">Loading repositories...</p>
           ) : repos.length === 0 ? (
-            <p className="text-sm text-[#555555]">No repositories found</p>
+            <p className="text-sm text-muted">No repositories found</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Repository list */}
               <div>
-                <p className="text-xs font-medium text-[#888888] uppercase tracking-wider mb-2">
+                <p className="text-xs font-medium text-secondary uppercase tracking-wider mb-2">
                   Repositories ({repos.length})
                 </p>
                 <div className="space-y-1 max-h-80 overflow-y-auto">
@@ -522,8 +522,8 @@ export default function RegistriesPage() {
                       onClick={() => handleSelectRepo(repo)}
                       className={`w-full text-left px-3 py-2 rounded-lg text-sm font-mono transition-colors cursor-pointer ${
                         selectedRepo === repo
-                          ? "bg-[#1a1a1a] text-white"
-                          : "text-[#888888] hover:bg-[#161616] hover:text-white"
+                          ? "bg-surface-active text-primary"
+                          : "text-secondary hover:bg-surface-elevated hover:text-primary"
                       }`}
                     >
                       {repo}
@@ -536,19 +536,19 @@ export default function RegistriesPage() {
               <div>
                 {selectedRepo && (
                   <>
-                    <p className="text-xs font-medium text-[#888888] uppercase tracking-wider mb-2">
+                    <p className="text-xs font-medium text-secondary uppercase tracking-wider mb-2">
                       Tags for {selectedRepo} ({tags.length})
                     </p>
                     {browseLoading ? (
-                      <p className="text-sm text-[#555555]">Loading tags...</p>
+                      <p className="text-sm text-muted">Loading tags...</p>
                     ) : tags.length === 0 ? (
-                      <p className="text-sm text-[#555555]">No tags found</p>
+                      <p className="text-sm text-muted">No tags found</p>
                     ) : (
                       <div className="space-y-1 max-h-80 overflow-y-auto">
                         {tags.map((tag) => (
                           <div
                             key={tag}
-                            className="px-3 py-2 rounded-lg text-sm font-mono text-[#888888] bg-[#0a0a0a]"
+                            className="px-3 py-2 rounded-lg text-sm font-mono text-secondary bg-background"
                           >
                             {selectedRepo}:{tag}
                           </div>

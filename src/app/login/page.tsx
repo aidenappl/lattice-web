@@ -34,17 +34,17 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0a0a] p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
-        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-8 shadow-2xl">
+        <div className="rounded-xl border border-border-subtle bg-surface p-8 shadow-2xl">
           {/* Logo */}
           <div className="flex items-center justify-center gap-3.5 mb-8">
             <Logo size="md" />
             <div className="flex flex-col leading-none">
-              <span className="text-xl font-semibold text-white tracking-tight">
+              <span className="text-xl font-semibold text-primary tracking-tight">
                 Lattice
               </span>
-              <span className="text-xs text-[#555555] font-medium">
+              <span className="text-xs text-muted font-medium">
                 Sign in to continue
               </span>
             </div>
@@ -85,15 +85,15 @@ export default function LoginPage() {
 
           {/* Divider */}
           <div className="flex items-center gap-3 my-6">
-            <div className="flex-1 h-px bg-[#222222]" />
-            <span className="text-xs text-[#555555]">or</span>
-            <div className="flex-1 h-px bg-[#222222]" />
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted">or</span>
+            <div className="flex-1 h-px bg-border" />
           </div>
 
           {/* OAuth */}
           <a
             href={`${API_URL}/forta/login`}
-            className="flex h-10 w-full items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#161616] px-4 text-sm font-medium text-white transition-colors hover:bg-[#1a1a1a] hover:border-[#333333]"
+            className="flex h-10 w-full items-center justify-center rounded-lg border border-border-strong bg-surface-elevated px-4 text-sm font-medium text-primary transition-colors hover:bg-surface-active hover:border-border-strong"
           >
             Sign in with Forta
           </a>

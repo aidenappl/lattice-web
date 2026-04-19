@@ -1,22 +1,83 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Light mode tokens ─────────────────────────────────────────── */
 :root {
+  --background: #ffffff;
+  --background-alt: #fafafa;
+  --surface: #f4f4f5;
+  --surface-alt: #efefef;
+  --surface-elevated: #ebebeb;
+  --surface-active: #e4e4e7;
+  --foreground: #0f0f10;
+  --border-subtle: #e4e4e7;
+  --border: #d4d4d8;
+  --border-strong: #c0c0c8;
+  --border-emphasis: #9090a0;
+  --text-primary: #0f0f10;
+  --text-secondary: #71717a;
+  --text-muted: #a1a1aa;
+  --text-dimmed: #71717a;
+  --text-subtle: #9ca3af;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --destructive: #ef4444;
+  --destructive-soft: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+}
+
+/* ── Dark mode tokens ──────────────────────────────────────────── */
+.dark {
   --background: #0a0a0a;
-  --foreground: #ededed;
+  --background-alt: #0d0d0d;
   --surface: #111111;
+  --surface-alt: #141414;
   --surface-elevated: #161616;
-  --border: #222222;
+  --surface-active: #1a1a1a;
+  --foreground: #ededed;
   --border-subtle: #1a1a1a;
+  --border: #222222;
+  --border-strong: #2a2a2a;
+  --border-emphasis: #444444;
   --text-primary: #ffffff;
   --text-secondary: #888888;
   --text-muted: #555555;
+  --text-dimmed: #444444;
+  --text-subtle: #d4d4d4;
   --accent: #3b82f6;
   --accent-hover: #2563eb;
+  --destructive: #ef4444;
+  --destructive-soft: #f87171;
+  --success: #22c55e;
+  --warning: #f59e0b;
 }
 
+/* ── Tailwind color utilities ──────────────────────────────────── */
 @theme inline {
   --color-background: var(--background);
+  --color-background-alt: var(--background-alt);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-active: var(--surface-active);
   --color-foreground: var(--foreground);
+  --color-border-subtle: var(--border-subtle);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-emphasis: var(--border-emphasis);
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-dimmed: var(--text-dimmed);
+  --color-subtle: var(--text-subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-destructive: var(--destructive);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -28,7 +89,21 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+html {
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
+}
+
 * {
   scrollbar-width: thin;
-  scrollbar-color: #333333 transparent;
+  scrollbar-color: var(--border-strong) transparent;
 }

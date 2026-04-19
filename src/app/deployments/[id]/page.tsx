@@ -147,7 +147,7 @@ export default function DeploymentDetailPage() {
   if (loading) return <PageLoader />;
   if (!deployment)
     return (
-      <div className="text-center text-sm text-[#555555] py-12">
+      <div className="text-center text-sm text-muted py-12">
         Deployment not found
       </div>
     );
@@ -164,12 +164,12 @@ export default function DeploymentDetailPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-white">
+            <h1 className="text-xl font-semibold text-primary">
               Deployment #{deployment.id}
             </h1>
             <StatusBadge status={deployment.status} />
           </div>
-          <p className="text-sm text-[#888888] mt-1">
+          <p className="text-sm text-secondary mt-1">
             <Link
               href={`/stacks/${deployment.stack_id}`}
               className="text-[#3b82f6] hover:underline"
@@ -200,8 +200,8 @@ export default function DeploymentDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Timeline */}
-        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
-          <h2 className="text-sm font-medium text-white mb-6">
+        <div className="rounded-xl border border-border-subtle bg-surface p-5">
+          <h2 className="text-sm font-medium text-primary mb-6">
             Status Timeline
           </h2>
           <div className="space-y-4">
@@ -217,7 +217,7 @@ export default function DeploymentDetailPage() {
                         ? "bg-[#22c55e]/20 text-[#22c55e] ring-1 ring-[#22c55e]/30"
                         : isCurrent
                           ? "bg-[#3b82f6]/20 text-[#3b82f6] ring-1 ring-[#3b82f6]/30"
-                          : "bg-[#1a1a1a] text-[#555555]",
+                          : "bg-surface-active text-muted",
                     )}
                   >
                     {i + 1}
@@ -226,7 +226,7 @@ export default function DeploymentDetailPage() {
                     <p
                       className={cn(
                         "text-sm font-medium capitalize",
-                        isCompleted ? "text-white" : "text-[#555555]",
+                        isCompleted ? "text-primary" : "text-muted",
                       )}
                     >
                       {step}
@@ -237,10 +237,10 @@ export default function DeploymentDetailPage() {
             })}
             {(isFailed || isRolledBack) && (
               <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ef4444]/20 text-[#f87171] ring-1 ring-red-500/30 text-xs font-medium">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ef4444]/20 text-destructive-soft ring-1 ring-red-500/30 text-xs font-medium">
                   !
                 </div>
-                <p className="text-sm font-medium text-[#f87171] capitalize">
+                <p className="text-sm font-medium text-destructive-soft capitalize">
                   {deployment.status.replace("_", " ")}
                 </p>
               </div>
@@ -249,22 +249,22 @@ export default function DeploymentDetailPage() {
         </div>
 
         {/* Details */}
-        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
-          <h2 className="text-sm font-medium text-white mb-4">Details</h2>
+        <div className="rounded-xl border border-border-subtle bg-surface p-5">
+          <h2 className="text-sm font-medium text-primary mb-4">Details</h2>
           <div className="space-y-4">
             <div>
-              <p className="text-xs text-[#555555] uppercase tracking-wider">
+              <p className="text-xs text-muted uppercase tracking-wider">
                 Strategy
               </p>
-              <p className="text-sm text-[#888888] mt-1">
+              <p className="text-sm text-secondary mt-1">
                 {deployment.strategy}
               </p>
             </div>
             <div>
-              <p className="text-xs text-[#555555] uppercase tracking-wider">
+              <p className="text-xs text-muted uppercase tracking-wider">
                 Triggered By
               </p>
-              <p className="text-sm text-[#888888] mt-1">
+              <p className="text-sm text-secondary mt-1">
                 {triggeredByUser
                   ? triggeredByUser.name || triggeredByUser.email
                   : deployment.triggered_by
@@ -273,10 +273,10 @@ export default function DeploymentDetailPage() {
               </p>
             </div>
             <div>
-              <p className="text-xs text-[#555555] uppercase tracking-wider">
+              <p className="text-xs text-muted uppercase tracking-wider">
                 Approved By
               </p>
-              <p className="text-sm text-[#888888] mt-1">
+              <p className="text-sm text-secondary mt-1">
                 {approvedByUser
                   ? approvedByUser.name || approvedByUser.email
                   : deployment.approved_by
@@ -285,30 +285,30 @@ export default function DeploymentDetailPage() {
               </p>
             </div>
             <div>
-              <p className="text-xs text-[#555555] uppercase tracking-wider">
+              <p className="text-xs text-muted uppercase tracking-wider">
                 Started At
               </p>
-              <p className="text-sm text-[#888888] mt-1">
+              <p className="text-sm text-secondary mt-1">
                 {deployment.started_at
                   ? formatDate(deployment.started_at)
                   : "-"}
               </p>
             </div>
             <div>
-              <p className="text-xs text-[#555555] uppercase tracking-wider">
+              <p className="text-xs text-muted uppercase tracking-wider">
                 Completed At
               </p>
-              <p className="text-sm text-[#888888] mt-1">
+              <p className="text-sm text-secondary mt-1">
                 {deployment.completed_at
                   ? formatDate(deployment.completed_at)
                   : "-"}
               </p>
             </div>
             <div>
-              <p className="text-xs text-[#555555] uppercase tracking-wider">
+              <p className="text-xs text-muted uppercase tracking-wider">
                 Created
               </p>
-              <p className="text-sm text-[#888888] mt-1">
+              <p className="text-sm text-secondary mt-1">
                 {formatDate(deployment.inserted_at)}
               </p>
             </div>
@@ -317,9 +317,9 @@ export default function DeploymentDetailPage() {
       </div>
 
       {/* Deployment Logs */}
-      <div className="mt-6 rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
+      <div className="mt-6 rounded-xl border border-border-subtle bg-surface p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-medium text-white">Deployment Logs</h2>
+          <h2 className="text-sm font-medium text-primary">Deployment Logs</h2>
           {deployment.status === "deploying" && (
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3b82f6] opacity-75" />
@@ -327,29 +327,51 @@ export default function DeploymentDetailPage() {
             </span>
           )}
         </div>
-        <div className="max-h-[400px] overflow-y-auto rounded-lg bg-[#0a0a0a] border border-[#1a1a1a] p-4 font-mono text-xs space-y-1">
+        <div className="max-h-[400px] overflow-y-auto rounded-lg bg-background border border-border-subtle p-4 font-mono text-xs space-y-1">
           {logs.length === 0 ? (
-            <p className="text-[#555555] text-center py-8">No logs yet</p>
+            <p className="text-muted text-center py-8">No logs yet</p>
           ) : (
-            logs.map((log) => (
-              <div key={log.id} className="flex gap-2">
-                <span className="text-[#444444] shrink-0 select-none">
-                  {new Date(log.recorded_at).toLocaleTimeString()}
-                </span>
-                {log.stage && (
-                  <span className="text-[#3b82f6] shrink-0">[{log.stage}]</span>
-                )}
-                <span
-                  className={cn(
-                    log.level === "error"
-                      ? "text-[#f87171]"
-                      : log.level === "warn"
-                        ? "text-[#eab308]"
-                        : "text-[#d4d4d4]",
+            logs.map((log, i) => (
+              <div key={log.id}>
+                {i > 0 &&
+                  new Date(log.recorded_at).getTime() -
+                    new Date(logs[i - 1].recorded_at).getTime() >
+                    5_000 && (
+                    <div className="flex items-center gap-2 px-2 py-2 my-1 select-none">
+                      <div className="flex-1 h-px bg-border-subtle" />
+                      <span className="text-[10px] font-mono text-muted whitespace-nowrap">
+                        new session &middot;{" "}
+                        {new Date(log.recorded_at).toLocaleTimeString([], {
+                          hour12: false,
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })}
+                      </span>
+                      <div className="flex-1 h-px bg-border-subtle" />
+                    </div>
                   )}
-                >
-                  {log.message}
-                </span>
+                <div className="flex gap-2">
+                  <span className="text-dimmed shrink-0 select-none">
+                    {new Date(log.recorded_at).toLocaleTimeString()}
+                  </span>
+                  {log.stage && (
+                    <span className="text-[#3b82f6] shrink-0">
+                      [{log.stage}]
+                    </span>
+                  )}
+                  <span
+                    className={cn(
+                      log.level === "error"
+                        ? "text-destructive-soft"
+                        : log.level === "warn"
+                          ? "text-[#eab308]"
+                          : "text-subtle",
+                    )}
+                  >
+                    {log.message}
+                  </span>
+                </div>
               </div>
             ))
           )}

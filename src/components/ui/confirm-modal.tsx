@@ -57,12 +57,12 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           onClick={() => handle(false)}
         >
           <div
-            className="bg-[#111111] border border-[#2a2a2a] rounded-xl p-6 w-full max-w-sm mx-4 shadow-2xl"
+            className="bg-surface border border-border-strong rounded-xl p-6 w-full max-w-sm mx-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-semibold text-white">{state.title}</h3>
+            <h3 className="text-sm font-semibold text-primary">{state.title}</h3>
             {state.message && (
-              <p className="text-xs text-[#888888] mt-2 mb-5 leading-relaxed">
+              <p className="text-xs text-secondary mt-2 mb-5 leading-relaxed">
                 {state.message}
               </p>
             )}

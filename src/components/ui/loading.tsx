@@ -17,7 +17,7 @@ export function LoadingSpinner({
 
   return (
     <svg
-      className={cn("animate-spin text-[#555555]", sizes[size], className)}
+      className={cn("animate-spin text-muted", sizes[size], className)}
       fill="none"
       viewBox="0 0 24 24"
     >

@@ -21,7 +21,7 @@ function actionColor(action: string): string {
   const key = Object.keys(actionColors).find((k) =>
     action.toLowerCase().includes(k),
   );
-  return key ? actionColors[key] : "text-[#888888]";
+  return key ? actionColors[key] : "text-secondary";
 }
 
 export default function AuditLogPage() {
@@ -67,8 +67,8 @@ export default function AuditLogPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Audit Log</h1>
-          <p className="text-sm text-[#888888] mt-1">
+          <h1 className="text-xl font-semibold text-primary">Audit Log</h1>
+          <p className="text-sm text-secondary mt-1">
             Track all actions performed in the system
           </p>
         </div>
@@ -76,7 +76,7 @@ export default function AuditLogPage() {
           <select
             value={resourceFilter}
             onChange={(e) => setResourceFilter(e.target.value)}
-            className="h-9 rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
+            className="h-9 rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
           >
             <option value="all">All Resources</option>
             {resourceTypes.map((r) => (
@@ -88,7 +88,7 @@ export default function AuditLogPage() {
           <select
             value={actionFilter}
             onChange={(e) => setActionFilter(e.target.value)}
-            className="h-9 rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
+            className="h-9 rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
           >
             <option value="all">All Actions</option>
             {actions.map((a) => (
@@ -100,26 +100,26 @@ export default function AuditLogPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] overflow-hidden">
+      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-[#1a1a1a]">
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+            <tr className="border-b border-border-subtle">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Time
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 User
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Action
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Resource
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Details
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 IP
               </th>
             </tr>
@@ -129,7 +129,7 @@ export default function AuditLogPage() {
               <tr>
                 <td
                   colSpan={6}
-                  className="px-4 py-12 text-center text-sm text-[#555555]"
+                  className="px-4 py-12 text-center text-sm text-muted"
                 >
                   No audit log entries found
                 </td>
@@ -138,12 +138,12 @@ export default function AuditLogPage() {
               filtered.map((entry) => (
                 <tr
                   key={entry.id}
-                  className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#161616] transition-colors"
+                  className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors"
                 >
-                  <td className="px-4 py-3 text-sm text-[#555555] whitespace-nowrap">
+                  <td className="px-4 py-3 text-sm text-muted whitespace-nowrap">
                     {formatDate(entry.inserted_at)}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#888888]">
+                  <td className="px-4 py-3 text-sm text-secondary">
                     {entry.user_id
                       ? (userMap.get(entry.user_id) ?? `User #${entry.user_id}`)
                       : "System"}
@@ -155,19 +155,19 @@ export default function AuditLogPage() {
                       {entry.action}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#888888]">
+                  <td className="px-4 py-3 text-sm text-secondary">
                     {entry.resource_type}
                     {entry.resource_id != null && (
-                      <span className="text-[#555555]">
+                      <span className="text-muted">
                         {" "}
                         #{entry.resource_id}
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#555555] max-w-xs truncate">
+                  <td className="px-4 py-3 text-sm text-muted max-w-xs truncate">
                     {entry.details ?? "-"}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#555555] font-mono">
+                  <td className="px-4 py-3 text-sm text-muted font-mono">
                     {entry.ip_address ?? "-"}
                   </td>
                 </tr>

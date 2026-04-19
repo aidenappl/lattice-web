@@ -245,15 +245,15 @@ export default function NewStackPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-white">Create Stack</h1>
-        <p className="text-sm text-[#888888] mt-1">
+        <h1 className="text-xl font-semibold text-primary">Create Stack</h1>
+        <p className="text-sm text-secondary mt-1">
           Import a Docker Compose file to create a new stack
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="max-w-3xl space-y-6">
         {/* Stack info */}
-        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6">
+        <div className="rounded-xl border border-border-subtle bg-surface p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               id="name"
@@ -266,7 +266,7 @@ export default function NewStackPage() {
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="worker"
-                className="text-xs font-medium text-[#888888] uppercase tracking-wider"
+                className="text-xs font-medium text-secondary uppercase tracking-wider"
               >
                 Worker
               </label>
@@ -274,7 +274,7 @@ export default function NewStackPage() {
                 id="worker"
                 value={workerId}
                 onChange={(e) => setWorkerId(e.target.value)}
-                className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none"
+                className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none"
               >
                 <option value="">Select a worker...</option>
                 {workers.map((w) => (
@@ -290,7 +290,7 @@ export default function NewStackPage() {
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="description"
-                className="text-xs font-medium text-[#888888] uppercase tracking-wider"
+                className="text-xs font-medium text-secondary uppercase tracking-wider"
               >
                 Description
               </label>
@@ -300,13 +300,13 @@ export default function NewStackPage() {
                 placeholder="Optional description..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 py-2 text-sm text-white placeholder:text-[#555555] focus:border-[#444444] focus:outline-none resize-none"
+                className="w-full rounded-lg border border-border-strong bg-surface-elevated px-3 py-2 text-sm text-primary placeholder:text-muted focus:border-border-emphasis focus:outline-none resize-none"
               />
             </div>
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="strategy"
-                className="text-xs font-medium text-[#888888] uppercase tracking-wider"
+                className="text-xs font-medium text-secondary uppercase tracking-wider"
               >
                 Deployment Strategy
               </label>
@@ -314,7 +314,7 @@ export default function NewStackPage() {
                 id="strategy"
                 value={strategy}
                 onChange={(e) => setStrategy(e.target.value)}
-                className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none"
+                className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none"
               >
                 <option value="rolling">Rolling</option>
                 <option value="blue-green">Blue-Green</option>
@@ -325,13 +325,13 @@ export default function NewStackPage() {
         </div>
 
         {/* Compose YAML editor */}
-        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6">
+        <div className="rounded-xl border border-border-subtle bg-surface p-6">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-sm font-semibold text-white">
+              <h2 className="text-sm font-semibold text-primary">
                 Docker Compose
               </h2>
-              <p className="text-xs text-[#555555] mt-0.5">
+              <p className="text-xs text-muted mt-0.5">
                 Paste or drop a docker-compose.yml file
               </p>
             </div>
@@ -401,15 +401,15 @@ export default function NewStackPage() {
         </div>
 
         {/* Environment Variables */}
-        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6">
+        <div className="rounded-xl border border-border-subtle bg-surface p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-sm font-semibold text-white">
+              <h2 className="text-sm font-semibold text-primary">
                 Environment Variables
               </h2>
-              <p className="text-xs text-[#555555] mt-0.5">
+              <p className="text-xs text-muted mt-0.5">
                 Values for{" "}
-                <code className="text-[#888888] font-mono">{"${VAR}"}</code>{" "}
+                <code className="text-secondary font-mono">{"${VAR}"}</code>{" "}
                 references in your compose file
               </p>
             </div>
@@ -431,10 +431,10 @@ export default function NewStackPage() {
             )}
           </div>
 
-          <div className="rounded-lg border border-[#2a2a2a] overflow-hidden">
+          <div className="rounded-lg border border-border-strong overflow-hidden">
             {envRows.length > 0 ? (
               <>
-                <div className="grid grid-cols-[1fr_1fr_auto] text-xs text-[#555555] uppercase tracking-wider px-3 py-2 border-b border-[#2a2a2a] bg-[#0d0d0d]">
+                <div className="grid grid-cols-[1fr_1fr_auto] text-xs text-muted uppercase tracking-wider px-3 py-2 border-b border-border-strong bg-background-alt">
                   <span>Key</span>
                   <span>Value</span>
                   <span />
@@ -448,12 +448,12 @@ export default function NewStackPage() {
                     ? isDefined
                       ? "text-[#22c55e]"
                       : "text-[#ef4444]"
-                    : "text-white";
+                    : "text-primary";
 
                   return (
                     <div
                       key={row.id}
-                      className="grid grid-cols-[1fr_1fr_auto] items-center border-b border-[#1a1a1a] last:border-b-0"
+                      className="grid grid-cols-[1fr_1fr_auto] items-center border-b border-border-subtle last:border-b-0"
                     >
                       <input
                         type="text"
@@ -463,7 +463,7 @@ export default function NewStackPage() {
                         }
                         placeholder="KEY"
                         spellCheck={false}
-                        className={`bg-transparent px-3 py-2 text-sm font-mono placeholder:text-[#333333] focus:outline-none border-r border-[#1a1a1a] ${keyColorClass}`}
+                        className={`bg-transparent px-3 py-2 text-sm font-mono placeholder:text-muted focus:outline-none border-r border-border-subtle ${keyColorClass}`}
                       />
                       <input
                         type="text"
@@ -473,12 +473,12 @@ export default function NewStackPage() {
                         }
                         placeholder="value"
                         spellCheck={false}
-                        className="bg-transparent px-3 py-2 text-sm text-white font-mono placeholder:text-[#333333] focus:outline-none border-r border-[#1a1a1a]"
+                        className="bg-transparent px-3 py-2 text-sm text-primary font-mono placeholder:text-muted focus:outline-none border-r border-border-subtle"
                       />
                       <button
                         type="button"
                         onClick={() => removeEnvRow(row.id)}
-                        className="px-3 py-2 text-[#555555] hover:text-[#ef4444] transition-colors"
+                        className="px-3 py-2 text-muted hover:text-[#ef4444] transition-colors"
                         aria-label="Remove variable"
                       >
                         <svg
@@ -501,9 +501,9 @@ export default function NewStackPage() {
               </>
             ) : (
               <div className="px-3 py-8 text-center">
-                <p className="text-xs text-[#555555]">
+                <p className="text-xs text-muted">
                   No environment variables. Add one below, or reference{" "}
-                  <code className="font-mono text-[#888888]">{"${VAR}"}</code>{" "}
+                  <code className="font-mono text-secondary">{"${VAR}"}</code>{" "}
                   in your compose file to auto-detect.
                 </p>
               </div>
@@ -513,7 +513,7 @@ export default function NewStackPage() {
           <button
             type="button"
             onClick={addEnvRow}
-            className="mt-3 flex items-center gap-1.5 text-xs text-[#555555] hover:text-white transition-colors"
+            className="mt-3 flex items-center gap-1.5 text-xs text-muted hover:text-primary transition-colors"
           >
             <svg
               className="h-3.5 w-3.5"

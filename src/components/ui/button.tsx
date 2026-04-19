@@ -18,12 +18,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     const variants = {
       primary: "bg-white text-black hover:bg-zinc-100",
       secondary:
-        "border border-[#2a2a2a] bg-[#111111] text-white hover:bg-[#161616] hover:border-[#333333]",
+        "border border-border-strong bg-surface text-primary hover:bg-surface-elevated hover:border-border-strong",
       destructive:
-        "bg-red-600/10 border border-red-600/30 text-[#f87171] hover:bg-red-600/20 hover:border-red-600/50",
+        "bg-red-600/10 border border-red-600/30 text-destructive-soft hover:bg-red-600/20 hover:border-red-600/50",
       warning:
         "bg-yellow-600/10 border border-yellow-600/30 text-yellow-400 hover:bg-yellow-600/20 hover:border-yellow-600/50",
-      ghost: "text-[#888888] hover:bg-[#161616] hover:text-white",
+      ghost: "text-secondary hover:bg-surface-elevated hover:text-primary",
     };
 
     const sizes = {

@@ -17,13 +17,25 @@ const sizeMap: Record<LogoSize, number> = {
 export function Logo({ size = "md", className }: LogoProps) {
   const px = sizeMap[size];
   return (
-    <Image
-      src="/lattice-dark-icon.png"
-      alt="Lattice"
-      width={px}
-      height={px}
-      className={cn("shrink-0", className)}
-      priority
-    />
+    <>
+      {/* Dark icon — shown in light mode */}
+      <Image
+        src="/lattice-dark-icon.png"
+        alt="Lattice"
+        width={px}
+        height={px}
+        className={cn("shrink-0 dark:hidden", className)}
+        priority
+      />
+      {/* Light icon — shown in dark mode */}
+      <Image
+        src="/lattice-light-icon.png"
+        alt="Lattice"
+        width={px}
+        height={px}
+        className={cn("shrink-0 hidden dark:block", className)}
+        priority
+      />
+    </>
   );
 }

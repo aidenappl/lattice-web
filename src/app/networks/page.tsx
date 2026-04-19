@@ -107,15 +107,15 @@ export default function NetworksPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Networks</h1>
-          <p className="text-sm text-[#888888] mt-1">
+          <h1 className="text-xl font-semibold text-primary">Networks</h1>
+          <p className="text-sm text-secondary mt-1">
             {totalPorts} port{totalPorts !== 1 ? "s" : ""} mapped across{" "}
             {workers.length} worker{workers.length !== 1 ? "s" : ""}
           </p>
         </div>
         <button
           onClick={load}
-          className="inline-flex items-center justify-center font-medium rounded-lg transition-colors cursor-pointer focus:outline-none border border-[#2a2a2a] bg-[#111111] text-white hover:bg-[#1a1a1a] h-8 px-3.5 text-sm gap-1.5"
+          className="inline-flex items-center justify-center font-medium rounded-lg transition-colors cursor-pointer focus:outline-none border border-border-strong bg-surface text-primary hover:bg-surface-active h-8 px-3.5 text-sm gap-1.5"
         >
           <svg
             className="h-3.5 w-3.5"
@@ -135,33 +135,33 @@ export default function NetworksPage() {
       </div>
 
       {workerGroups.length === 0 ? (
-        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-12 text-center">
-          <p className="text-sm text-[#555555]">No workers found</p>
+        <div className="rounded-xl border border-border-subtle bg-surface p-12 text-center">
+          <p className="text-sm text-muted">No workers found</p>
         </div>
       ) : (
         <div className="space-y-6">
           {workerGroups.map((group) => (
             <div
               key={group.worker.id}
-              className="rounded-xl border border-[#1a1a1a] bg-[#111111] overflow-hidden"
+              className="rounded-xl border border-border-subtle bg-surface overflow-hidden"
             >
               {/* Worker header */}
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#1a1a1a] bg-[#0d0d0d]">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-border-subtle bg-background-alt">
                 <div className="flex items-center gap-3">
                   <Link
                     href={`/workers/${group.worker.id}`}
-                    className="text-sm font-medium text-white hover:text-[#3b82f6] transition-colors"
+                    className="text-sm font-medium text-primary hover:text-[#3b82f6] transition-colors"
                   >
                     {group.worker.name}
                   </Link>
                   <StatusBadge status={group.worker.status} />
                   {group.worker.ip_address && (
-                    <span className="text-xs text-[#555555] font-mono">
+                    <span className="text-xs text-muted font-mono">
                       {group.worker.ip_address}
                     </span>
                   )}
                 </div>
-                <span className="text-xs text-[#555555]">
+                <span className="text-xs text-muted">
                   {group.ports.length} port{group.ports.length !== 1 ? "s" : ""}
                 </span>
               </div>
@@ -169,7 +169,7 @@ export default function NetworksPage() {
               {/* Port table */}
               {group.ports.length === 0 ? (
                 <div className="px-5 py-6 text-center">
-                  <p className="text-xs text-[#444444]">
+                  <p className="text-xs text-dimmed">
                     No port mappings on this worker
                   </p>
                 </div>
@@ -177,22 +177,22 @@ export default function NetworksPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-[#141414]">
-                      <th className="px-5 py-2.5 text-left text-xs font-medium text-[#555555] uppercase tracking-wider">
+                      <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
                         Host Port
                       </th>
-                      <th className="px-5 py-2.5 text-left text-xs font-medium text-[#555555] uppercase tracking-wider">
+                      <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
                         Container Port
                       </th>
-                      <th className="px-5 py-2.5 text-left text-xs font-medium text-[#555555] uppercase tracking-wider">
+                      <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
                         Protocol
                       </th>
-                      <th className="px-5 py-2.5 text-left text-xs font-medium text-[#555555] uppercase tracking-wider">
+                      <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
                         Container
                       </th>
-                      <th className="px-5 py-2.5 text-left text-xs font-medium text-[#555555] uppercase tracking-wider">
+                      <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-5 py-2.5 text-left text-xs font-medium text-[#555555] uppercase tracking-wider">
+                      <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
                         Stack
                       </th>
                     </tr>
@@ -210,11 +210,11 @@ export default function NetworksPage() {
                       return (
                         <tr
                           key={`${p.container.id}-${p.hostPort}-${i}`}
-                          className="hover:bg-[#161616] transition-colors"
+                          className="hover:bg-surface-elevated transition-colors"
                         >
                           <td className="px-5 py-2.5">
                             <span
-                              className={`text-sm font-mono font-medium ${conflicting ? "text-[#ef4444]" : "text-white"}`}
+                              className={`text-sm font-mono font-medium ${conflicting ? "text-[#ef4444]" : "text-primary"}`}
                               title={
                                 conflicting
                                   ? "Port conflict — multiple containers using this port"
@@ -230,19 +230,19 @@ export default function NetworksPage() {
                             </span>
                           </td>
                           <td className="px-5 py-2.5">
-                            <span className="text-sm font-mono text-[#888888]">
+                            <span className="text-sm font-mono text-secondary">
                               :{p.containerPort}
                             </span>
                           </td>
                           <td className="px-5 py-2.5">
-                            <span className="text-xs text-[#555555] uppercase">
+                            <span className="text-xs text-muted uppercase">
                               {p.protocol}
                             </span>
                           </td>
                           <td className="px-5 py-2.5">
                             <Link
                               href={`/containers/${p.container.id}`}
-                              className="text-sm text-[#888888] hover:text-white transition-colors"
+                              className="text-sm text-secondary hover:text-primary transition-colors"
                             >
                               {p.container.name}
                             </Link>
@@ -253,7 +253,7 @@ export default function NetworksPage() {
                           <td className="px-5 py-2.5">
                             <Link
                               href={`/stacks/${p.stack.id}`}
-                              className="text-xs text-[#555555] hover:text-white transition-colors"
+                              className="text-xs text-muted hover:text-primary transition-colors"
                             >
                               {p.stack.name}
                             </Link>

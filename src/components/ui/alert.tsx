@@ -53,13 +53,13 @@ export function Alert({
       )}
     >
       <span className={cn("mt-0.5 h-2 w-2 rounded-full shrink-0", v.dot)} />
-      <span className="text-[#d4d4d4] flex-1 text-xs leading-relaxed">
+      <span className="text-subtle flex-1 text-xs leading-relaxed">
         {children}
       </span>
       {onDismiss && (
         <button
           onClick={onDismiss}
-          className="text-[#555555] hover:text-white transition-colors shrink-0"
+          className="text-muted hover:text-primary transition-colors shrink-0"
         >
           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

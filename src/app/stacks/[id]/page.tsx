@@ -528,7 +528,7 @@ export default function StackDetailPage() {
   if (loading) return <PageLoader />;
   if (!stack)
     return (
-      <div className="text-center text-sm text-[#555555] py-12">
+      <div className="text-center text-sm text-muted py-12">
         Stack not found
       </div>
     );
@@ -536,7 +536,7 @@ export default function StackDetailPage() {
   // Derive liveness from the map computed above
   const stackWorker = workers.find((w) => w.id === stack.worker_id) ?? null;
   const workerOnline = stackWorker
-    ? (workerLiveness[stackWorker.id] ?? false)
+    ? (workerLiveness[stackWorker.id] ?? true)
     : true; // no worker assigned → don't block
   const staleReason = stackWorker ? workerStaleReason(stackWorker) : null;
 
@@ -554,11 +554,11 @@ export default function StackDetailPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-white">{stack.name}</h1>
+            <h1 className="text-xl font-semibold text-primary">{stack.name}</h1>
             <StatusBadge status={stack.status} />
           </div>
           {stack.description && (
-            <p className="text-sm text-[#888888] mt-1">{stack.description}</p>
+            <p className="text-sm text-secondary mt-1">{stack.description}</p>
           )}
         </div>
         <div className="flex gap-2">
@@ -629,9 +629,9 @@ export default function StackDetailPage() {
         {/* Stack Info + Containers */}
         <div className="lg:col-span-2 space-y-6">
           {/* Stack Info */}
-          <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
+          <div className="rounded-xl border border-border-subtle bg-surface p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-medium text-white">Stack Info</h2>
+              <h2 className="text-sm font-medium text-primary">Stack Info</h2>
               {!editingStack && (
                 <Button variant="ghost" size="sm" onClick={openEditStack}>
                   Edit
@@ -650,13 +650,13 @@ export default function StackDetailPage() {
                     required
                   />
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-[#888888] uppercase tracking-wider">
+                    <label className="text-xs font-medium text-secondary uppercase tracking-wider">
                       Worker
                     </label>
                     <select
                       value={editStackWorkerId}
                       onChange={(e) => setEditStackWorkerId(e.target.value)}
-                      className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none"
+                      className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none"
                     >
                       <option value="">Unassigned</option>
                       {workers.map((w) => (
@@ -668,7 +668,7 @@ export default function StackDetailPage() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-[#888888] uppercase tracking-wider">
+                  <label className="text-xs font-medium text-secondary uppercase tracking-wider">
                     Description
                   </label>
                   <textarea
@@ -676,18 +676,18 @@ export default function StackDetailPage() {
                     value={editStackDescription}
                     onChange={(e) => setEditStackDescription(e.target.value)}
                     placeholder="Optional description..."
-                    className="w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 py-2 text-sm text-white placeholder:text-[#555555] focus:border-[#444444] focus:outline-none resize-none"
+                    className="w-full rounded-lg border border-border-strong bg-surface-elevated px-3 py-2 text-sm text-primary placeholder:text-muted focus:border-border-emphasis focus:outline-none resize-none"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-[#888888] uppercase tracking-wider">
+                    <label className="text-xs font-medium text-secondary uppercase tracking-wider">
                       Deployment Strategy
                     </label>
                     <select
                       value={editStackStrategy}
                       onChange={(e) => setEditStackStrategy(e.target.value)}
-                      className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none"
+                      className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none"
                     >
                       <option value="rolling">Rolling</option>
                       <option value="blue-green">Blue-Green</option>
@@ -695,7 +695,7 @@ export default function StackDetailPage() {
                     </select>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-[#888888] uppercase tracking-wider">
+                    <label className="text-xs font-medium text-secondary uppercase tracking-wider">
                       Auto Deploy
                     </label>
                     <div className="flex items-center h-9 gap-3">
@@ -707,7 +707,9 @@ export default function StackDetailPage() {
                           setEditStackAutoDeploy(!editStackAutoDeploy)
                         }
                         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                          editStackAutoDeploy ? "bg-[#3b82f6]" : "bg-[#2a2a2a]"
+                          editStackAutoDeploy
+                            ? "bg-[#3b82f6]"
+                            : "bg-border-strong"
                         }`}
                       >
                         <span
@@ -718,7 +720,7 @@ export default function StackDetailPage() {
                           }`}
                         />
                       </button>
-                      <span className="text-sm text-[#888888]">
+                      <span className="text-sm text-secondary">
                         {editStackAutoDeploy ? "Enabled" : "Disabled"}
                       </span>
                     </div>
@@ -744,10 +746,10 @@ export default function StackDetailPage() {
             ) : (
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xs text-[#555555] uppercase tracking-wider">
+                  <p className="text-xs text-muted uppercase tracking-wider">
                     Worker
                   </p>
-                  <p className="text-sm text-[#888888] mt-1">
+                  <p className="text-sm text-secondary mt-1">
                     {stack.worker_id ? (
                       <button
                         onClick={() =>
@@ -763,26 +765,26 @@ export default function StackDetailPage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#555555] uppercase tracking-wider">
+                  <p className="text-xs text-muted uppercase tracking-wider">
                     Strategy
                   </p>
-                  <p className="text-sm text-[#888888] mt-1">
+                  <p className="text-sm text-secondary mt-1">
                     {stack.deployment_strategy}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#555555] uppercase tracking-wider">
+                  <p className="text-xs text-muted uppercase tracking-wider">
                     Auto Deploy
                   </p>
-                  <p className="text-sm text-[#888888] mt-1">
+                  <p className="text-sm text-secondary mt-1">
                     {stack.auto_deploy ? "Enabled" : "Disabled"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#555555] uppercase tracking-wider">
+                  <p className="text-xs text-muted uppercase tracking-wider">
                     Created
                   </p>
-                  <p className="text-sm text-[#888888] mt-1">
+                  <p className="text-sm text-secondary mt-1">
                     {formatDate(stack.inserted_at)}
                   </p>
                 </div>
@@ -792,8 +794,8 @@ export default function StackDetailPage() {
 
           {/* Stack Environment Variables */}
           {showEnvVars && (
-            <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
-              <h2 className="text-sm font-medium text-white mb-4">
+            <div className="rounded-xl border border-border-subtle bg-surface p-5">
+              <h2 className="text-sm font-medium text-primary mb-4">
                 Stack Environment Variables
               </h2>
               <EnvVarEditor value={stackEnvVars} onChange={setStackEnvVars} />
@@ -811,14 +813,14 @@ export default function StackDetailPage() {
 
           {/* Compose Editor */}
           {showCompose && (
-            <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
+            <div className="rounded-xl border border-border-subtle bg-surface p-5">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-medium text-white">
+                <h2 className="text-sm font-medium text-primary">
                   Docker Compose
                 </h2>
                 <button
                   onClick={() => setShowCompose(false)}
-                  className="text-[#555555] hover:text-white transition-colors"
+                  className="text-muted hover:text-primary transition-colors"
                   aria-label="Close compose editor"
                 >
                   <svg
@@ -837,7 +839,7 @@ export default function StackDetailPage() {
                   </svg>
                 </button>
               </div>
-              <p className="text-xs text-[#555555] mb-3">
+              <p className="text-xs text-muted mb-3">
                 Edit the compose YAML and save to replace all containers with
                 the updated definition.
               </p>
@@ -881,11 +883,11 @@ export default function StackDetailPage() {
           )}
 
           {/* Containers */}
-          <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#1a1a1a] flex items-center justify-between">
-              <h2 className="text-sm font-medium text-white">Containers</h2>
+          <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+            <div className="px-5 py-4 border-b border-border-subtle flex items-center justify-between">
+              <h2 className="text-sm font-medium text-primary">Containers</h2>
               <div className="flex items-center gap-3">
-                <span className="text-xs text-[#555555]">
+                <span className="text-xs text-muted">
                   {containers.length} container
                   {containers.length !== 1 ? "s" : ""}
                 </span>
@@ -902,7 +904,7 @@ export default function StackDetailPage() {
             {showCreateContainer && (
               <form
                 onSubmit={handleCreateContainer}
-                className="px-5 py-4 border-b border-[#1a1a1a] bg-[#0d0d0d]"
+                className="px-5 py-4 border-b border-border-subtle bg-background-alt"
               >
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                   <Input
@@ -944,24 +946,24 @@ export default function StackDetailPage() {
             )}
 
             {containers.length === 0 ? (
-              <div className="px-5 py-8 text-center text-sm text-[#555555]">
+              <div className="px-5 py-8 text-center text-sm text-muted">
                 No containers in this stack
               </div>
             ) : (
               containers.length > 0 && (
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-[#1a1a1a]">
-                      <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                    <tr className="border-b border-border-subtle">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                         Name
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                         Image
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-[#888888] uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-secondary uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
@@ -970,17 +972,17 @@ export default function StackDetailPage() {
                     {containers.map((container) => (
                       <tr
                         key={container.id}
-                        className="border-b border-[#1a1a1a] last:border-0"
+                        className="border-b border-border-subtle last:border-0"
                       >
                         <td className="px-4 py-3 text-sm font-medium">
                           <Link
                             href={`/containers/${container.id}`}
-                            className="text-white hover:text-[#3b82f6] transition-colors"
+                            className="text-primary hover:text-[#3b82f6] transition-colors"
                           >
                             {container.name}
                           </Link>
                         </td>
-                        <td className="px-4 py-3 text-sm text-[#888888] font-mono">
+                        <td className="px-4 py-3 text-sm text-secondary font-mono">
                           {container.image}:{container.tag}
                         </td>
                         <td className="px-4 py-3">
@@ -1001,7 +1003,7 @@ export default function StackDetailPage() {
                                 title={
                                   !workerOnline ? "Worker offline" : undefined
                                 }
-                                className="px-2 py-1 text-xs text-[#22c55e] hover:bg-[#161616] rounded transition-colors disabled:opacity-40"
+                                className="px-2 py-1 text-xs text-[#22c55e] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
                               >
                                 {actionLoading[`${container.id}-start`]
                                   ? "..."
@@ -1020,7 +1022,7 @@ export default function StackDetailPage() {
                                 title={
                                   !workerOnline ? "Worker offline" : undefined
                                 }
-                                className="px-2 py-1 text-xs text-[#3b82f6] hover:bg-[#161616] rounded transition-colors disabled:opacity-40"
+                                className="px-2 py-1 text-xs text-[#3b82f6] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
                               >
                                 {actionLoading[`${container.id}-restart`]
                                   ? "..."
@@ -1039,7 +1041,7 @@ export default function StackDetailPage() {
                                 title={
                                   !workerOnline ? "Worker offline" : undefined
                                 }
-                                className="px-2 py-1 text-xs text-[#f59e0b] hover:bg-[#161616] rounded transition-colors disabled:opacity-40"
+                                className="px-2 py-1 text-xs text-[#f59e0b] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
                               >
                                 {actionLoading[`${container.id}-stop`]
                                   ? "..."
@@ -1057,7 +1059,7 @@ export default function StackDetailPage() {
                               title={
                                 !workerOnline ? "Worker offline" : undefined
                               }
-                              className="px-2 py-1 text-xs text-[#8b5cf6] hover:bg-[#161616] rounded transition-colors disabled:opacity-40"
+                              className="px-2 py-1 text-xs text-[#8b5cf6] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
                             >
                               {actionLoading[`${container.id}-recreate`]
                                 ? "..."
@@ -1065,7 +1067,7 @@ export default function StackDetailPage() {
                             </button>
                             <a
                               href={`/containers/${container.id}`}
-                              className="px-2 py-1 text-xs text-[#888888] hover:bg-[#161616] hover:text-white rounded transition-colors"
+                              className="px-2 py-1 text-xs text-secondary hover:bg-surface-elevated hover:text-primary rounded transition-colors"
                             >
                               Edit
                             </a>
@@ -1073,7 +1075,7 @@ export default function StackDetailPage() {
                               onClick={() =>
                                 handleDeleteContainer(container.id)
                               }
-                              className="px-2 py-1 text-xs text-[#ef4444] hover:bg-[#161616] rounded transition-colors"
+                              className="px-2 py-1 text-xs text-[#ef4444] hover:bg-surface-elevated rounded transition-colors"
                             >
                               Delete
                             </button>
@@ -1088,14 +1090,16 @@ export default function StackDetailPage() {
           </div>
 
           {/* Container Logs */}
-          <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#1a1a1a] flex items-center justify-between">
-              <h2 className="text-sm font-medium text-white">Container Logs</h2>
+          <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+            <div className="px-5 py-4 border-b border-border-subtle flex items-center justify-between">
+              <h2 className="text-sm font-medium text-primary">
+                Container Logs
+              </h2>
               <div className="flex items-center gap-2">
                 <select
                   value={streamFilter}
                   onChange={(e) => setStreamFilter(e.target.value)}
-                  className="bg-[#161616] border border-[#2a2a2a] text-[#ededed] px-2 py-1 rounded-md text-xs cursor-pointer"
+                  className="bg-surface-elevated border border-border-strong text-foreground px-2 py-1 rounded-md text-xs cursor-pointer"
                 >
                   <option value="all">All streams</option>
                   <option value="stdout">stdout</option>
@@ -1108,7 +1112,7 @@ export default function StackDetailPage() {
                       e.target.value ? Number(e.target.value) : null,
                     )
                   }
-                  className="bg-[#161616] border border-[#2a2a2a] text-[#ededed] px-2 py-1 rounded-md text-xs cursor-pointer"
+                  className="bg-surface-elevated border border-border-strong text-foreground px-2 py-1 rounded-md text-xs cursor-pointer"
                 >
                   <option value="">Select container...</option>
                   {containers.map((c) => (
@@ -1128,25 +1132,45 @@ export default function StackDetailPage() {
               </div>
             </div>
             {!selectedContainer ? (
-              <div className="px-5 py-8 text-center text-sm text-[#555555]">
+              <div className="px-5 py-8 text-center text-sm text-muted">
                 Select a container to view logs
               </div>
             ) : logsLoading ? (
-              <div className="px-5 py-8 text-center text-sm text-[#555555]">
+              <div className="px-5 py-8 text-center text-sm text-muted">
                 Loading logs...
               </div>
             ) : logs.length === 0 ? (
-              <div className="px-5 py-8 text-center text-sm text-[#555555]">
+              <div className="px-5 py-8 text-center text-sm text-muted">
                 No logs available
               </div>
             ) : (
               <div className="max-h-[400px] overflow-y-auto p-4 font-mono text-xs leading-relaxed">
-                {logs.map((log) => (
-                  <div key={log.id} className="flex gap-2 hover:bg-[#161616]">
-                    <span className="text-[#555555] shrink-0 select-none">
-                      {new Date(log.recorded_at).toLocaleTimeString()}
-                    </span>
-                    <span className="text-[#888888]">{log.message}</span>
+                {logs.map((log, i) => (
+                  <div key={log.id}>
+                    {i > 0 &&
+                      new Date(log.recorded_at).getTime() -
+                        new Date(logs[i - 1].recorded_at).getTime() >
+                        5_000 && (
+                        <div className="flex items-center gap-2 px-2 py-2 my-1 select-none">
+                          <div className="flex-1 h-px bg-border-subtle" />
+                          <span className="text-[10px] font-mono text-muted whitespace-nowrap">
+                            new session &middot;{" "}
+                            {new Date(log.recorded_at).toLocaleTimeString([], {
+                              hour12: false,
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              second: "2-digit",
+                            })}
+                          </span>
+                          <div className="flex-1 h-px bg-border-subtle" />
+                        </div>
+                      )}
+                    <div className="flex gap-2 hover:bg-surface-elevated">
+                      <span className="text-muted shrink-0 select-none">
+                        {new Date(log.recorded_at).toLocaleTimeString()}
+                      </span>
+                      <span className="text-secondary">{log.message}</span>
+                    </div>
                   </div>
                 ))}
                 <div ref={logsEndRef} />
@@ -1157,13 +1181,13 @@ export default function StackDetailPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
-            <h2 className="text-sm font-medium text-white mb-4">
+          <div className="rounded-xl border border-border-subtle bg-surface p-5">
+            <h2 className="text-sm font-medium text-primary mb-4">
               Deployment History
             </h2>
             <div className="space-y-2">
               {deployments.length === 0 ? (
-                <p className="text-xs text-[#555555] text-center py-4">
+                <p className="text-xs text-muted text-center py-4">
                   No deployments yet
                 </p>
               ) : (
@@ -1173,17 +1197,17 @@ export default function StackDetailPage() {
                     onClick={() => loadDeploymentLogs(d.id)}
                     className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-left transition-colors ${
                       selectedDeployment === d.id
-                        ? "bg-[#1e1e1e] border border-[#333333]"
-                        : "bg-[#161616] hover:bg-[#1a1a1a] border border-transparent"
+                        ? "bg-[#1e1e1e] border border-border-strong"
+                        : "bg-surface-elevated hover:bg-surface-active border border-transparent"
                     }`}
                   >
                     <div>
                       <StatusBadge status={d.status} />
-                      <p className="text-xs text-[#555555] mt-1">
+                      <p className="text-xs text-muted mt-1">
                         {d.strategy} #{d.id}
                       </p>
                     </div>
-                    <p className="text-xs text-[#555555]">
+                    <p className="text-xs text-muted">
                       {timeAgo(d.inserted_at)}
                     </p>
                   </button>
@@ -1194,24 +1218,24 @@ export default function StackDetailPage() {
 
           {/* Deployment Logs */}
           {selectedDeployment && (
-            <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
+            <div className="rounded-xl border border-border-subtle bg-surface p-5">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-medium text-white">
+                <h2 className="text-sm font-medium text-primary">
                   Deployment #{selectedDeployment} Logs
                 </h2>
                 <button
                   onClick={() => loadDeploymentLogs(selectedDeployment)}
-                  className="text-xs text-[#555555] hover:text-[#888888] transition-colors"
+                  className="text-xs text-muted hover:text-secondary transition-colors"
                 >
                   Refresh
                 </button>
               </div>
               {deploymentLogsLoading ? (
-                <p className="text-xs text-[#555555] text-center py-4">
+                <p className="text-xs text-muted text-center py-4">
                   Loading logs...
                 </p>
               ) : deploymentLogs.length === 0 ? (
-                <p className="text-xs text-[#555555] text-center py-4">
+                <p className="text-xs text-muted text-center py-4">
                   No logs yet
                 </p>
               ) : (
@@ -1222,10 +1246,10 @@ export default function StackDetailPage() {
                       className={`flex gap-2 px-2 py-1 rounded ${
                         log.level === "error"
                           ? "bg-red-950/30 text-red-400"
-                          : "text-[#888888]"
+                          : "text-secondary"
                       }`}
                     >
-                      <span className="text-[#444444] shrink-0 tabular-nums">
+                      <span className="text-dimmed shrink-0 tabular-nums">
                         {new Date(log.recorded_at).toLocaleTimeString()}
                       </span>
                       {log.stage && (

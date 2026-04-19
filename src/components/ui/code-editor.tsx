@@ -299,7 +299,7 @@ export function CodeEditor({
   return (
     <div
       className={cn(
-        "relative rounded-lg border border-[#2a2a2a] bg-[#0d0d0d] overflow-hidden focus-within:border-[#444444]",
+        "relative rounded-lg border border-border-strong bg-background-alt overflow-hidden focus-within:border-border-emphasis",
         className,
       )}
     >
@@ -307,7 +307,7 @@ export function CodeEditor({
       <pre
         ref={preRef}
         aria-hidden
-        className="absolute inset-0 px-3 py-2 text-sm font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none m-0 [&_.json-key]:text-[#7aa2f7] [&_.json-string]:text-[#9ece6a] [&_.json-number]:text-[#ff9e64] [&_.json-bool]:text-[#ff9e64] [&_.yaml-key]:text-[#7aa2f7] [&_.yaml-colon]:text-[#555555] [&_.yaml-comment]:text-[#555555] [&_.env-var-defined]:text-[#22c55e] [&_.env-var-defined]:font-semibold [&_.env-var-missing]:text-[#ef4444] [&_.env-var-missing]:font-semibold"
+        className="absolute inset-0 px-3 py-2 text-sm font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none m-0 [&_.json-key]:text-[#7aa2f7] [&_.json-string]:text-[#9ece6a] [&_.json-number]:text-[#ff9e64] [&_.json-bool]:text-[#ff9e64] [&_.yaml-key]:text-[#7aa2f7] [&_.yaml-colon]:text-muted [&_.yaml-comment]:text-muted [&_.env-var-defined]:text-[#22c55e] [&_.env-var-defined]:font-semibold [&_.env-var-missing]:text-[#ef4444] [&_.env-var-missing]:font-semibold"
         dangerouslySetInnerHTML={{ __html: highlighted + "\n" }}
       />
       {/* Transparent textarea on top for editing */}
@@ -320,7 +320,7 @@ export function CodeEditor({
         onScroll={handleScroll}
         placeholder={placeholder}
         spellCheck={false}
-        className="relative w-full bg-transparent px-3 py-2 text-sm text-transparent caret-white placeholder:text-[#555555] focus:outline-none font-mono resize-none selection:bg-[#264f78] selection:text-transparent"
+        className="relative w-full bg-transparent px-3 py-2 text-sm text-transparent caret-white placeholder:text-muted focus:outline-none font-mono resize-none selection:bg-[#264f78] selection:text-transparent"
       />
     </div>
   );

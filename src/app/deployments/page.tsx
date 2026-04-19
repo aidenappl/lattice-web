@@ -57,8 +57,8 @@ export default function DeploymentsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Deployments</h1>
-          <p className="text-sm text-[#888888] mt-1">
+          <h1 className="text-xl font-semibold text-primary">Deployments</h1>
+          <p className="text-sm text-secondary mt-1">
             Track deployment history and status
           </p>
         </div>
@@ -66,7 +66,7 @@ export default function DeploymentsPage() {
           <select
             value={stackFilter}
             onChange={(e) => setStackFilter(e.target.value)}
-            className="h-9 rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
+            className="h-9 rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
           >
             <option value="all">All Stacks</option>
             {stacks.map((s) => (
@@ -78,7 +78,7 @@ export default function DeploymentsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-9 rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
+            className="h-9 rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
           >
             {statusOptions.map((s) => (
               <option key={s} value={s}>
@@ -91,26 +91,26 @@ export default function DeploymentsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] overflow-hidden">
+      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-[#1a1a1a]">
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+            <tr className="border-b border-border-subtle">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 ID
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Stack
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Strategy
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Started
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Completed
               </th>
             </tr>
@@ -120,7 +120,7 @@ export default function DeploymentsPage() {
               <tr>
                 <td
                   colSpan={6}
-                  className="px-4 py-12 text-center text-sm text-[#555555]"
+                  className="px-4 py-12 text-center text-sm text-muted"
                 >
                   No deployments found
                 </td>
@@ -129,12 +129,12 @@ export default function DeploymentsPage() {
               filtered.map((d) => (
                 <tr
                   key={d.id}
-                  className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#161616] transition-colors"
+                  className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors"
                 >
                   <td className="px-4 py-3">
                     <Link
                       href={`/deployments/${d.id}`}
-                      className="text-sm font-medium text-white hover:text-[#3b82f6] transition-colors"
+                      className="text-sm font-medium text-primary hover:text-[#3b82f6] transition-colors"
                     >
                       #{d.id}
                     </Link>
@@ -150,13 +150,13 @@ export default function DeploymentsPage() {
                   <td className="px-4 py-3">
                     <StatusBadge status={d.status} />
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#888888]">
+                  <td className="px-4 py-3 text-sm text-secondary">
                     {d.strategy}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#555555]">
+                  <td className="px-4 py-3 text-sm text-muted">
                     {d.started_at ? formatDate(d.started_at) : "-"}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#555555]">
+                  <td className="px-4 py-3 text-sm text-muted">
                     {d.completed_at ? formatDate(d.completed_at) : "-"}
                   </td>
                 </tr>

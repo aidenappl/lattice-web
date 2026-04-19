@@ -10,14 +10,14 @@ export default function UnauthorizedPage() {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0a0a] p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
-        <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-8 shadow-2xl">
+        <div className="rounded-xl border border-border-subtle bg-surface p-8 shadow-2xl">
           {/* Logo */}
           <div className="flex items-center justify-center gap-3.5 mb-8">
             <Logo size="md" />
             <div className="h-8 w-px bg-[#333333]" />
-            <span className="text-lg font-semibold text-white tracking-tight">
+            <span className="text-lg font-semibold text-primary tracking-tight">
               Lattice
             </span>
           </div>
@@ -42,11 +42,11 @@ export default function UnauthorizedPage() {
             </div>
           </div>
 
-          <h1 className="text-center text-xl font-semibold text-white mb-2">
+          <h1 className="text-center text-xl font-semibold text-primary mb-2">
             Unauthorized
           </h1>
 
-          <p className="text-center text-sm text-[#888888] mb-8 leading-relaxed">
+          <p className="text-center text-sm text-secondary mb-8 leading-relaxed">
             You don&apos;t have access to Lattice. Your access may have been
             revoked or you haven&apos;t been granted access yet.
           </p>
@@ -54,19 +54,19 @@ export default function UnauthorizedPage() {
           <div className="flex flex-col gap-3">
             <Link
               href="/login"
-              className="flex h-10 items-center justify-center rounded-lg bg-[#3b82f6] px-4 text-sm font-medium text-white transition-colors hover:bg-[#2563eb] cursor-pointer"
+              className="flex h-10 items-center justify-center rounded-lg bg-[#3b82f6] px-4 text-sm font-medium text-primary transition-colors hover:bg-[#2563eb] cursor-pointer"
             >
               Back to Sign In
             </Link>
             <Link
               href="/login"
-              className="flex h-10 items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#111111] px-4 text-sm font-medium text-[#888888] transition-colors hover:bg-[#161616] hover:border-[#333333] hover:text-white cursor-pointer"
+              className="flex h-10 items-center justify-center rounded-lg border border-border-strong bg-surface px-4 text-sm font-medium text-secondary transition-colors hover:bg-surface-elevated hover:border-border-strong hover:text-primary cursor-pointer"
             >
               Sign in with a different account
             </Link>
           </div>
 
-          <p className="mt-6 text-center text-xs text-[#555555]">
+          <p className="mt-6 text-center text-xs text-muted">
             If you believe this is a mistake, contact your administrator.
           </p>
         </div>

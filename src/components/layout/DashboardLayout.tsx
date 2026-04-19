@@ -21,7 +21,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
+    <div className="min-h-screen bg-background">
       <Navbar />
       <ConfirmProvider>
         <main className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1600px] mx-auto w-full">
@@ -32,20 +32,20 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         position="bottom-right"
         toastOptions={{
           style: {
-            background: "#1a1a1a",
-            color: "#ededed",
-            border: "1px solid #2a2a2a",
+            background: "var(--surface)",
+            color: "var(--foreground)",
+            border: "1px solid var(--border-strong)",
             borderRadius: "8px",
             fontSize: "13px",
           },
           success: {
-            iconTheme: { primary: "#22c55e", secondary: "#1a1a1a" },
+            iconTheme: { primary: "#22c55e", secondary: "var(--surface)" },
           },
           error: {
-            iconTheme: { primary: "#ef4444", secondary: "#1a1a1a" },
+            iconTheme: { primary: "#ef4444", secondary: "var(--surface)" },
           },
           loading: {
-            iconTheme: { primary: "#3b82f6", secondary: "#1a1a1a" },
+            iconTheme: { primary: "#3b82f6", secondary: "var(--surface)" },
           },
         }}
       />

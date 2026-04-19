@@ -65,14 +65,14 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
 
   if (!isReady) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0a0a0a] gap-8">
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background gap-8">
         <div className="flex items-center gap-3.5">
           <Logo size="md" />
           <div className="flex flex-col leading-none">
-            <span className="text-xl font-semibold text-white tracking-tight">
+            <span className="text-xl font-semibold text-primary tracking-tight">
               Lattice
             </span>
-            <span className="text-xs text-[#555555] font-medium">Admin</span>
+            <span className="text-xs text-muted font-medium">Admin</span>
           </div>
         </div>
         <LoadingSpinner size="md" />
