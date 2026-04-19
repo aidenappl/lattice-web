@@ -284,6 +284,28 @@ export default function ContainerDetailPage() {
         }
       }
 
+      // Live lifecycle_log entries from the runner (verbose action progress).
+      if (event.type === "lifecycle_log") {
+        const lcName = (payload["container_name"] as string) ?? "";
+        if (lcName === myName) {
+          const message = (payload["message"] as string) ?? "";
+          if (message) {
+            const entry: ContainerLog = {
+              id: `lc_${syntheticId()}` as unknown as number,
+              container_id: null,
+              container_name: myName,
+              worker_id: event.worker_id ?? 0,
+              stream: "lifecycle" as "stdout",
+              message,
+              recorded_at: new Date().toISOString(),
+            };
+            setLogs((prev) =>
+              sortLogs([...prev.slice(-(logLimit - 1)), entry]),
+            );
+          }
+        }
+      }
+
       // Worker-level events: lifecycle logs are written to DB for every
       // container on the worker, so we reload whenever our worker is affected.
       if (

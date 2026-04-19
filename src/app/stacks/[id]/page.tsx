@@ -310,6 +310,28 @@ export default function StackDetailPage() {
         }
       }
 
+      // Live lifecycle_log entries from the runner (verbose action progress).
+      if (
+        event.type === "lifecycle_log" &&
+        eventName &&
+        eventName === selectedContainerNameRef.current
+      ) {
+        const message = (payload["message"] as string) ?? "";
+        if (message) {
+          const entry: ContainerLog = {
+            id: `lc_${syntheticId()}` as unknown as number,
+            container_id: null,
+            container_name: eventName,
+            worker_id: event.worker_id ?? 0,
+            stream: "lifecycle" as "stdout",
+            message,
+            recorded_at: new Date().toISOString(),
+          };
+          const limit = logLimitRef.current;
+          setLogs((prev) => sortLogs([...prev.slice(-(limit - 1)), entry]));
+        }
+      }
+
       // Worker lifecycle events — reload logs after a short delay
       if (
         event.type === "worker_shutdown" ||
