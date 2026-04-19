@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Worker, WorkerToken, WorkerMetrics, Stack } from "@/types";
 import {
@@ -18,6 +18,8 @@ import {
 import { reqGetStacks } from "@/services/stacks.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
+import toast from "react-hot-toast";
+import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +51,35 @@ function barColor(pct: number): string {
   if (pct > 90) return "bg-[#ef4444]";
   if (pct > 70) return "bg-[#eab308]";
   return "bg-[#3b82f6]";
+}
+
+function sparkColor(pct: number): string {
+  if (pct > 90) return "#ef4444";
+  if (pct > 70) return "#eab308";
+  return "#3b82f6";
+}
+
+function Sparkline({ values, color }: { values: number[]; color: string }) {
+  if (values.length < 2) return null;
+  const w = 80;
+  const h = 28;
+  const max = Math.max(...values, 1);
+  const step = w / (values.length - 1);
+  const pts = values
+    .map((v, i) => `${i * step},${h - (v / max) * h}`)
+    .join(" ");
+  return (
+    <svg width={w} height={h} className="overflow-visible opacity-60">
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
 function MetricCard({
@@ -91,6 +122,8 @@ export default function WorkerDetailPage() {
   const [metrics, setMetrics] = useState<WorkerMetrics[]>([]);
   const [stacks, setStacks] = useState<Stack[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [, setTick] = useState(0); // drives the "X ago" re-render every second
 
   // Edit state
   const [editing, setEditing] = useState(false);
@@ -107,30 +140,100 @@ export default function WorkerDetailPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
 
+  const load = async () => {
+    const [workerRes, metricsRes, tokensRes, stacksRes] = await Promise.all([
+      reqGetWorker(id),
+      reqGetWorkerMetrics(id),
+      reqGetWorkerTokens(id),
+      reqGetStacks(),
+    ]);
+    if (workerRes.success) {
+      setWorker(workerRes.data);
+      setEditName(workerRes.data.name);
+      setEditHostname(workerRes.data.hostname);
+      setEditLabels(workerRes.data.labels ?? "");
+    }
+    if (metricsRes.success) setMetrics(metricsRes.data ?? []);
+    if (tokensRes.success) setTokens(tokensRes.data ?? []);
+    if (stacksRes.success)
+      setStacks(
+        (stacksRes.data ?? []).filter((s: Stack) => s.worker_id === id),
+      );
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const load = async () => {
-      const [workerRes, metricsRes, tokensRes, stacksRes] = await Promise.all([
-        reqGetWorker(id),
-        reqGetWorkerMetrics(id),
-        reqGetWorkerTokens(id),
-        reqGetStacks(),
-      ]);
-      if (workerRes.success) {
-        setWorker(workerRes.data);
-        setEditName(workerRes.data.name);
-        setEditHostname(workerRes.data.hostname);
-        setEditLabels(workerRes.data.labels ?? "");
-      }
-      if (metricsRes.success) setMetrics(metricsRes.data ?? []);
-      if (tokensRes.success) setTokens(tokensRes.data ?? []);
-      if (stacksRes.success)
-        setStacks(
-          (stacksRes.data ?? []).filter((s: Stack) => s.worker_id === id),
-        );
-      setLoading(false);
-    };
     load();
-  }, [id]);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // WebSocket: real-time worker status + metrics
+  const handleSocketEvent = useCallback(
+    (event: AdminSocketEvent) => {
+      if (event.worker_id !== id) return;
+
+      if (event.type === "worker_heartbeat") {
+        const p = event.payload ?? {};
+        const now = new Date().toISOString();
+        // Patch worker's last_heartbeat_at and ensure status is online
+        setWorker((prev) =>
+          prev ? { ...prev, status: "online", last_heartbeat_at: now } : prev,
+        );
+        // Build a live metrics snapshot from the payload
+        const snapshot: WorkerMetrics = {
+          id: Date.now(), // synthetic id — not persisted
+          worker_id: id,
+          cpu_percent: (p.cpu_percent as number | null) ?? null,
+          cpu_cores: (p.cpu_cores as number | null) ?? null,
+          load_avg_1: (p.load_avg_1 as number | null) ?? null,
+          load_avg_5: (p.load_avg_5 as number | null) ?? null,
+          load_avg_15: (p.load_avg_15 as number | null) ?? null,
+          memory_used_mb: (p.memory_used_mb as number | null) ?? null,
+          memory_total_mb: (p.memory_total_mb as number | null) ?? null,
+          memory_free_mb: (p.memory_free_mb as number | null) ?? null,
+          swap_used_mb: (p.swap_used_mb as number | null) ?? null,
+          swap_total_mb: (p.swap_total_mb as number | null) ?? null,
+          disk_used_mb: (p.disk_used_mb as number | null) ?? null,
+          disk_total_mb: (p.disk_total_mb as number | null) ?? null,
+          container_count: (p.container_count as number | null) ?? null,
+          container_running_count:
+            (p.container_running_count as number | null) ?? null,
+          network_rx_bytes: (p.network_rx_bytes as number | null) ?? null,
+          network_tx_bytes: (p.network_tx_bytes as number | null) ?? null,
+          uptime_seconds: (p.uptime_seconds as number | null) ?? null,
+          process_count: (p.process_count as number | null) ?? null,
+          recorded_at: now,
+        };
+        setMetrics((prev) => [snapshot, ...prev.slice(0, 99)]);
+        setLastUpdated(new Date());
+      }
+
+      if (event.type === "worker_connected") {
+        setWorker((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "online",
+                last_heartbeat_at: new Date().toISOString(),
+              }
+            : prev,
+        );
+        toast.success(`Worker ${worker?.name ?? `#${id}`} came online`);
+      }
+
+      if (event.type === "worker_disconnected") {
+        setWorker((prev) => (prev ? { ...prev, status: "offline" } : prev));
+        toast.error(`Worker ${worker?.name ?? `#${id}`} went offline`);
+      }
+    },
+    [id, worker?.name],
+  );
+  useAdminSocket(handleSocketEvent);
+
+  // Tick every second so "updated X ago" stays fresh
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -207,6 +310,20 @@ export default function WorkerDetailPage() {
     );
 
   const latestMetric = metrics.length > 0 ? metrics[0] : null;
+
+  // Sparkline history (oldest → newest, up to last 20 heartbeats)
+  const cpuHistory = metrics
+    .slice(0, 20)
+    .reverse()
+    .map((m) => m.cpu_percent ?? 0);
+  const memHistory = metrics
+    .slice(0, 20)
+    .reverse()
+    .map((m) =>
+      m.memory_used_mb != null && m.memory_total_mb
+        ? (m.memory_used_mb / m.memory_total_mb) * 100
+        : 0,
+    );
 
   return (
     <div>
@@ -412,9 +529,24 @@ export default function WorkerDetailPage() {
           {/* Metrics */}
           {latestMetric && (
             <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
-              <h2 className="text-sm font-medium text-white mb-4">
-                Latest Metrics
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-medium text-white">
+                    Live Metrics
+                  </h2>
+                  {worker.status === "online" && (
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#22c55e] opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#22c55e]" />
+                    </span>
+                  )}
+                </div>
+                {lastUpdated && (
+                  <span className="text-xs text-[#444444]">
+                    updated {timeAgo(lastUpdated.toISOString())}
+                  </span>
+                )}
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
                 <MetricCard
                   label="CPU"
@@ -427,6 +559,14 @@ export default function WorkerDetailPage() {
                   color="text-[#3b82f6]"
                   percent={latestMetric.cpu_percent ?? undefined}
                 />
+                {cpuHistory.length >= 2 && (
+                  <div className="flex items-end">
+                    <Sparkline
+                      values={cpuHistory}
+                      color={sparkColor(latestMetric.cpu_percent ?? 0)}
+                    />
+                  </div>
+                )}
                 <MetricCard
                   label="Memory"
                   value={
@@ -445,6 +585,11 @@ export default function WorkerDetailPage() {
                       : undefined
                   }
                 />
+                {memHistory.length >= 2 && (
+                  <div className="flex items-end">
+                    <Sparkline values={memHistory} color="#a855f7" />
+                  </div>
+                )}
                 <MetricCard
                   label="Disk"
                   value={

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 
 export type AdminSocketEvent = {
     type: string;
@@ -16,84 +16,112 @@ function getWsUrl(): string {
     );
 }
 
+// ─── Singleton WebSocket manager ─────────────────────────────────────────────
+// A single shared connection is maintained for the lifetime of the page.
+// All useAdminSocket() consumers register a subscriber and share it.
+
+const subscribers = new Set<EventHandler>();
+let ws: WebSocket | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let intentionalClose = false;
+
+function connect() {
+    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+        return;
+    }
+
+    intentionalClose = false;
+    const url = getWsUrl();
+    console.log("[AdminSocket] connecting to", url);
+
+    ws = new WebSocket(url);
+
+    ws.onopen = () => {
+        console.log("[AdminSocket] connected");
+    };
+
+    ws.onmessage = (e) => {
+        let data: AdminSocketEvent;
+        try {
+            data = JSON.parse(e.data as string) as AdminSocketEvent;
+        } catch (err) {
+            console.warn("[AdminSocket] unparseable message:", e.data, err);
+            return;
+        }
+        console.debug("[AdminSocket] ←", data.type, data);
+        subscribers.forEach((fn) => fn(data));
+    };
+
+    ws.onerror = () => {
+        // Errors are always followed by onclose — let onclose handle reconnect.
+    };
+
+    ws.onclose = (e) => {
+        if (intentionalClose) return;
+        console.log(
+            `[AdminSocket] closed (code=${e.code}), reconnecting in 3s…`,
+        );
+        if (subscribers.size > 0) {
+            reconnectTimer = setTimeout(connect, 3000);
+        }
+    };
+}
+
+function ensureConnected() {
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
+    connect();
+}
+
+function maybeDisconnect() {
+    if (subscribers.size === 0) {
+        intentionalClose = true;
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+        if (ws) {
+            ws.onclose = null;
+            ws.close();
+            ws = null;
+        }
+    }
+}
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
 /**
- * Connects to the Lattice admin WebSocket at /ws/admin and calls onEvent
- * for each message received. Automatically reconnects on disconnect.
+ * Subscribes to the shared Lattice admin WebSocket at /ws/admin.
+ * All hook consumers share a single connection. Automatically reconnects.
  *
  * Events emitted by the server:
- *  - container_status    { container_name, action, status }
- *  - container_sync      { container_name, state, status }
+ *  - container_status        { container_name, action, status }
+ *  - container_sync          { container_name, state, status }
  *  - container_health_status { container_name, health_status }
- *  - container_logs      { container_name, stream, message }
- *  - deployment_progress { deployment_id, status, message, ... }
- *  - worker_heartbeat    { ... metrics }
- *  - worker_connected    { worker_id }
- *  - worker_disconnected { worker_id }
+ *  - container_logs          { container_name, stream, message }
+ *  - deployment_progress     { deployment_id, status, message, ... }
+ *  - worker_heartbeat        { ... metrics }
+ *  - worker_connected        { worker_id }
+ *  - worker_disconnected     { worker_id }
  */
 export function useAdminSocket(onEvent: EventHandler): void {
+    // Keep the handler ref up to date without changing the subscriber identity
     const onEventRef = useRef<EventHandler>(onEvent);
-    const wsRef = useRef<WebSocket | null>(null);
-    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const mountedRef = useRef(true);
-
-    // keep handler ref current without re-triggering connect
     useEffect(() => {
         onEventRef.current = onEvent;
     }, [onEvent]);
 
-    const connect = useCallback(() => {
-        if (!mountedRef.current) return;
-
-        const url = getWsUrl();
-        console.log("[AdminSocket] connecting to", url);
-
-        const ws = new WebSocket(url);
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-            console.log("[AdminSocket] connected");
-        };
-
-        ws.onmessage = (e) => {
-            let data: AdminSocketEvent;
-            try {
-                data = JSON.parse(e.data as string) as AdminSocketEvent;
-            } catch (err) {
-                console.warn("[AdminSocket] unparseable message:", e.data, err);
-                return;
-            }
-            console.debug("[AdminSocket] ←", data.type, data);
-            onEventRef.current(data);
-        };
-
-        ws.onerror = (e) => {
-            console.error("[AdminSocket] error:", e);
-        };
-
-        ws.onclose = (e) => {
-            console.log(
-                `[AdminSocket] closed (code=${e.code} reason="${e.reason}"), reconnecting in 3s…`,
-            );
-            if (mountedRef.current) {
-                reconnectTimerRef.current = setTimeout(connect, 3000);
-            }
-        };
-    }, []);
-
     useEffect(() => {
-        mountedRef.current = true;
-        connect();
+        // Wrap in a stable function so the subscriber set entry stays the same
+        const handler: EventHandler = (event) => onEventRef.current(event);
+        subscribers.add(handler);
+        ensureConnected();
 
         return () => {
-            mountedRef.current = false;
-            if (reconnectTimerRef.current) {
-                clearTimeout(reconnectTimerRef.current);
-            }
-            if (wsRef.current) {
-                // Remove onclose so reconnect loop doesn't fire on intentional unmount
-                wsRef.current.onclose = null;
-                wsRef.current.close();
-            }
+            subscribers.delete(handler);
+            maybeDisconnect();
         };
-    }, [connect]);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 }

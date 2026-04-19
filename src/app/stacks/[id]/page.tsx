@@ -17,12 +17,11 @@ import {
   reqGetContainers,
   reqDeployStack,
   reqGetContainerLogs,
-  reqCreateContainer,
-  reqUpdateContainer,
   reqDeleteContainer,
   reqUpdateStack,
   reqDeleteStack,
   reqUpdateCompose,
+  reqSyncCompose,
   reqStartContainer,
   reqStopContainer,
   reqRestartContainer,
@@ -45,74 +44,6 @@ import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
 import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
 
-type ContainerForm = {
-  name: string;
-  image: string;
-  tag: string;
-  port_mappings: string;
-  env_vars: string;
-  volumes: string;
-  cpu_limit: string;
-  memory_limit: string;
-  replicas: string;
-  restart_policy: string;
-  command: string;
-  entrypoint: string;
-  registry_id: string;
-};
-
-const emptyContainerForm: ContainerForm = {
-  name: "",
-  image: "",
-  tag: "latest",
-  port_mappings: "",
-  env_vars: "",
-  volumes: "",
-  cpu_limit: "",
-  memory_limit: "",
-  replicas: "1",
-  restart_policy: "unless-stopped",
-  command: "",
-  entrypoint: "",
-  registry_id: "",
-};
-
-function containerToForm(c: Container): ContainerForm {
-  return {
-    name: c.name,
-    image: c.image,
-    tag: c.tag,
-    port_mappings: c.port_mappings ?? "",
-    env_vars: c.env_vars ?? "",
-    volumes: c.volumes ?? "",
-    cpu_limit: c.cpu_limit?.toString() ?? "",
-    memory_limit: c.memory_limit?.toString() ?? "",
-    replicas: c.replicas.toString(),
-    restart_policy: c.restart_policy ?? "unless-stopped",
-    command: c.command ?? "",
-    entrypoint: c.entrypoint ?? "",
-    registry_id: c.registry_id?.toString() ?? "",
-  };
-}
-
-function formToPayload(form: ContainerForm) {
-  return {
-    name: form.name,
-    image: form.image,
-    tag: form.tag || "latest",
-    port_mappings: form.port_mappings || undefined,
-    env_vars: form.env_vars || undefined,
-    volumes: form.volumes || undefined,
-    cpu_limit: form.cpu_limit ? parseFloat(form.cpu_limit) : undefined,
-    memory_limit: form.memory_limit ? parseInt(form.memory_limit) : undefined,
-    replicas: parseInt(form.replicas) || 1,
-    restart_policy: form.restart_policy || undefined,
-    command: form.command || undefined,
-    entrypoint: form.entrypoint || undefined,
-    registry_id: form.registry_id ? parseInt(form.registry_id) : undefined,
-  };
-}
-
 export default function StackDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -128,14 +59,6 @@ export default function StackDetailPage() {
   // Worker liveness — must be declared unconditionally before any early return.
   // Passes all workers; we filter to the stack's worker after loading.
   const workerLiveness = useWorkerLiveness(workers);
-
-  // Container form state
-  const [showContainerForm, setShowContainerForm] = useState(false);
-  const [editingContainer, setEditingContainer] = useState<number | null>(null);
-  const [containerForm, setContainerForm] =
-    useState<ContainerForm>(emptyContainerForm);
-  const [containerFormError, setContainerFormError] = useState("");
-  const [containerFormSubmitting, setContainerFormSubmitting] = useState(false);
 
   // Container actions state
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>(
@@ -160,6 +83,7 @@ export default function StackDetailPage() {
   const [showCompose, setShowCompose] = useState(false);
   const [composeYaml, setComposeYaml] = useState("");
   const [savingCompose, setSavingCompose] = useState(false);
+  const [syncingCompose, setSyncingCompose] = useState(false);
   const [composeError, setComposeError] = useState("");
 
   // Deployment logs
@@ -409,51 +333,6 @@ export default function StackDetailPage() {
     }
   }, [selectedContainer, streamFilter, loadLogs]);
 
-  // Container CRUD
-  const openAddContainer = () => {
-    setEditingContainer(null);
-    setContainerForm(emptyContainerForm);
-    setContainerFormError("");
-    setShowContainerForm(true);
-  };
-
-  const openEditContainer = (c: Container) => {
-    setEditingContainer(c.id);
-    setContainerForm(containerToForm(c));
-    setContainerFormError("");
-    setShowContainerForm(true);
-  };
-
-  const handleContainerSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setContainerFormError("");
-    setContainerFormSubmitting(true);
-    const payload = formToPayload(containerForm);
-    if (editingContainer) {
-      const res = await reqUpdateContainer(editingContainer, payload);
-      if (!res.success) {
-        setContainerFormError(
-          res.error_message || "Failed to update container",
-        );
-        setContainerFormSubmitting(false);
-        return;
-      }
-    } else {
-      const res = await reqCreateContainer(id, payload);
-      if (!res.success) {
-        setContainerFormError(
-          res.error_message || "Failed to create container",
-        );
-        setContainerFormSubmitting(false);
-        return;
-      }
-    }
-    setShowContainerForm(false);
-    setContainerFormSubmitting(false);
-    setHasPendingChanges(true);
-    await refreshContainers();
-  };
-
   const handleDeleteContainer = async (containerId: number) => {
     if (!confirm("Delete this container?")) return;
     const res = await reqDeleteContainer(containerId);
@@ -532,10 +411,34 @@ export default function StackDetailPage() {
       setStack(res.data);
       setHasPendingChanges(true);
       await refreshContainers();
+      setShowCompose(false);
+      if (confirm("Compose saved. Deploy now?")) {
+        handleDeploy();
+      }
     } else {
       setComposeError(res.error_message || "Failed to update compose");
     }
     setSavingCompose(false);
+  };
+
+  const handleSyncCompose = async () => {
+    setSyncingCompose(true);
+    setComposeError("");
+    const toastId = toast.loading("Syncing config from compose…");
+    const res = await reqSyncCompose(id);
+    setSyncingCompose(false);
+    if (res.success) {
+      const updated = (res.data ?? []).filter((r) => r.updated).length;
+      const skipped = (res.data ?? []).filter((r) => !r.updated).length;
+      toast.success(
+        `Synced ${updated} container${updated !== 1 ? "s" : ""}${skipped > 0 ? ` (${skipped} skipped)` : ""}`,
+        { id: toastId },
+      );
+      await refreshContainers();
+    } else {
+      toast.error(res.error_message || "Sync failed", { id: toastId });
+      setComposeError(res.error_message || "Sync failed");
+    }
   };
 
   const workerName = (wId: number | null) => {
@@ -831,9 +734,31 @@ export default function StackDetailPage() {
           {/* Compose Editor */}
           {showCompose && (
             <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
-              <h2 className="text-sm font-medium text-white mb-3">
-                Docker Compose
-              </h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-medium text-white">
+                  Docker Compose
+                </h2>
+                <button
+                  onClick={() => setShowCompose(false)}
+                  className="text-[#555555] hover:text-white transition-colors"
+                  aria-label="Close compose editor"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
               <p className="text-xs text-[#555555] mb-3">
                 Edit the compose YAML and save to replace all containers with
                 the updated definition.
@@ -848,11 +773,24 @@ export default function StackDetailPage() {
               {composeError && (
                 <p className="text-xs text-[#f87171] mt-2">{composeError}</p>
               )}
-              <div className="mt-3 flex justify-end">
+              <div className="mt-3 flex justify-between items-center">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleSyncCompose}
+                  disabled={
+                    syncingCompose || savingCompose || !composeYaml.trim()
+                  }
+                  title="Re-read the stored compose YAML and patch existing containers (health check, env, ports, etc.) without recreating them"
+                >
+                  {syncingCompose ? "Syncing…" : "Sync Config"}
+                </Button>
                 <Button
                   size="sm"
                   onClick={handleSaveCompose}
-                  disabled={savingCompose || !composeYaml.trim()}
+                  disabled={
+                    savingCompose || syncingCompose || !composeYaml.trim()
+                  }
                 >
                   {savingCompose ? "Saving..." : "Save & Sync Containers"}
                 </Button>
@@ -864,229 +802,13 @@ export default function StackDetailPage() {
           <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] overflow-hidden">
             <div className="px-5 py-4 border-b border-[#1a1a1a] flex items-center justify-between">
               <h2 className="text-sm font-medium text-white">Containers</h2>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-[#555555]">
-                  {containers.length} container
-                  {containers.length !== 1 ? "s" : ""}
-                </span>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={openAddContainer}
-                >
-                  Add Container
-                </Button>
-              </div>
+              <span className="text-xs text-[#555555]">
+                {containers.length} container
+                {containers.length !== 1 ? "s" : ""}
+              </span>
             </div>
 
-            {/* Container Form */}
-            {showContainerForm && (
-              <div className="px-5 py-4 border-b border-[#1a1a1a] bg-[#0d0d0d]">
-                <form onSubmit={handleContainerSubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <Input
-                      id="c-name"
-                      label="Name"
-                      placeholder="my-container"
-                      value={containerForm.name}
-                      onChange={(e) =>
-                        setContainerForm((f) => ({
-                          ...f,
-                          name: e.target.value,
-                        }))
-                      }
-                      required
-                    />
-                    <Input
-                      id="c-image"
-                      label="Image"
-                      placeholder="nginx"
-                      value={containerForm.image}
-                      onChange={(e) =>
-                        setContainerForm((f) => ({
-                          ...f,
-                          image: e.target.value,
-                        }))
-                      }
-                      required
-                    />
-                    <Input
-                      id="c-tag"
-                      label="Tag"
-                      placeholder="latest"
-                      value={containerForm.tag}
-                      onChange={(e) =>
-                        setContainerForm((f) => ({ ...f, tag: e.target.value }))
-                      }
-                    />
-                    <Input
-                      id="c-replicas"
-                      label="Replicas"
-                      type="number"
-                      min="1"
-                      value={containerForm.replicas}
-                      onChange={(e) =>
-                        setContainerForm((f) => ({
-                          ...f,
-                          replicas: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-medium text-[#888888] uppercase tracking-wider">
-                        Restart Policy
-                      </label>
-                      <select
-                        value={containerForm.restart_policy}
-                        onChange={(e) =>
-                          setContainerForm((f) => ({
-                            ...f,
-                            restart_policy: e.target.value,
-                          }))
-                        }
-                        className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none"
-                      >
-                        <option value="no">No</option>
-                        <option value="always">Always</option>
-                        <option value="unless-stopped">Unless Stopped</option>
-                        <option value="on-failure">On Failure</option>
-                      </select>
-                    </div>
-                    <Input
-                      id="c-cpu"
-                      label="CPU Limit (cores)"
-                      placeholder="0.5"
-                      value={containerForm.cpu_limit}
-                      onChange={(e) =>
-                        setContainerForm((f) => ({
-                          ...f,
-                          cpu_limit: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <Input
-                    id="c-memory"
-                    label="Memory Limit (MB)"
-                    placeholder="512"
-                    value={containerForm.memory_limit}
-                    onChange={(e) =>
-                      setContainerForm((f) => ({
-                        ...f,
-                        memory_limit: e.target.value,
-                      }))
-                    }
-                  />
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-[#888888] uppercase tracking-wider">
-                      Port Mappings (JSON)
-                    </label>
-                    <CodeEditor
-                      rows={2}
-                      value={containerForm.port_mappings}
-                      onChange={(v) =>
-                        setContainerForm((f) => ({
-                          ...f,
-                          port_mappings: v,
-                        }))
-                      }
-                      language="json"
-                      placeholder='[{"host_port":"8080","container_port":"80","protocol":"tcp"}]'
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-[#888888] uppercase tracking-wider">
-                      Environment Variables (JSON)
-                    </label>
-                    <CodeEditor
-                      rows={2}
-                      value={containerForm.env_vars}
-                      onChange={(v) =>
-                        setContainerForm((f) => ({
-                          ...f,
-                          env_vars: v,
-                        }))
-                      }
-                      language="json"
-                      placeholder='{"NODE_ENV": "production"}'
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-[#888888] uppercase tracking-wider">
-                      Volumes (JSON)
-                    </label>
-                    <CodeEditor
-                      rows={2}
-                      value={containerForm.volumes}
-                      onChange={(v) =>
-                        setContainerForm((f) => ({
-                          ...f,
-                          volumes: v,
-                        }))
-                      }
-                      language="json"
-                      placeholder='{"/host/path": "/container/path"}'
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Input
-                      id="c-command"
-                      label="Command (JSON array)"
-                      placeholder='["npm", "start"]'
-                      value={containerForm.command}
-                      onChange={(e) =>
-                        setContainerForm((f) => ({
-                          ...f,
-                          command: e.target.value,
-                        }))
-                      }
-                    />
-                    <Input
-                      id="c-entrypoint"
-                      label="Entrypoint (JSON array)"
-                      placeholder='["/entrypoint.sh"]'
-                      value={containerForm.entrypoint}
-                      onChange={(e) =>
-                        setContainerForm((f) => ({
-                          ...f,
-                          entrypoint: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  {containerFormError && (
-                    <p className="text-xs text-[#f87171]">
-                      {containerFormError}
-                    </p>
-                  )}
-                  <div className="flex gap-2">
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={containerFormSubmitting}
-                    >
-                      {containerFormSubmitting
-                        ? "Saving..."
-                        : editingContainer
-                          ? "Update"
-                          : "Add"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowContainerForm(false)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {containers.length === 0 && !showContainerForm ? (
+            {containers.length === 0 ? (
               <div className="px-5 py-8 text-center text-sm text-[#555555]">
                 No containers in this stack
               </div>
@@ -1206,12 +928,12 @@ export default function StackDetailPage() {
                                 ? "..."
                                 : "Recreate"}
                             </button>
-                            <button
-                              onClick={() => openEditContainer(container)}
+                            <a
+                              href={`/containers/${container.id}`}
                               className="px-2 py-1 text-xs text-[#888888] hover:bg-[#161616] hover:text-white rounded transition-colors"
                             >
                               Edit
-                            </button>
+                            </a>
                             <button
                               onClick={() =>
                                 handleDeleteContainer(container.id)

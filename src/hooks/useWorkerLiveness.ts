@@ -33,7 +33,14 @@ export function useWorkerLiveness(workers: Worker[]): LivenessMap {
     // Track last-seen timestamps per worker so we can detect heartbeat gaps
     const lastSeenRef = useRef<Record<number, number>>({});
 
-    // When the initial worker list changes (e.g. page re-fetch), re-sync
+    // Stable key derived from workers data — avoids re-seeding on every render
+    // when callers pass a freshly-created array with the same contents.
+    const workersKey = workers
+        .map((w) => `${w.id}:${w.status}:${w.last_heartbeat_at}`)
+        .join(",");
+
+    // When the actual worker data changes (re-fetch), re-sync liveness seed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         setLiveness(buildInitialLiveness(workers));
         const now = Date.now();
@@ -44,7 +51,7 @@ export function useWorkerLiveness(workers: Worker[]): LivenessMap {
                 lastSeenRef.current[w.id] = now;
             }
         }
-    }, [workers]);
+    }, [workersKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleEvent = useCallback((event: AdminSocketEvent) => {
         const wId = event.worker_id;

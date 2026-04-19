@@ -75,7 +75,7 @@ The web app exposes its version via an API route:
 
 ```
 GET /api/version
-{"version":"v0.1.0"}
+{"version":"v0.1.1"}
 ```
 
 The version is hardcoded in the source. The dashboard page also displays both the web version and the API version (fetched from the backend's `GET /version` endpoint).

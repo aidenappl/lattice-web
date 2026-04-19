@@ -167,7 +167,9 @@ export default function ContainerDetailPage() {
 
   const loadLogs = useCallback(async () => {
     const res = await reqGetContainerLogs(id, { limit: 250 });
-    if (res.success) setLogs(res.data ?? []);
+    if (res.success)
+      // API returns newest-first; reverse so oldest is at top (standard log tail)
+      setLogs((res.data ?? []).slice().reverse());
     else
       console.warn(
         `[ContainerInspector] failed to load logs for container ${id}:`,
@@ -182,13 +184,12 @@ export default function ContainerDetailPage() {
       const eventName = payload["container_name"] as string | undefined;
       const myName = containerNameRef.current;
 
+      if (!eventName || !myName || eventName !== myName) return;
+
       if (
-        (event.type === "container_status" ||
-          event.type === "container_sync" ||
-          event.type === "container_health_status") &&
-        eventName &&
-        myName &&
-        eventName === myName
+        event.type === "container_status" ||
+        event.type === "container_sync" ||
+        event.type === "container_health_status"
       ) {
         console.log(
           `[ContainerInspector] WS ${event.type} matched "${myName}"`,
@@ -196,6 +197,25 @@ export default function ContainerDetailPage() {
         );
         loadContainer();
         if (tab === "logs") loadLogs();
+      }
+
+      if (event.type === "container_logs") {
+        const message = payload["message"] as string | undefined;
+        const rawStream = (payload["stream"] as string | undefined) ?? "stdout";
+        const stream: "stdout" | "stderr" =
+          rawStream === "stderr" ? "stderr" : "stdout";
+        if (message) {
+          const entry: ContainerLog = {
+            id: Date.now(), // synthetic — not persisted
+            container_id: null,
+            container_name: myName,
+            worker_id: event.worker_id ?? 0,
+            stream,
+            message,
+            recorded_at: new Date().toISOString(),
+          };
+          setLogs((prev) => [...prev.slice(-249), entry]);
+        }
       }
     },
     [loadContainer, loadLogs, tab],

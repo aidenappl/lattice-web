@@ -148,3 +148,9 @@ export const reqUpdateCompose = (id: number, data: { compose_yaml: string }) =>
         url: `/admin/stacks/${id}/compose`,
         data,
     });
+
+export const reqSyncCompose = (id: number) =>
+    fetchApi<{ container_name: string; updated: boolean; reason?: string }[]>({
+        method: "POST",
+        url: `/admin/stacks/${id}/sync-compose`,
+    });
