@@ -100,6 +100,7 @@ function buildSystemView(
                     status: s.status,
                     workerName: w.name,
                     containerCount: sContainers.length,
+                    scale: "md",
                 } satisfies StackNodeData,
             });
 
@@ -128,6 +129,7 @@ function buildSystemView(
                         tag: c.tag,
                         healthStatus: c.health_status,
                         stackName: s.name,
+                        scale,
                     } satisfies ContainerNodeData,
                 });
 
