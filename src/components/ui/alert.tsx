@@ -1,6 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faXmark } from "@fortawesome/free-solid-svg-icons";
 
 type AlertVariant = "error" | "warning" | "info" | "success";
 
@@ -61,9 +63,7 @@ export function Alert({
           onClick={onDismiss}
           className="text-muted hover:text-primary transition-colors shrink-0"
         >
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />
         </button>
       )}
     </div>

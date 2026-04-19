@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faRotate } from "@fortawesome/free-solid-svg-icons";
 import { Container, Stack, Worker } from "@/types";
 import { reqGetAllContainers, reqGetStacks } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
@@ -117,19 +119,7 @@ export default function NetworksPage() {
           onClick={load}
           className="inline-flex items-center justify-center font-medium rounded-lg transition-colors cursor-pointer focus:outline-none border border-border-strong bg-surface text-primary hover:bg-surface-active h-8 px-3.5 text-sm gap-1.5"
         >
-          <svg
-            className="h-3.5 w-3.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
+          <FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />
           Refresh
         </button>
       </div>

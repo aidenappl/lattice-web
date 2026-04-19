@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { reqGetOverview, OverviewData } from "@/services/admin.service";
-import { PageLoader } from "@/components/ui/loading";
 import { APP_VERSION } from "@/lib/version";
+import { TopologyBoard } from "@/components/topology/TopologyBoard";
 
 export default function DashboardPage() {
   const [overview, setOverview] = useState<OverviewData | null>(null);
   const [apiVersion, setApiVersion] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     document.title = "Lattice - Dashboard";
@@ -22,78 +21,61 @@ export default function DashboardPage() {
           .then((r) => r.json())
           .catch(() => null),
       ]);
-      if (overviewRes.success) {
-        setOverview(overviewRes.data);
-      }
-      if (versionRes?.version) {
-        setApiVersion(versionRes.version);
-      }
-      setLoading(false);
+      if (overviewRes.success) setOverview(overviewRes.data);
+      if (versionRes?.version) setApiVersion(versionRes.version);
     };
     load();
   }, []);
-
-  if (loading) return <PageLoader />;
 
   const stats = [
     {
       label: "Workers",
       value: overview
-        ? `${overview.online_workers} / ${overview.total_workers}`
-        : "0 / 0",
-      sub: "online / total",
+        ? `${overview.online_workers}/${overview.total_workers}`
+        : "-",
       color: "text-[#22c55e]",
     },
     {
       label: "Stacks",
-      value: overview?.active_stacks ?? 0,
-      sub: "active",
+      value: overview?.active_stacks ?? "-",
       color: "text-[#3b82f6]",
     },
     {
-      label: "Total Stacks",
-      value: overview?.total_stacks ?? 0,
-      sub: "configured",
+      label: "Total",
+      value: overview?.total_stacks ?? "-",
       color: "text-[#a855f7]",
     },
     {
-      label: "Deployments",
-      value: overview?.recent_deployment_count ?? 0,
-      sub: "recent",
+      label: "Deploys",
+      value: overview?.recent_deployment_count ?? "-",
       color: "text-[#eab308]",
     },
   ];
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-primary">Dashboard</h1>
-        <p className="text-sm text-secondary mt-1">
-          Overview of your infrastructure
-        </p>
+    <div className="flex flex-col h-[calc(100vh-5.5rem)]">
+      {/* Compact stats bar */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-5">
+          {stats.map((s) => (
+            <div key={s.label} className="flex items-center gap-1.5">
+              <span className="text-[11px] text-muted uppercase tracking-wider">
+                {s.label}
+              </span>
+              <span className={`text-sm font-semibold ${s.color}`}>
+                {s.value}
+              </span>
+            </div>
+          ))}
+        </div>
+        <span className="text-[10px] text-muted font-mono">
+          Web {APP_VERSION} / API {apiVersion ?? "..."}
+        </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className="rounded-xl border border-border-subtle bg-surface p-5"
-          >
-            <p className="text-xs font-medium text-secondary uppercase tracking-wider mb-3">
-              {stat.label}
-            </p>
-            <p className={`text-2xl font-semibold ${stat.color}`}>
-              {stat.value}
-            </p>
-            <p className="text-xs text-muted mt-1">{stat.sub}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Version Info */}
-      <div className="mt-8 flex items-center gap-6 text-xs text-muted font-mono">
-        <span>Web {APP_VERSION}</span>
-        <span>API {apiVersion ?? "..."}</span>
+      {/* Topology canvas */}
+      <div className="flex-1 min-h-0">
+        <TopologyBoard />
       </div>
     </div>
   );

@@ -107,3 +107,33 @@ html {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
 }
+
+/* ── React Flow overrides ──────────────────────────────────────── */
+.topology-flow .react-flow__node {
+  cursor: pointer;
+  transition:
+    transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.2s ease;
+}
+.topology-flow .react-flow__node:hover {
+  filter: brightness(1.08);
+}
+.topology-flow .react-flow__edge path,
+.topology-flow .react-flow__edge circle {
+  transition:
+    stroke 0.3s ease,
+    opacity 0.3s ease;
+}
+.topology-flow .react-flow__handle {
+  opacity: 0;
+}
+.topology-flow .react-flow__minimap {
+  border-radius: 8px;
+}
+.topology-flow .react-flow__controls button svg {
+  fill: var(--text-secondary);
+}
+.topology-flow .react-flow__controls button:hover svg {
+  fill: var(--text-primary);
+}

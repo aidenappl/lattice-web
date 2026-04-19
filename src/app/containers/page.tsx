@@ -14,6 +14,15 @@ import {
 import { reqGetWorkers } from "@/services/workers.service";
 import { reqGetStacks } from "@/services/stacks.service";
 import { PageLoader } from "@/components/ui/loading";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faRotate,
+  faPlay,
+  faStop,
+  faSpinner,
+  faArrowsRotate,
+  faChevronRight,
+} from "@fortawesome/free-solid-svg-icons";
 import { StatusBadge } from "@/components/ui/badge";
 import { Stack, Worker } from "@/types";
 import { timeAgo } from "@/lib/utils";
@@ -226,19 +235,7 @@ export default function ContainersPage() {
           onClick={load}
           className="inline-flex items-center justify-center font-medium rounded-lg transition-colors cursor-pointer focus:outline-none border border-border-strong bg-surface text-primary hover:bg-surface-active h-8 px-3.5 text-sm gap-1.5"
         >
-          <svg
-            className="h-3.5 w-3.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
+          <FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />
           Refresh
         </button>
       </div>
@@ -420,33 +417,15 @@ export default function ContainersPage() {
                             className="h-7 w-7 rounded flex items-center justify-center text-[#22c55e] hover:bg-[#22c55e]/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "start" ? (
-                              <svg
+                              <FontAwesomeIcon
+                                icon={faSpinner}
                                 className="h-3.5 w-3.5 animate-spin"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                              >
-                                <circle
-                                  className="opacity-25"
-                                  cx="12"
-                                  cy="12"
-                                  r="10"
-                                  stroke="currentColor"
-                                  strokeWidth="4"
-                                />
-                                <path
-                                  className="opacity-75"
-                                  fill="currentColor"
-                                  d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"
-                                />
-                              </svg>
+                              />
                             ) : (
-                              <svg
+                              <FontAwesomeIcon
+                                icon={faPlay}
                                 className="h-3.5 w-3.5"
-                                fill="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path d="M8 5v14l11-7z" />
-                              </svg>
+                              />
                             )}
                           </button>
                         )}
@@ -459,33 +438,15 @@ export default function ContainersPage() {
                             className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-[#ef4444] hover:bg-[#ef4444]/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "stop" ? (
-                              <svg
+                              <FontAwesomeIcon
+                                icon={faSpinner}
                                 className="h-3.5 w-3.5 animate-spin"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                              >
-                                <circle
-                                  className="opacity-25"
-                                  cx="12"
-                                  cy="12"
-                                  r="10"
-                                  stroke="currentColor"
-                                  strokeWidth="4"
-                                />
-                                <path
-                                  className="opacity-75"
-                                  fill="currentColor"
-                                  d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"
-                                />
-                              </svg>
+                              />
                             ) : (
-                              <svg
+                              <FontAwesomeIcon
+                                icon={faStop}
                                 className="h-3.5 w-3.5"
-                                fill="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <rect x="6" y="6" width="12" height="12" />
-                              </svg>
+                              />
                             )}
                           </button>
                         )}
@@ -498,39 +459,15 @@ export default function ContainersPage() {
                             className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-[#3b82f6] hover:bg-[#3b82f6]/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "restart" ? (
-                              <svg
+                              <FontAwesomeIcon
+                                icon={faSpinner}
                                 className="h-3.5 w-3.5 animate-spin"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                              >
-                                <circle
-                                  className="opacity-25"
-                                  cx="12"
-                                  cy="12"
-                                  r="10"
-                                  stroke="currentColor"
-                                  strokeWidth="4"
-                                />
-                                <path
-                                  className="opacity-75"
-                                  fill="currentColor"
-                                  d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"
-                                />
-                              </svg>
+                              />
                             ) : (
-                              <svg
+                              <FontAwesomeIcon
+                                icon={faRotate}
                                 className="h-3.5 w-3.5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                                />
-                              </svg>
+                              />
                             )}
                           </button>
                         )}
@@ -542,39 +479,15 @@ export default function ContainersPage() {
                           className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-[#a855f7] hover:bg-[#a855f7]/10 disabled:opacity-40 transition-colors cursor-pointer"
                         >
                           {busy === "recreate" ? (
-                            <svg
+                            <FontAwesomeIcon
+                              icon={faSpinner}
                               className="h-3.5 w-3.5 animate-spin"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                            >
-                              <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                strokeWidth="4"
-                              />
-                              <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"
-                              />
-                            </svg>
+                            />
                           ) : (
-                            <svg
+                            <FontAwesomeIcon
+                              icon={faArrowsRotate}
                               className="h-3.5 w-3.5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                              />
-                            </svg>
+                            />
                           )}
                         </button>
                         {/* Details link */}
@@ -583,19 +496,10 @@ export default function ContainersPage() {
                           title="View details"
                           className="h-7 w-7 rounded flex items-center justify-center text-muted hover:text-primary hover:bg-border-strong transition-colors"
                         >
-                          <svg
+                          <FontAwesomeIcon
+                            icon={faChevronRight}
                             className="h-3.5 w-3.5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 5l7 7-7 7"
-                            />
-                          </svg>
+                          />
                         </Link>
                       </div>
                     </td>

@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useRef, useMemo, DragEvent } from "react";
 import { useRouter } from "next/navigation";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faXmark, faPlus } from "@fortawesome/free-solid-svg-icons";
 import { Worker } from "@/types";
 import { reqGetWorkers } from "@/services/workers.service";
 import {
@@ -481,19 +483,10 @@ export default function NewStackPage() {
                         className="px-3 py-2 text-muted hover:text-[#ef4444] transition-colors"
                         aria-label="Remove variable"
                       >
-                        <svg
+                        <FontAwesomeIcon
+                          icon={faXmark}
                           className="h-3.5 w-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
+                        />
                       </button>
                     </div>
                   );
@@ -515,19 +508,7 @@ export default function NewStackPage() {
             onClick={addEnvRow}
             className="mt-3 flex items-center gap-1.5 text-xs text-muted hover:text-primary transition-colors"
           >
-            <svg
-              className="h-3.5 w-3.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
+            <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" />
             Add variable
           </button>
         </div>

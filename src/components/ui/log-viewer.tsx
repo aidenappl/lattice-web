@@ -3,6 +3,8 @@
 import { useRef } from "react";
 import { useEffect } from "react";
 import { ContainerLog, LifecycleLog } from "@/types";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faBolt } from "@fortawesome/free-solid-svg-icons";
 
 // ─── Synthetic log helpers ────────────────────────────────────────────────────
 
@@ -115,7 +117,10 @@ export function LogLine({ line }: { line: ContainerLog }) {
           : ""}
       </span>
       {lifecycle ? (
-        <span className="text-blue-400 font-medium">⚡ {line.message}</span>
+        <span className="text-blue-400 font-medium">
+          <FontAwesomeIcon icon={faBolt} className="mr-1.5" />
+          {line.message}
+        </span>
       ) : (
         <span className="text-subtle">{line.message}</span>
       )}
