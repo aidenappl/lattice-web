@@ -26,6 +26,9 @@ import { formatDate, timeAgo, workerStaleReason } from "@/lib/utils";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
 import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
+import { CodeEditor } from "@/components/ui/code-editor";
+import { Alert } from "@/components/ui/alert";
+import { useConfirm } from "@/components/ui/confirm-modal";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -153,6 +156,7 @@ export default function ContainerDetailPage() {
 
   const logsEndRef = useRef<HTMLDivElement>(null);
   const containerNameRef = useRef<string>("");
+  const showConfirm = useConfirm();
 
   // Worker liveness — must be declared unconditionally before any early return
   const workerListForLiveness = worker ? [worker] : [];
@@ -423,34 +427,16 @@ export default function ContainerDetailPage() {
 
       {/* Pending context banner */}
       {container.status === "pending" && (
-        <div className="mb-6 rounded-xl border border-yellow-600/30 bg-yellow-600/5 px-4 py-3">
-          <div className="flex items-start gap-3">
-            <svg
-              className="h-4 w-4 text-yellow-400 mt-0.5 shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
-              />
-            </svg>
-            <div>
-              <p className="text-sm font-medium text-yellow-400">
-                Container is pending
-              </p>
-              <p className="text-xs text-[#888888] mt-1">
-                {!worker
-                  ? "No worker is assigned to this stack. Assign a worker and deploy to start this container."
-                  : !workerOnline
-                    ? `Worker "${worker.name}" is offline. The container will start once the worker reconnects.`
-                    : "This container has been configured but not yet deployed. Click Deploy on the stack page to push it to the worker."}
-              </p>
-            </div>
-          </div>
+        <div className="mb-6">
+          <Alert variant="warning">
+            <strong>Container is pending</strong>
+            <br />
+            {!worker
+              ? "No worker is assigned to this stack. Assign a worker and deploy to start this container."
+              : !workerOnline
+                ? `Worker "${worker.name}" is offline. The container will start once the worker reconnects.`
+                : "This container has been configured but not yet deployed. Click Deploy on the stack page to push it to the worker."}
+          </Alert>
         </div>
       )}
 
@@ -490,9 +476,10 @@ export default function ContainerDetailPage() {
           disabled={!isRunning || controlsDisabled}
           loading={actionLoading === "stop"}
           color="text-[#888888] hover:bg-[#2a2a2a]"
-          onClick={() =>
-            runAction("stop", () => reqStopContainer(container.id))
-          }
+          onClick={async () => {
+            const ok = await showConfirm({ title: "Stop container", message: `Stop "${container.name}"? The container will be gracefully shut down.`, confirmLabel: "Stop", variant: "warning" });
+            if (ok) runAction("stop", () => reqStopContainer(container.id));
+          }}
         />
         {/* Kill */}
         <ActionButton
@@ -515,9 +502,10 @@ export default function ContainerDetailPage() {
           disabled={!isRunning || controlsDisabled}
           loading={actionLoading === "kill"}
           color="text-[#ef4444] hover:bg-[#ef4444]/10"
-          onClick={() =>
-            runAction("kill", () => reqKillContainer(container.id))
-          }
+          onClick={async () => {
+            const ok = await showConfirm({ title: "Kill container", message: `Force-kill "${container.name}"? This sends SIGKILL immediately.`, confirmLabel: "Kill", variant: "danger" });
+            if (ok) runAction("kill", () => reqKillContainer(container.id));
+          }}
         />
         {/* Restart */}
         <ActionButton
@@ -540,9 +528,10 @@ export default function ContainerDetailPage() {
           disabled={!isRunning || controlsDisabled}
           loading={actionLoading === "restart"}
           color="text-[#3b82f6] hover:bg-[#3b82f6]/10"
-          onClick={() =>
-            runAction("restart", () => reqRestartContainer(container.id))
-          }
+          onClick={async () => {
+            const ok = await showConfirm({ title: "Restart container", message: `Restart "${container.name}"? The container will be stopped and started.`, confirmLabel: "Restart", variant: "warning" });
+            if (ok) runAction("restart", () => reqRestartContainer(container.id));
+          }}
         />
         {/* Pause */}
         <ActionButton
@@ -603,9 +592,10 @@ export default function ContainerDetailPage() {
           disabled={controlsDisabled}
           loading={actionLoading === "recreate"}
           color="text-[#a855f7] hover:bg-[#a855f7]/10"
-          onClick={() =>
-            runAction("recreate", () => reqRecreateContainer(container.id))
-          }
+          onClick={async () => {
+            const ok = await showConfirm({ title: "Recreate container", message: `Recreate "${container.name}"? The container will be removed and created fresh from its config.`, confirmLabel: "Recreate", variant: "warning" });
+            if (ok) runAction("recreate", () => reqRecreateContainer(container.id));
+          }}
         />
         {/* Remove */}
         <ActionButton
@@ -628,9 +618,10 @@ export default function ContainerDetailPage() {
           disabled={controlsDisabled}
           loading={actionLoading === "remove"}
           color="text-[#ef4444] hover:bg-[#ef4444]/10"
-          onClick={() =>
-            runAction("remove", () => reqRemoveContainer(container.id))
-          }
+          onClick={async () => {
+            const ok = await showConfirm({ title: "Remove container", message: `Permanently remove "${container.name}" from Docker? This cannot be undone.`, confirmLabel: "Remove", variant: "danger" });
+            if (ok) runAction("remove", () => reqRemoveContainer(container.id));
+          }}
         />
         {/* Edit */}
         <button
@@ -654,7 +645,9 @@ export default function ContainerDetailPage() {
         </button>
 
         {actionError && (
-          <span className="ml-auto text-xs text-[#ef4444]">{actionError}</span>
+          <div className="ml-auto">
+            <Alert variant="error" onDismiss={() => setActionError(null)}>{actionError}</Alert>
+          </div>
         )}
       </div>
 
@@ -786,48 +779,48 @@ export default function ContainerDetailPage() {
               <label className="block text-xs text-[#888888] mb-1.5">
                 Environment Variables (JSON)
               </label>
-              <textarea
+              <CodeEditor
                 rows={4}
                 value={editEnvVars}
-                onChange={(e) => setEditEnvVars(e.target.value)}
+                onChange={setEditEnvVars}
                 placeholder={'{"KEY": "value"}'}
-                className={inputClass + " resize-y font-mono text-xs"}
+                language="json"
               />
             </div>
             <div>
               <label className="block text-xs text-[#888888] mb-1.5">
                 Port Mappings (JSON)
               </label>
-              <textarea
+              <CodeEditor
                 rows={4}
                 value={editPortMappings}
-                onChange={(e) => setEditPortMappings(e.target.value)}
+                onChange={setEditPortMappings}
                 placeholder={'[{"host_port": "8080", "container_port": "80"}]'}
-                className={inputClass + " resize-y font-mono text-xs"}
+                language="json"
               />
             </div>
             <div>
               <label className="block text-xs text-[#888888] mb-1.5">
                 Volumes (JSON)
               </label>
-              <textarea
+              <CodeEditor
                 rows={4}
                 value={editVolumes}
-                onChange={(e) => setEditVolumes(e.target.value)}
+                onChange={setEditVolumes}
                 placeholder={'[{"host": "/data", "container": "/app/data"}]'}
-                className={inputClass + " resize-y font-mono text-xs"}
+                language="json"
               />
             </div>
             <div>
               <label className="block text-xs text-[#888888] mb-1.5">
                 Health Check (JSON)
               </label>
-              <textarea
+              <CodeEditor
                 rows={4}
                 value={editHealthCheck}
-                onChange={(e) => setEditHealthCheck(e.target.value)}
+                onChange={setEditHealthCheck}
                 placeholder={'{"test": ["CMD", "curl", "-f", "http://localhost"], "interval": "30s", "timeout": "10s", "retries": 3}'}
-                className={inputClass + " resize-y font-mono text-xs"}
+                language="json"
               />
             </div>
           </div>

@@ -45,6 +45,7 @@ import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
 import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
 import { useConfirm } from "@/components/ui/confirm-modal";
+import { Alert } from "@/components/ui/alert";
 
 export default function StackDetailPage() {
   const params = useParams();
@@ -384,6 +385,19 @@ export default function StackDetailPage() {
     const container = containers.find((c) => c.id === containerId);
     const name = container?.name ?? String(containerId);
     const label = action.charAt(0).toUpperCase() + action.slice(1);
+
+    // Confirm destructive actions
+    const confirmMap: Record<string, { title: string; message: string; variant: "danger" | "warning" }> = {
+      stop: { title: "Stop container", message: `Stop "${name}"?`, variant: "warning" },
+      recreate: { title: "Recreate container", message: `Recreate "${name}"? It will be removed and created fresh.`, variant: "warning" },
+      remove: { title: "Remove container", message: `Remove "${name}" from Docker? This cannot be undone.`, variant: "danger" },
+    };
+    const conf = confirmMap[action];
+    if (conf) {
+      const ok = await showConfirm({ ...conf, confirmLabel: label });
+      if (!ok) return;
+    }
+
     const key = `${containerId}-${action}`;
     setActionLoading((prev) => ({ ...prev, [key]: true }));
 
@@ -814,7 +828,9 @@ export default function StackDetailPage() {
                 placeholder={`version: "3"\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"`}
               />
               {composeError && (
-                <p className="text-xs text-[#f87171] mt-2">{composeError}</p>
+                <div className="mt-2">
+                  <Alert variant="error" onDismiss={() => setComposeError("")}>{composeError}</Alert>
+                </div>
               )}
               <div className="mt-3 flex justify-between items-center">
                 <Button

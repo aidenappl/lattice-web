@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
+import { useConfirm } from "@/components/ui/confirm-modal";
 
 const timelineSteps = ["pending", "approved", "deploying", "deployed"] as const;
 
@@ -23,10 +24,11 @@ export default function DeploymentDetailPage() {
   const [deployment, setDeployment] = useState<Deployment | null>(null);
   const [logs, setLogs] = useState<DeploymentLog[]>([]);
   const [stacks, setStacks] = useState<Stack[]>([]);
-  const [users, setUsers] = useState<{ id: number; name: string; email: string }[]>([]);
+  const [users, setUsers] = useState<{ id: number; name: string | null; email: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const showConfirm = useConfirm();
 
   useEffect(() => {
     const load = async () => {
@@ -99,6 +101,12 @@ export default function DeploymentDetailPage() {
   const approvedByUser = users.find((u) => u.id === deployment?.approved_by);
 
   const handleApprove = async () => {
+    const ok = await showConfirm({
+      title: "Approve deployment",
+      message: "This will begin deploying to the worker. Continue?",
+      confirmLabel: "Approve",
+    });
+    if (!ok) return;
     setActing(true);
     const res = await reqApproveDeployment(id);
     if (res.success) setDeployment(res.data);
@@ -106,6 +114,13 @@ export default function DeploymentDetailPage() {
   };
 
   const handleRollback = async () => {
+    const ok = await showConfirm({
+      title: "Rollback deployment",
+      message: "This will roll back the deployment. Any changes made by this deployment will be reverted.",
+      confirmLabel: "Rollback",
+      variant: "danger",
+    });
+    if (!ok) return;
     setActing(true);
     const res = await reqRollbackDeployment(id);
     if (res.success) setDeployment(res.data);

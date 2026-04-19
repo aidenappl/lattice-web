@@ -20,6 +20,7 @@ import { timeAgo } from "@/lib/utils";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
 import { StalePill } from "@/components/ui/worker-offline-banner";
+import { useConfirm } from "@/components/ui/confirm-modal";
 
 function parsePortMappings(raw: string | null): string {
   if (!raw) return "—";
@@ -56,6 +57,7 @@ export default function ContainersPage() {
   const [actionLoading, setActionLoading] = useState<Record<number, string>>(
     {},
   );
+  const showConfirm = useConfirm();
 
   // Debounce socket-driven refreshes
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -106,6 +108,22 @@ export default function ContainersPage() {
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     };
   }, [load]);
+
+  const confirmAndRun = async (id: number, action: string) => {
+    const container = containers.find((c) => c.id === id);
+    const name = container?.name ?? String(id);
+    const confirmMap: Record<string, { title: string; message: string; variant: "danger" | "warning" }> = {
+      stop: { title: "Stop container", message: `Stop "${name}"? The container will be gracefully shut down.`, variant: "warning" },
+      restart: { title: "Restart container", message: `Restart "${name}"? The container will be stopped and started.`, variant: "warning" },
+      recreate: { title: "Recreate container", message: `Recreate "${name}"? The container will be removed and created fresh.`, variant: "warning" },
+    };
+    const conf = confirmMap[action];
+    if (conf) {
+      const ok = await showConfirm({ ...conf, confirmLabel: conf.title.split(" ")[0] });
+      if (!ok) return;
+    }
+    runAction(id, action);
+  };
 
   const runAction = async (id: number, action: string) => {
     const container = containers.find((c) => c.id === id);
@@ -413,7 +431,7 @@ export default function ContainersPage() {
                         {/* Stop (only when running) */}
                         {c.status === "running" && (
                           <button
-                            onClick={() => runAction(c.id, "stop")}
+                            onClick={() => confirmAndRun(c.id, "stop")}
                             disabled={!!busy || !workerOnline}
                             title={!workerOnline ? "Worker offline" : "Stop"}
                             className="h-7 w-7 rounded flex items-center justify-center text-[#888888] hover:text-[#ef4444] hover:bg-[#ef4444]/10 disabled:opacity-40 transition-colors cursor-pointer"
@@ -452,7 +470,7 @@ export default function ContainersPage() {
                         {/* Restart */}
                         {c.status === "running" && (
                           <button
-                            onClick={() => runAction(c.id, "restart")}
+                            onClick={() => confirmAndRun(c.id, "restart")}
                             disabled={!!busy || !workerOnline}
                             title={!workerOnline ? "Worker offline" : "Restart"}
                             className="h-7 w-7 rounded flex items-center justify-center text-[#888888] hover:text-[#3b82f6] hover:bg-[#3b82f6]/10 disabled:opacity-40 transition-colors cursor-pointer"
@@ -496,7 +514,7 @@ export default function ContainersPage() {
                         )}
                         {/* Recreate */}
                         <button
-                          onClick={() => runAction(c.id, "recreate")}
+                          onClick={() => confirmAndRun(c.id, "recreate")}
                           disabled={!!busy || !workerOnline}
                           title={!workerOnline ? "Worker offline" : "Recreate"}
                           className="h-7 w-7 rounded flex items-center justify-center text-[#888888] hover:text-[#a855f7] hover:bg-[#a855f7]/10 disabled:opacity-40 transition-colors cursor-pointer"

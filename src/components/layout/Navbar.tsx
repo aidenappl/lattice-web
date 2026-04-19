@@ -14,6 +14,7 @@ const navigation = [
   { name: "Stacks", href: "/stacks" },
   { name: "Containers", href: "/containers" },
   { name: "Deployments", href: "/deployments" },
+  { name: "Networks", href: "/networks" },
   { name: "Registries", href: "/registries" },
   { name: "Audit Log", href: "/audit-log" },
   { name: "Settings", href: "/settings" },

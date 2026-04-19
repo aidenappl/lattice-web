@@ -4,6 +4,7 @@ import { useState } from "react";
 import { reqLogin } from "@/services/auth.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
 
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 
@@ -68,7 +69,7 @@ export default function LoginPage() {
             />
 
             {error && (
-              <p className="text-xs text-[#f87171]">{error}</p>
+              <Alert variant="error">{error}</Alert>
             )}
 
             <Button type="submit" size="lg" className="w-full mt-2" disabled={loading}>

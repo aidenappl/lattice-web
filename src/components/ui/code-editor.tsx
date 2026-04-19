@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback, KeyboardEvent } from "react";
+import { useRef, useCallback, KeyboardEvent, useMemo, UIEvent } from "react";
 import { cn } from "@/lib/utils";
 
 const PAIRS: Record<string, string> = {
@@ -15,6 +15,68 @@ const PAIRS: Record<string, string> = {
 const CLOSE_CHARS = new Set(Object.values(PAIRS));
 
 const TAB = "  ";
+
+// ─── JSON syntax highlighting ────────────────────────────────────────────────
+
+function highlightJSON(text: string): string {
+  if (!text) return "";
+  // Escape HTML first
+  const escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  return escaped
+    // Strings (keys and values) — must come first
+    .replace(
+      /("(?:[^"\\]|\\.)*")\s*:/g,
+      '<span class="json-key">$1</span>:',
+    )
+    .replace(
+      /:\s*("(?:[^"\\]|\\.)*")/g,
+      ': <span class="json-string">$1</span>',
+    )
+    // Standalone strings (in arrays, etc.)
+    .replace(
+      /(?<=[\[,\s])("(?:[^"\\]|\\.)*")(?=[,\]\s])/g,
+      '<span class="json-string">$1</span>',
+    )
+    // Numbers
+    .replace(
+      /(?<=:\s*|[\[,\s])(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=[,\}\]\s])/g,
+      '<span class="json-number">$1</span>',
+    )
+    // Booleans & null
+    .replace(
+      /\b(true|false|null)\b/g,
+      '<span class="json-bool">$1</span>',
+    );
+}
+
+function highlightYAML(text: string): string {
+  if (!text) return "";
+  const escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  return escaped
+    .split("\n")
+    .map((line) => {
+      // Comments
+      if (/^\s*#/.test(line)) {
+        return `<span class="yaml-comment">${line}</span>`;
+      }
+      // Key: value
+      return line.replace(
+        /^(\s*)([\w.-]+)(:)/,
+        '$1<span class="yaml-key">$2</span><span class="yaml-colon">$3</span>',
+      );
+    })
+    .join("\n");
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 interface CodeEditorProps {
   value: string;
@@ -34,6 +96,23 @@ export function CodeEditor({
   language = "json",
 }: CodeEditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const preRef = useRef<HTMLPreElement>(null);
+
+  const handleScroll = useCallback((e: UIEvent<HTMLTextAreaElement>) => {
+    if (preRef.current) {
+      preRef.current.scrollTop = e.currentTarget.scrollTop;
+      preRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  }, []);
+
+  const highlighted = useMemo(() => {
+    if (language === "json") return highlightJSON(value);
+    if (language === "yaml") return highlightYAML(value);
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }, [value, language]);
 
   const insert = useCallback(
     (ta: HTMLTextAreaElement, before: string, after: string = "") => {
@@ -208,18 +287,26 @@ export function CodeEditor({
   );
 
   return (
-    <textarea
-      ref={ref}
-      rows={rows}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onKeyDown={handleKeyDown}
-      placeholder={placeholder}
-      spellCheck={false}
-      className={cn(
-        "w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 py-2 text-sm text-white placeholder:text-[#555555] focus:border-[#444444] focus:outline-none font-mono resize-none",
-        className,
-      )}
-    />
+    <div className={cn("relative rounded-lg border border-[#2a2a2a] bg-[#0d0d0d] overflow-hidden focus-within:border-[#444444]", className)}>
+      {/* Highlighted underlay */}
+      <pre
+        ref={preRef}
+        aria-hidden
+        className="absolute inset-0 px-3 py-2 text-sm font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none m-0 [&_.json-key]:text-[#7aa2f7] [&_.json-string]:text-[#9ece6a] [&_.json-number]:text-[#ff9e64] [&_.json-bool]:text-[#ff9e64] [&_.yaml-key]:text-[#7aa2f7] [&_.yaml-colon]:text-[#555555] [&_.yaml-comment]:text-[#555555]"
+        dangerouslySetInnerHTML={{ __html: highlighted + "\n" }}
+      />
+      {/* Transparent textarea on top for editing */}
+      <textarea
+        ref={ref}
+        rows={rows}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onScroll={handleScroll}
+        placeholder={placeholder}
+        spellCheck={false}
+        className="relative w-full bg-transparent px-3 py-2 text-sm text-transparent caret-white placeholder:text-[#555555] focus:outline-none font-mono resize-none selection:bg-[#264f78] selection:text-transparent"
+      />
+    </div>
   );
 }

@@ -7,6 +7,7 @@ import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Alert } from "@/components/ui/alert";
 import { formatDate } from "@/lib/utils";
 
 export default function SettingsPage() {
@@ -117,7 +118,7 @@ export default function SettingsPage() {
               </select>
             </div>
           </div>
-          {error && <p className="text-xs text-[#f87171]">{error}</p>}
+          {error && <Alert variant="error" onDismiss={() => setError("")}>{error}</Alert>}
           <Button type="submit" disabled={submitting || !email.trim() || !password.trim()}>
             {submitting ? "Creating..." : "Create User"}
           </Button>

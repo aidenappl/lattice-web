@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm-modal";
+import { Alert } from "@/components/ui/alert";
 
 export default function RegistriesPage() {
   const [registries, setRegistries] = useState<Registry[]>([]);
@@ -304,7 +305,7 @@ export default function RegistriesPage() {
               </span>
             )}
             {testStatus === "error" && (
-              <span className="text-sm text-[#f87171]">{testError}</span>
+              <Alert variant="error">{testError}</Alert>
             )}
           </div>
 

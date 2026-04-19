@@ -140,7 +140,6 @@ export default function WorkerDetailPage() {
 
   // Worker action state
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const showConfirm = useConfirm();
 
@@ -298,6 +297,14 @@ export default function WorkerDetailPage() {
   };
 
   const handleDeleteToken = async (tokenId: number) => {
+    const token = tokens.find((t) => t.id === tokenId);
+    const ok = await showConfirm({
+      title: "Delete token",
+      message: `Delete token "${token?.name ?? tokenId}"? The worker will no longer be able to authenticate with this token.`,
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     const res = await reqDeleteWorkerToken(tokenId);
     if (res.success) {
       setTokens((prev) => prev.filter((t) => t.id !== tokenId));
@@ -305,8 +312,18 @@ export default function WorkerDetailPage() {
   };
 
   const handleWorkerAction = async (action: string) => {
+    const confirmMessages: Record<string, { title: string; message: string; variant: "danger" | "warning" }> = {
+      reboot: { title: "Reboot worker", message: "Are you sure you want to reboot this worker's OS? The worker will go offline temporarily.", variant: "danger" },
+      upgrade: { title: "Upgrade runner", message: "Are you sure you want to upgrade the lattice-runner on this worker? The runner will restart after upgrade.", variant: "warning" },
+      "stop-all": { title: "Stop all containers", message: "Are you sure you want to stop all containers on this worker?", variant: "warning" },
+      "start-all": { title: "Start all containers", message: "Are you sure you want to start all stopped containers on this worker?", variant: "warning" },
+    };
+    const conf = confirmMessages[action];
+    if (conf) {
+      const ok = await showConfirm({ ...conf, confirmLabel: "Confirm" });
+      if (!ok) return;
+    }
     setActionLoading(action);
-    setConfirmAction(null);
     const actionMap: Record<string, (id: number) => Promise<any>> = {
       reboot: reqRebootWorker,
       upgrade: reqUpgradeRunner,
@@ -427,75 +444,42 @@ export default function WorkerDetailPage() {
           <h2 className="text-sm font-medium text-white mb-4">
             Worker Actions
           </h2>
-          {confirmAction && (
-            <div className="mb-4 rounded-lg bg-[#1a1a1a] border border-[#333333] p-4">
-              <p className="text-sm text-white mb-3">
-                {confirmAction === "reboot" &&
-                  "Are you sure you want to reboot this worker's OS? The worker will go offline temporarily."}
-                {confirmAction === "upgrade" &&
-                  "Are you sure you want to upgrade the lattice-runner on this worker? The runner will restart after upgrade."}
-                {confirmAction === "stop-all" &&
-                  "Are you sure you want to stop all containers on this worker?"}
-                {confirmAction === "start-all" &&
-                  "Are you sure you want to start all stopped containers on this worker?"}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant={
-                    confirmAction === "reboot" ? "destructive" : "primary"
-                  }
-                  size="sm"
-                  onClick={() => handleWorkerAction(confirmAction)}
-                  disabled={!!actionLoading}
-                >
-                  {actionLoading === confirmAction ? "Sending..." : "Confirm"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setConfirmAction(null)}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          )}
           <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setConfirmAction("start-all")}
+              onClick={() => handleWorkerAction("start-all")}
               disabled={!!actionLoading}
+              loading={actionLoading === "start-all"}
             >
-              {actionLoading === "start-all"
-                ? "Sending..."
-                : "Start All Containers"}
+              Start All Containers
             </Button>
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setConfirmAction("stop-all")}
+              onClick={() => handleWorkerAction("stop-all")}
               disabled={!!actionLoading}
+              loading={actionLoading === "stop-all"}
             >
-              {actionLoading === "stop-all"
-                ? "Sending..."
-                : "Stop All Containers"}
+              Stop All Containers
             </Button>
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setConfirmAction("upgrade")}
+              onClick={() => handleWorkerAction("upgrade")}
               disabled={!!actionLoading}
+              loading={actionLoading === "upgrade"}
             >
-              {actionLoading === "upgrade" ? "Sending..." : "Upgrade Runner"}
+              Upgrade Runner
             </Button>
             <Button
               variant="destructive"
               size="sm"
-              onClick={() => setConfirmAction("reboot")}
+              onClick={() => handleWorkerAction("reboot")}
               disabled={!!actionLoading}
+              loading={actionLoading === "reboot"}
             >
-              {actionLoading === "reboot" ? "Sending..." : "Reboot OS"}
+              Reboot OS
             </Button>
           </div>
         </div>
