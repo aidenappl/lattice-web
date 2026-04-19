@@ -9,6 +9,7 @@ export type WorkerVersionInfo = {
 export type VersionInfo = {
     api: {
         current: string;
+        latest: string;
     };
     web: {
         latest: string;
@@ -18,4 +19,5 @@ export type VersionInfo = {
         workers: WorkerVersionInfo[];
         outdated_count: number;
     };
+    last_checked: string;
 };

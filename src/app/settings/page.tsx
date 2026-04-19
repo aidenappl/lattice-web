@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { User } from "@/types";
+import { User, VersionInfo } from "@/types";
 import {
   reqGetUsers,
   reqCreateUser,
   reqUpdateUser,
+  reqGetVersions,
+  reqRefreshVersions,
 } from "@/services/admin.service";
 import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
@@ -13,6 +15,209 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { formatDate } from "@/lib/utils";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faRotate,
+  faServer,
+  faGlobe,
+  faMicrochip,
+  faCheck,
+  faArrowUp,
+} from "@fortawesome/free-solid-svg-icons";
+import { APP_VERSION } from "@/lib/version";
+import toast from "react-hot-toast";
+
+function VersionCheckSection() {
+  const [info, setInfo] = useState<VersionInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = async () => {
+    const res = await reqGetVersions();
+    if (res.success) setInfo(res.data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    const res = await reqRefreshVersions();
+    if (res.success) {
+      toast.success("Version cache refreshed from GitHub");
+      await load();
+    } else {
+      toast.error("Failed to refresh versions");
+    }
+    setRefreshing(false);
+  };
+
+  const apiCurrent = info?.api.current ?? "—";
+  const apiLatest = info?.api.latest ?? "";
+  const webCurrent = APP_VERSION;
+  const webLatest = info?.web.latest ?? "";
+  const runnerLatest = info?.runner.latest ?? "";
+  const outdatedRunners = info?.runner.outdated_count ?? 0;
+  const totalRunners = info?.runner.workers.length ?? 0;
+
+  const apiUpToDate = !apiLatest || apiCurrent === apiLatest;
+  const webUpToDate = webCurrent === "dev" || !webLatest || webCurrent === webLatest;
+
+  const lastChecked = info?.last_checked
+    ? new Date(info.last_checked)
+    : null;
+
+  return (
+    <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+        <div>
+          <h2 className="text-sm font-semibold text-primary">
+            Version Check
+          </h2>
+          {lastChecked && lastChecked.getTime() > 0 && (
+            <p className="text-xs text-muted mt-0.5">
+              Last checked:{" "}
+              {lastChecked.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </p>
+          )}
+        </div>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={handleRefresh}
+          disabled={refreshing || loading}
+        >
+          <FontAwesomeIcon
+            icon={faRotate}
+            className={`h-3 w-3 mr-1.5 ${refreshing ? "animate-spin" : ""}`}
+          />
+          {refreshing ? "Checking..." : "Check Now"}
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="px-4 py-8 text-center text-sm text-muted">
+          Loading version info...
+        </div>
+      ) : (
+        <div className="divide-y divide-border-subtle">
+          {/* API */}
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-elevated">
+                <FontAwesomeIcon
+                  icon={faServer}
+                  className="h-3.5 w-3.5 text-secondary"
+                />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-primary">API</p>
+                <p className="text-xs text-muted">
+                  Current: {apiCurrent}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {apiLatest && (
+                <span className="text-xs text-muted">
+                  Latest: {apiLatest}
+                </span>
+              )}
+              {apiUpToDate ? (
+                <Badge variant="success">
+                  <FontAwesomeIcon icon={faCheck} className="h-2.5 w-2.5" />
+                  Up to date
+                </Badge>
+              ) : (
+                <Badge variant="warning">
+                  <FontAwesomeIcon icon={faArrowUp} className="h-2.5 w-2.5" />
+                  Update available
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          {/* Web */}
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-elevated">
+                <FontAwesomeIcon
+                  icon={faGlobe}
+                  className="h-3.5 w-3.5 text-secondary"
+                />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-primary">Web</p>
+                <p className="text-xs text-muted">
+                  Current: {webCurrent}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {webLatest && (
+                <span className="text-xs text-muted">
+                  Latest: {webLatest}
+                </span>
+              )}
+              {webUpToDate ? (
+                <Badge variant="success">
+                  <FontAwesomeIcon icon={faCheck} className="h-2.5 w-2.5" />
+                  Up to date
+                </Badge>
+              ) : (
+                <Badge variant="warning">
+                  <FontAwesomeIcon icon={faArrowUp} className="h-2.5 w-2.5" />
+                  Update available
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          {/* Runners */}
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-elevated">
+                <FontAwesomeIcon
+                  icon={faMicrochip}
+                  className="h-3.5 w-3.5 text-secondary"
+                />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-primary">Runners</p>
+                <p className="text-xs text-muted">
+                  {totalRunners} worker{totalRunners !== 1 ? "s" : ""} registered
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {runnerLatest && (
+                <span className="text-xs text-muted">
+                  Latest: {runnerLatest}
+                </span>
+              )}
+              {outdatedRunners === 0 ? (
+                <Badge variant="success">
+                  <FontAwesomeIcon icon={faCheck} className="h-2.5 w-2.5" />
+                  All up to date
+                </Badge>
+              ) : (
+                <Badge variant="warning">
+                  <FontAwesomeIcon icon={faArrowUp} className="h-2.5 w-2.5" />
+                  {outdatedRunners} outdated
+                </Badge>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -74,11 +279,21 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-primary">Settings</h1>
-          <p className="text-sm text-secondary mt-1">User management</p>
-        </div>
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold text-primary">Settings</h1>
+        <p className="text-sm text-secondary mt-1">
+          System configuration and user management
+        </p>
+      </div>
+
+      {/* Version Check */}
+      <div className="mb-8">
+        <VersionCheckSection />
+      </div>
+
+      {/* Users Section */}
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-primary">Users</h2>
         <Button onClick={() => setShowForm(!showForm)}>
           {showForm ? "Cancel" : "Create User"}
         </Button>

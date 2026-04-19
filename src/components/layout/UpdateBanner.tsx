@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowUp,
@@ -15,8 +15,37 @@ import { reqUpgradeRunner } from "@/services/workers.service";
 import toast from "react-hot-toast";
 import Link from "next/link";
 
+const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
+
+/** Poll the API healthcheck until it comes back, then reload. */
+function waitForRestart(label: string, toastId: string) {
+  let attempts = 0;
+  const maxAttempts = 60; // 60s timeout
+  const poll = setInterval(async () => {
+    attempts++;
+    try {
+      const res = await fetch(`${API_URL}/healthcheck`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      if (res.ok) {
+        clearInterval(poll);
+        toast.success(`${label} restarted successfully.`, { id: toastId });
+        setTimeout(() => window.location.reload(), 1500);
+      }
+    } catch {
+      // still down — keep polling
+    }
+    if (attempts >= maxAttempts) {
+      clearInterval(poll);
+      toast.error(`${label} did not come back within 60 seconds.`, {
+        id: toastId,
+      });
+    }
+  }, 1000);
+}
+
 export function UpdateBanner() {
-  const { info, webUpdateAvailable, runnerUpdatesAvailable, loading } =
+  const { info, apiUpdateAvailable, webUpdateAvailable, runnerUpdatesAvailable, loading } =
     useVersionCheck();
   const [dismissed, setDismissed] = useState(false);
   const [updatingWeb, setUpdatingWeb] = useState(false);
@@ -25,43 +54,82 @@ export function UpdateBanner() {
 
   if (loading || dismissed || !info) return null;
 
-  const hasUpdates = webUpdateAvailable || runnerUpdatesAvailable > 0;
+  const hasUpdates = apiUpdateAvailable || webUpdateAvailable || runnerUpdatesAvailable > 0;
   if (!hasUpdates) return null;
 
   const handleUpdateWeb = async () => {
     setUpdatingWeb(true);
     const res = await reqUpdateWeb();
     if (res.success) {
-      toast.success(
-        "Web update triggered. The page will reload when the new version is ready.",
+      const toastId = toast.loading(
+        "Web container restarting — waiting for it to come back...",
       );
-      // Poll until the web comes back up with the new version
-      setTimeout(() => window.location.reload(), 10000);
+      // Web container is restarting. The API is still up, so poll the
+      // web's own health endpoint until it responds.
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const r = await fetch("/api/health", {
+            signal: AbortSignal.timeout(2000),
+          });
+          if (r.ok) {
+            clearInterval(poll);
+            toast.success("Web updated successfully. Reloading...", {
+              id: toastId,
+            });
+            setTimeout(() => window.location.reload(), 1500);
+          }
+        } catch {
+          // still restarting
+        }
+        if (attempts >= 60) {
+          clearInterval(poll);
+          toast.error("Web did not come back within 60 seconds.", {
+            id: toastId,
+          });
+          setUpdatingWeb(false);
+        }
+      }, 1000);
     } else {
       toast.error(
         `Failed to update web: ${"error_message" in res ? res.error_message : "Unknown error"}`,
       );
+      setUpdatingWeb(false);
     }
-    setUpdatingWeb(false);
   };
 
   const handleUpdateAPI = async () => {
     setUpdatingAPI(true);
-    const res = await reqUpdateAPI();
-    if (res.success) {
-      toast.success("API update triggered successfully.");
-    } else {
-      toast.error(
-        `Failed to update API: ${"error_message" in res ? res.error_message : "Unknown error"}`,
-      );
+    // The API will respond with success then kill itself ~2 seconds later.
+    // The request may also fail entirely if the container dies too fast.
+    // Both cases are expected — we just poll until it comes back.
+    const toastId = toast.loading(
+      "Pulling latest API image and restarting...",
+    );
+    try {
+      const res = await reqUpdateAPI();
+      if (!res.success && "error_message" in res) {
+        // Actual failure (e.g. pull failed) — not a restart
+        toast.error(`API update failed: ${res.error_message}`, {
+          id: toastId,
+        });
+        setUpdatingAPI(false);
+        return;
+      }
+    } catch {
+      // Request failed — container likely already restarting. Expected.
     }
-    setUpdatingAPI(false);
+    // Wait for the API to come back up.
+    waitForRestart("API", toastId);
   };
 
   const handleUpdateAllRunners = async () => {
     if (!info) return;
     setUpdatingRunners(true);
-    const outdated = info.runner.workers.filter((w) => w.outdated && w.status === "online");
+    const outdated = info.runner.workers.filter(
+      (w) => w.outdated && w.status === "online",
+    );
     let succeeded = 0;
     let failed = 0;
     for (const w of outdated) {
@@ -96,6 +164,12 @@ export function UpdateBanner() {
               Updates available
             </span>
             <div className="flex items-center gap-3 text-xs">
+              {apiUpdateAvailable && (
+                <span className="flex items-center gap-1.5 text-secondary">
+                  <FontAwesomeIcon icon={faServer} className="h-3 w-3" />
+                  API {info.api.latest}
+                </span>
+              )}
               {webUpdateAvailable && (
                 <span className="flex items-center gap-1.5 text-secondary">
                   <FontAwesomeIcon icon={faGlobe} className="h-3 w-3" />
@@ -117,6 +191,16 @@ export function UpdateBanner() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {apiUpdateAvailable && (
+            <button
+              onClick={handleUpdateAPI}
+              disabled={updatingAPI}
+              className="flex items-center gap-1.5 rounded-lg bg-[#3b82f6] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#2563eb] transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <FontAwesomeIcon icon={faServer} className="h-3 w-3" />
+              {updatingAPI ? "Updating..." : "Update API"}
+            </button>
+          )}
           {webUpdateAvailable && (
             <button
               onClick={handleUpdateWeb}

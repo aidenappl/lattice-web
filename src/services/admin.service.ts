@@ -58,6 +58,12 @@ export const reqGetVersions = () =>
         url: "/admin/versions",
     });
 
+export const reqRefreshVersions = () =>
+    fetchApi<{ api: string; web: string; runner: string; last_checked: string }>({
+        method: "POST",
+        url: "/admin/versions/refresh",
+    });
+
 export const reqUpdateAPI = () =>
     fetchApi<{ service: string; pull: string; up: string }>({
         method: "POST",

@@ -33,15 +33,21 @@ export function useVersionCheck() {
 
         const info = res.data;
 
-        // Web is outdated if its version differs from what the API says is latest
+        // Web is outdated if its version differs from what GitHub says is latest
         const webUpdateAvailable =
             APP_VERSION !== "dev" &&
             info.web.latest !== "" &&
             APP_VERSION !== info.web.latest;
 
+        // API is outdated if its running version differs from the latest GitHub release
+        const apiUpdateAvailable =
+            info.api.current !== "" &&
+            info.api.latest !== "" &&
+            info.api.current !== info.api.latest;
+
         setState({
             info,
-            apiUpdateAvailable: false, // API always reports its own version as current
+            apiUpdateAvailable,
             webUpdateAvailable,
             runnerUpdatesAvailable: info.runner.outdated_count,
             loading: false,
