@@ -17,6 +17,7 @@ import {
   reqGetContainers,
   reqDeployStack,
   reqGetContainerLogs,
+  reqGetLifecycleLogs,
   reqDeleteContainer,
   reqUpdateStack,
   reqDeleteStack,
@@ -53,6 +54,8 @@ import {
   downloadLogsAsTxt,
   isNewSession,
   syntheticId,
+  isSynthetic,
+  lifecycleToContainerLog,
 } from "@/components/ui/log-viewer";
 
 export default function StackDetailPage() {
@@ -88,6 +91,7 @@ export default function StackDetailPage() {
 
   // Refs to allow WS handler to access current state without stale closures
   const selectedContainerNameRef = useRef<string>("");
+  const selectedContainerRef = useRef<number | null>(null);
   const logLimitRef = useRef<LogLimit>(250);
 
   // Stack env vars
@@ -236,6 +240,7 @@ export default function StackDetailPage() {
   useEffect(() => {
     const c = containers.find((cc) => cc.id === selectedContainer);
     selectedContainerNameRef.current = c?.name ?? "";
+    selectedContainerRef.current = selectedContainer;
   }, [selectedContainer, containers]);
   useEffect(() => {
     logLimitRef.current = logLimit;
@@ -256,6 +261,14 @@ export default function StackDetailPage() {
             `[StackPage] WS ${event.type} for "${eventName}" — refreshing containers`,
           );
           refreshContainers();
+          // Reload logs when the selected container's status changes
+          // (picks up lifecycle entries like "[lattice] container restarted")
+          if (eventName === selectedContainerNameRef.current) {
+            setTimeout(() => {
+              const sel = selectedContainerRef.current;
+              if (sel) loadLogs(sel);
+            }, 500);
+          }
         }
       }
 
@@ -280,7 +293,20 @@ export default function StackDetailPage() {
             recorded_at: new Date().toISOString(),
           };
           const limit = logLimitRef.current;
-          setLogs((prev) => sortLogs([...prev.slice(-(limit - 1)), entry]));
+          setLogs((prev) => {
+            // Only skip if a DB-fetched entry with the same message arrived
+            // within 2 s (same boot burst). This avoids dropping lines that
+            // legitimately repeat across sessions (e.g. "Starting...").
+            const now = Date.now();
+            const dominated = prev.some(
+              (l) =>
+                !isSynthetic(l) &&
+                l.message === message &&
+                Math.abs(now - new Date(l.recorded_at).getTime()) < 2_000,
+            );
+            if (dominated) return prev;
+            return sortLogs([...prev.slice(-(limit - 1)), entry]);
+          });
         }
       }
 
@@ -415,12 +441,18 @@ export default function StackDetailPage() {
         limit: limit ?? logLimitRef.current,
       };
       if (stream && stream !== "all") params.stream = stream;
-      const res = await reqGetContainerLogs(containerId, params);
-      if (res.success) {
-        const dbLogs = res.data ?? [];
+      const [logRes, lcRes] = await Promise.all([
+        reqGetContainerLogs(containerId, params),
+        reqGetLifecycleLogs(containerId, { limit: params.limit }),
+      ]);
+      const dbLogs = logRes.success ? (logRes.data ?? []) : [];
+      const lcLogs = lcRes.success
+        ? (lcRes.data ?? []).map(lifecycleToContainerLog)
+        : [];
+      if (logRes.success || lcRes.success) {
         // Message-based dedup (safe against clock skew)
         const seen = new Set<string>();
-        const unique = dbLogs.filter((l) => {
+        const unique = [...dbLogs, ...lcLogs].filter((l) => {
           const key = `${l.recorded_at}|${l.message}`;
           if (seen.has(key)) return false;
           seen.add(key);
@@ -462,9 +494,16 @@ export default function StackDetailPage() {
 
   const handleDownloadAll = async () => {
     if (!selectedContainer) return;
-    const res = await reqGetContainerLogs(selectedContainer, { limit: 9999 });
-    if (res.success) {
-      const all = sortLogs((res.data ?? []).slice());
+    const [logRes, lcRes] = await Promise.all([
+      reqGetContainerLogs(selectedContainer, { limit: 9999 }),
+      reqGetLifecycleLogs(selectedContainer, { limit: 9999 }),
+    ]);
+    if (logRes.success) {
+      const dbLogs = (logRes.data ?? []).slice();
+      const lcLogs = lcRes.success
+        ? (lcRes.data ?? []).map(lifecycleToContainerLog)
+        : [];
+      const all = sortLogs([...dbLogs, ...lcLogs]);
       const c = containers.find((cc) => cc.id === selectedContainer);
       const name = c?.name ?? String(selectedContainer);
       downloadLogsAsTxt(all, `${name}-logs-all.txt`);
@@ -705,10 +744,12 @@ export default function StackDetailPage() {
                   {isDeploying
                     ? "Deploying..."
                     : forceDeployHovered
-                      ? "Force Deploy"
+                      ? "Force Re-deploy"
                       : isFailed
                         ? "Redeploy"
-                        : "Deploy"}
+                        : needsDeploy
+                          ? "Deploy"
+                          : "Re-deploy"}
                 </Button>
               </div>
             );

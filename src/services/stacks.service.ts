@@ -1,4 +1,4 @@
-import { Stack, Container, ContainerLog } from "@/types";
+import { Stack, Container, ContainerLog, LifecycleLog } from "@/types";
 import { fetchApi } from "./api.service";
 
 export const reqGetStacks = () =>
@@ -84,6 +84,13 @@ export const reqGetContainerLogs = (containerId: number, params?: { limit?: numb
     fetchApi<ContainerLog[]>({
         method: "GET",
         url: `/admin/containers/${containerId}/logs`,
+        params,
+    });
+
+export const reqGetLifecycleLogs = (containerId: number, params?: { limit?: number; offset?: number }) =>
+    fetchApi<LifecycleLog[]>({
+        method: "GET",
+        url: `/admin/containers/${containerId}/lifecycle`,
         params,
     });
 

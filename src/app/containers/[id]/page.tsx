@@ -9,6 +9,7 @@ import {
   reqGetContainer,
   reqUpdateContainer,
   reqGetContainerLogs,
+  reqGetLifecycleLogs,
   reqStartContainer,
   reqStopContainer,
   reqKillContainer,
@@ -37,6 +38,7 @@ import {
   sortLogs,
   downloadLogsAsTxt,
   isNewSession,
+  lifecycleToContainerLog,
 } from "@/components/ui/log-viewer";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -200,22 +202,27 @@ export default function ContainerDetailPage() {
   }, [id, editing]);
 
   const loadLogs = useCallback(async () => {
-    const res = await reqGetContainerLogs(id, { limit: logLimit });
-    if (res.success) {
-      const dbLogs = (res.data ?? []).slice().reverse();
+    const [logRes, lcRes] = await Promise.all([
+      reqGetContainerLogs(id, { limit: logLimit }),
+      reqGetLifecycleLogs(id, { limit: logLimit }),
+    ]);
+    const dbLogs = logRes.success ? (logRes.data ?? []).slice().reverse() : [];
+    const lcLogs = lcRes.success
+      ? (lcRes.data ?? []).map(lifecycleToContainerLog)
+      : [];
+    if (logRes.success || lcRes.success) {
       setLogs((prev) => {
         // Keep synthetic (WS-delivered) entries that haven't been persisted yet.
-        // Match by message content to avoid duplicates caused by clock skew.
         const dbMessages = new Set(dbLogs.map((l) => l.message));
         const pendingSynthetics = prev.filter(
           (l) => isSynthetic(l) && !dbMessages.has(l.message),
         );
-        return sortLogs([...dbLogs, ...pendingSynthetics]);
+        return sortLogs([...dbLogs, ...lcLogs, ...pendingSynthetics]);
       });
     } else {
       console.warn(
         `[ContainerInspector] failed to load logs for container ${id}:`,
-        res.error_message,
+        logRes.error_message,
       );
     }
   }, [id, logLimit]);
@@ -259,9 +266,20 @@ export default function ContainerDetailPage() {
               recorded_at: new Date().toISOString(),
             };
             // Insert in chronological order and cap at current limit.
-            setLogs((prev) =>
-              sortLogs([...prev.slice(-(logLimit - 1)), entry]),
-            );
+            // Only skip if a DB-fetched entry with the same message arrived
+            // within 2 s (same boot burst). This avoids dropping lines that
+            // legitimately repeat across sessions (e.g. "Starting...").
+            setLogs((prev) => {
+              const now = Date.now();
+              const dominated = prev.some(
+                (l) =>
+                  !isSynthetic(l) &&
+                  l.message === message &&
+                  Math.abs(now - new Date(l.recorded_at).getTime()) < 2_000,
+              );
+              if (dominated) return prev;
+              return sortLogs([...prev.slice(-(logLimit - 1)), entry]);
+            });
           }
         }
       }
@@ -309,9 +327,16 @@ export default function ContainerDetailPage() {
   };
 
   const handleDownloadAll = async () => {
-    const res = await reqGetContainerLogs(id, { limit: 9999 });
-    if (res.success) {
-      const all = sortLogs((res.data ?? []).slice());
+    const [logRes, lcRes] = await Promise.all([
+      reqGetContainerLogs(id, { limit: 9999 }),
+      reqGetLifecycleLogs(id, { limit: 9999 }),
+    ]);
+    if (logRes.success) {
+      const dbLogs = (logRes.data ?? []).slice();
+      const lcLogs = lcRes.success
+        ? (lcRes.data ?? []).map(lifecycleToContainerLog)
+        : [];
+      const all = sortLogs([...dbLogs, ...lcLogs]);
       const name = container?.name ?? String(id);
       downloadLogsAsTxt(all, `${name}-logs-all.txt`);
     }

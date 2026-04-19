@@ -57,3 +57,13 @@ export type ContainerLog = {
     message: string;
     recorded_at: string;
 };
+
+export type LifecycleLog = {
+    id: number;
+    container_id: number | null;
+    container_name: string | null;
+    worker_id: number;
+    event: string;
+    message: string;
+    recorded_at: string;
+};
