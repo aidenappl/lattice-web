@@ -102,7 +102,7 @@ export function LogLine({ line }: { line: ContainerLog }) {
   const lifecycle = isLifecycleEntry(line);
   return (
     <div
-      className={`flex gap-2 text-xs font-mono px-2 py-0.5 rounded ${lifecycle ? "bg-surface-elevated/50" : "hover:bg-surface-elevated"}`}
+      className={`flex gap-2 text-xs font-mono px-2 py-0.5 rounded ${lifecycle ? "bg-blue-500/10 border border-blue-500/20" : "hover:bg-surface-elevated"}`}
     >
       <span className="text-dimmed shrink-0 select-none w-40">
         {line.recorded_at
@@ -115,7 +115,7 @@ export function LogLine({ line }: { line: ContainerLog }) {
           : ""}
       </span>
       {lifecycle ? (
-        <span className="text-[#3b82f6]">⚡ {line.message}</span>
+        <span className="text-blue-400 font-medium">⚡ {line.message}</span>
       ) : (
         <span className="text-subtle">{line.message}</span>
       )}
