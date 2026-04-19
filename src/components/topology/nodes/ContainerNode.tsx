@@ -26,28 +26,28 @@ function ContainerNodeComponent({ data }: { data: ContainerNodeData }) {
 
   return (
     <div
-      className={`rounded-xl border bg-surface-alt px-4 py-3 min-w-[220px] ${borderClass}`}
+      className={`rounded-xl border bg-surface-alt px-5 py-4 min-w-[260px] cursor-pointer transition-all duration-200 hover:shadow-lg ${borderClass}`}
     >
       <Handle
         type="target"
         position={Position.Top}
-        className="!bg-accent !w-2 !h-2 !border-0"
+        className="!bg-accent !w-2.5 !h-2.5 !border-0"
       />
-      <div className="flex items-center gap-2.5">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#3b82f6]/10">
+      <div className="flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#3b82f6]/10">
           <FontAwesomeIcon
             icon={faCube}
-            className="h-3.5 w-3.5 text-[#3b82f6]"
+            className="h-4 w-4 text-[#3b82f6]"
           />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-xs font-semibold text-primary truncate">
+            <p className="text-sm font-semibold text-primary truncate">
               {data.label}
             </p>
-            <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotClass}`} />
+            <span className={`h-2 w-2 rounded-full shrink-0 ${dotClass}`} />
           </div>
-          <p className="text-[10px] text-muted truncate">
+          <p className="text-[11px] text-muted truncate">
             {data.image}:{data.tag}
           </p>
         </div>

@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Worker, WorkerToken, WorkerMetrics, Stack } from "@/types";
+import Link from "next/link";
+import { Worker, WorkerToken, WorkerMetrics, Stack, Container } from "@/types";
 import {
   reqGetWorker,
   reqUpdateWorker,
@@ -16,12 +17,14 @@ import {
   reqStopAllContainers,
   reqStartAllContainers,
 } from "@/services/workers.service";
-import { reqGetStacks } from "@/services/stacks.service";
+import { reqGetStacks, reqGetAllContainers } from "@/services/stacks.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronDown } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate, timeAgo } from "@/lib/utils";
@@ -123,7 +126,10 @@ export default function WorkerDetailPage() {
   const [tokens, setTokens] = useState<WorkerToken[]>([]);
   const [metrics, setMetrics] = useState<WorkerMetrics[]>([]);
   const [stacks, setStacks] = useState<Stack[]>([]);
+  const [containers, setContainers] = useState<Container[]>([]);
   const [loading, setLoading] = useState(true);
+  const [latestRunner, setLatestRunner] = useState<string | null>(null);
+  const [expandedStacks, setExpandedStacks] = useState<Set<number>>(new Set());
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [, setTick] = useState(0); // drives the "X ago" re-render every second
 
@@ -144,12 +150,17 @@ export default function WorkerDetailPage() {
   const showConfirm = useConfirm();
 
   const load = async () => {
-    const [workerRes, metricsRes, tokensRes, stacksRes] = await Promise.all([
-      reqGetWorker(id),
-      reqGetWorkerMetrics(id),
-      reqGetWorkerTokens(id),
-      reqGetStacks(),
-    ]);
+    const { reqGetVersions } = await import("@/services/admin.service");
+    const [workerRes, metricsRes, tokensRes, stacksRes, containersRes, versionsRes] =
+      await Promise.all([
+        reqGetWorker(id),
+        reqGetWorkerMetrics(id),
+        reqGetWorkerTokens(id),
+        reqGetStacks(),
+        reqGetAllContainers(),
+        reqGetVersions(),
+      ]);
+    if (versionsRes.success) setLatestRunner(versionsRes.data.runner.latest);
     if (workerRes.success) {
       setWorker(workerRes.data);
       setEditName(workerRes.data.name);
@@ -158,10 +169,11 @@ export default function WorkerDetailPage() {
     }
     if (metricsRes.success) setMetrics(metricsRes.data ?? []);
     if (tokensRes.success) setTokens(tokensRes.data ?? []);
-    if (stacksRes.success)
-      setStacks(
-        (stacksRes.data ?? []).filter((s: Stack) => s.worker_id === id),
-      );
+    const workerStacks = stacksRes.success
+      ? (stacksRes.data ?? []).filter((s: Stack) => s.worker_id === id)
+      : [];
+    setStacks(workerStacks);
+    if (containersRes.success) setContainers(containersRes.data ?? []);
     setLoading(false);
   };
 
@@ -181,9 +193,10 @@ export default function WorkerDetailPage() {
       if (event.type === "worker_heartbeat") {
         const p = event.payload ?? {};
         const now = new Date().toISOString();
-        // Patch worker's last_heartbeat_at and ensure status is online
+        // Patch worker's last_heartbeat_at, status, and runner_version
+        const rv = p.runner_version as string | undefined;
         setWorker((prev) =>
-          prev ? { ...prev, status: "online", last_heartbeat_at: now } : prev,
+          prev ? { ...prev, status: "online", last_heartbeat_at: now, ...(rv ? { runner_version: rv } : {}) } : prev,
         );
         // Build a live metrics snapshot from the payload
         const snapshot: WorkerMetrics = {
@@ -546,9 +559,16 @@ export default function WorkerDetailPage() {
                 <p className="text-xs text-muted uppercase tracking-wider">
                   Runner Version
                 </p>
-                <p className="text-sm text-secondary mt-1 font-mono">
-                  {worker.runner_version ?? "Unknown"}
-                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-sm text-secondary font-mono">
+                    {worker.runner_version ?? "Unknown"}
+                  </p>
+                  {latestRunner && worker.runner_version && worker.runner_version !== latestRunner && (
+                    <span className="rounded-md bg-[#eab308]/10 border border-[#eab308]/30 px-2 py-0.5 text-[10px] font-medium text-[#eab308]">
+                      {latestRunner} available
+                    </span>
+                  )}
+                </div>
               </div>
               <div>
                 <p className="text-xs text-muted uppercase tracking-wider">
@@ -746,21 +766,76 @@ export default function WorkerDetailPage() {
                   No stacks assigned to this worker
                 </p>
               ) : (
-                stacks.map((stack) => (
-                  <button
-                    key={stack.id}
-                    onClick={() => router.push(`/stacks/${stack.id}`)}
-                    className="w-full flex items-center justify-between rounded-lg bg-surface-elevated px-3 py-2 hover:bg-surface-active transition-colors text-left"
-                  >
-                    <div>
-                      <p className="text-sm text-primary">{stack.name}</p>
-                      <p className="text-xs text-muted">
-                        {stack.deployment_strategy}
-                      </p>
+                stacks.map((stack) => {
+                  const stackContainers = containers.filter(
+                    (c) => c.stack_id === stack.id,
+                  );
+                  const isExpanded = expandedStacks.has(stack.id);
+                  return (
+                    <div key={stack.id}>
+                      <button
+                        onClick={() =>
+                          setExpandedStacks((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(stack.id)) next.delete(stack.id);
+                            else next.add(stack.id);
+                            return next;
+                          })
+                        }
+                        className="w-full flex items-center justify-between rounded-lg bg-surface-elevated px-3 py-2 hover:bg-surface-active transition-colors text-left cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <FontAwesomeIcon
+                            icon={faChevronDown}
+                            className={`h-3 w-3 text-muted transition-transform ${isExpanded ? "" : "-rotate-90"}`}
+                          />
+                          <div>
+                            <p className="text-sm text-primary">{stack.name}</p>
+                            <p className="text-xs text-muted">
+                              {stack.deployment_strategy} &middot;{" "}
+                              {stackContainers.length} container
+                              {stackContainers.length !== 1 ? "s" : ""}
+                            </p>
+                          </div>
+                        </div>
+                        <StatusBadge status={stack.status} />
+                      </button>
+                      {isExpanded && (
+                        <div className="ml-5 mt-1 mb-1 space-y-1 border-l border-border-subtle pl-3">
+                          {stackContainers.length === 0 ? (
+                            <p className="text-xs text-dimmed py-1">
+                              No containers
+                            </p>
+                          ) : (
+                            stackContainers.map((c) => (
+                              <Link
+                                key={c.id}
+                                href={`/containers/${c.id}`}
+                                className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-surface-elevated transition-colors"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-primary">
+                                    {c.name}
+                                  </span>
+                                  <span className="text-[10px] text-muted font-mono">
+                                    {c.image}:{c.tag}
+                                  </span>
+                                </div>
+                                <StatusBadge status={c.status} />
+                              </Link>
+                            ))
+                          )}
+                          <Link
+                            href={`/stacks/${stack.id}`}
+                            className="block text-xs text-[#3b82f6] hover:underline px-2 py-1"
+                          >
+                            View stack &rarr;
+                          </Link>
+                        </div>
+                      )}
                     </div>
-                    <StatusBadge status={stack.status} />
-                  </button>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

@@ -4,7 +4,7 @@ import { Worker, Stack, Container } from "@/types";
 import { reqGetWorkers } from "@/services/workers.service";
 import { reqGetStacks, reqGetAllContainers } from "@/services/stacks.service";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
-import { applyDagreLayout } from "./layout";
+import { applyDagreLayout, type NodeScale } from "./layout";
 import type {
     ViewMode,
     SystemNodeData,
@@ -32,6 +32,7 @@ function buildSystemView(
     workers: Worker[],
     stacks: Stack[],
     containers: Container[],
+    scale: NodeScale = "md",
 ): { nodes: Node[]; edges: Edge[] } {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
@@ -168,13 +169,14 @@ function buildSystemView(
         });
     }
 
-    return applyDagreLayout(nodes, edges, "TB");
+    return applyDagreLayout(nodes, edges, "TB", scale);
 }
 
 function buildWorkerView(
     workers: Worker[],
     stacks: Stack[],
     containers: Container[],
+    scale: NodeScale = "md",
 ): { nodes: Node[]; edges: Edge[] } {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
@@ -231,13 +233,14 @@ function buildWorkerView(
         }
     }
 
-    return applyDagreLayout(nodes, edges, "TB");
+    return applyDagreLayout(nodes, edges, "TB", scale);
 }
 
 function buildStackView(
     workers: Worker[],
     stacks: Stack[],
     containers: Container[],
+    scale: NodeScale = "md",
 ): { nodes: Node[]; edges: Edge[] } {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
@@ -288,13 +291,14 @@ function buildStackView(
         }
     }
 
-    return applyDagreLayout(nodes, edges, "TB");
+    return applyDagreLayout(nodes, edges, "TB", scale);
 }
 
 function buildContainerView(
     workers: Worker[],
     stacks: Stack[],
     containers: Container[],
+    scale: NodeScale = "md",
 ): { nodes: Node[]; edges: Edge[] } {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
@@ -382,12 +386,12 @@ function buildContainerView(
         }
     }
 
-    return applyDagreLayout(nodes, edges, "LR");
+    return applyDagreLayout(nodes, edges, "LR", scale);
 }
 
 const builders: Record<
     ViewMode,
-    (w: Worker[], s: Stack[], c: Container[]) => { nodes: Node[]; edges: Edge[] }
+    (w: Worker[], s: Stack[], c: Container[], scale: NodeScale) => { nodes: Node[]; edges: Edge[] }
 > = {
     system: buildSystemView,
     worker: buildWorkerView,
@@ -395,7 +399,7 @@ const builders: Record<
     container: buildContainerView,
 };
 
-export function useTopologyData(viewMode: ViewMode) {
+export function useTopologyData(viewMode: ViewMode, scale: NodeScale = "md") {
     const [state, setState] = useState<TopologyState>({
         workers: [],
         stacks: [],
@@ -481,8 +485,8 @@ export function useTopologyData(viewMode: ViewMode) {
 
     const { nodes, edges } = useMemo(() => {
         if (state.loading) return { nodes: [], edges: [] };
-        return builders[viewMode](state.workers, state.stacks, state.containers);
-    }, [state, viewMode]);
+        return builders[viewMode](state.workers, state.stacks, state.containers, scale);
+    }, [state, viewMode, scale]);
 
     return { nodes, edges, loading: state.loading, refresh: load };
 }

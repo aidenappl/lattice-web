@@ -1,10 +1,9 @@
 "use client";
 
-import { useRef } from "react";
-import { useEffect } from "react";
+import { useRef, useLayoutEffect, useCallback } from "react";
 import { ContainerLog, LifecycleLog } from "@/types";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBolt } from "@fortawesome/free-solid-svg-icons";
+import { faBolt, faCircleExclamation } from "@fortawesome/free-solid-svg-icons";
 
 // ─── Synthetic log helpers ────────────────────────────────────────────────────
 
@@ -70,14 +69,12 @@ export function isLifecycleEntry(log: ContainerLog): boolean {
 
 // ─── Session break helpers ────────────────────────────────────────────────────
 
-export const SESSION_GAP_MS = 5_000;
-
-export function isNewSession(prev: ContainerLog, curr: ContainerLog): boolean {
-  return (
-    new Date(curr.recorded_at).getTime() -
-      new Date(prev.recorded_at).getTime() >
-    SESSION_GAP_MS
-  );
+export function isNewSession(_prev: ContainerLog, curr: ContainerLog): boolean {
+  // A new session starts at the "looking up container…" lifecycle entry,
+  // which is always the first message the runner sends for any container
+  // action (start, stop, restart, recreate, etc.).
+  if (!isLifecycleEntry(curr)) return false;
+  return curr.message === "looking up container\u2026";
 }
 
 export function SessionBreak({ at }: { at: string }) {
@@ -100,11 +97,28 @@ export function SessionBreak({ at }: { at: string }) {
 
 // ─── LogLine ──────────────────────────────────────────────────────────────────
 
+function isFailureMessage(msg: string): boolean {
+  const lower = msg.toLowerCase();
+  return (
+    lower.startsWith("failed") ||
+    lower.startsWith("error") ||
+    lower.includes("failed to") ||
+    lower.includes("error response")
+  );
+}
+
 export function LogLine({ line }: { line: ContainerLog }) {
   const lifecycle = isLifecycleEntry(line);
+  const failure = lifecycle && isFailureMessage(line.message);
   return (
     <div
-      className={`flex gap-2 text-xs font-mono px-2 py-0.5 rounded ${lifecycle ? "bg-blue-500/10 border border-blue-500/20" : "hover:bg-surface-elevated"}`}
+      className={`flex gap-2 text-xs font-mono px-2 py-0.5 rounded ${
+        failure
+          ? "bg-red-500/10 border border-red-500/20"
+          : lifecycle
+            ? "bg-blue-500/10 border border-blue-500/20"
+            : "hover:bg-surface-elevated"
+      }`}
     >
       <span className="text-dimmed shrink-0 select-none w-40">
         {line.recorded_at
@@ -117,8 +131,11 @@ export function LogLine({ line }: { line: ContainerLog }) {
           : ""}
       </span>
       {lifecycle ? (
-        <span className="text-blue-400 font-medium">
-          <FontAwesomeIcon icon={faBolt} className="mr-1.5" />
+        <span className={`font-medium ${failure ? "text-red-400" : "text-blue-400"}`}>
+          <FontAwesomeIcon
+            icon={failure ? faCircleExclamation : faBolt}
+            className="mr-1.5"
+          />
           {line.message}
         </span>
       ) : (
@@ -150,10 +167,31 @@ export function LogViewer({
   loading,
 }: LogViewerProps) {
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const prevLogCountRef = useRef(0);
+  const userScrolledUpRef = useRef(false);
 
-  useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs, loading]);
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    userScrolledUpRef.current = !atBottom;
+  }, []);
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || logs.length === 0) return;
+
+    const hadLogs = prevLogCountRef.current > 0;
+    const countChanged = logs.length !== prevLogCountRef.current;
+    prevLogCountRef.current = logs.length;
+
+    if (!hadLogs || (countChanged && !userScrolledUpRef.current)) {
+      // First load or new content while at bottom — jump to end
+      el.scrollTop = el.scrollHeight;
+    }
+    // Same count (rehydration) — do nothing, browser preserves scrollTop
+  }, [logs]);
 
   return (
     <div className="flex flex-col">
@@ -202,7 +240,7 @@ export function LogViewer({
         </div>
       </div>
       {/* Log pane */}
-      <div className="bg-background-alt min-h-[320px] max-h-[520px] overflow-y-auto p-3">
+      <div ref={scrollRef} onScroll={handleScroll} className="bg-background-alt min-h-[320px] max-h-[520px] overflow-y-auto p-3">
         {logs.length === 0 ? (
           <p className="text-xs text-dimmed font-mono p-2">No logs available</p>
         ) : (

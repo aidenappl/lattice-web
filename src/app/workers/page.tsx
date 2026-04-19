@@ -2,22 +2,30 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Worker } from "@/types";
+import { Worker, VersionInfo } from "@/types";
 import {
   reqGetWorkers,
   reqCreateWorker,
   reqCreateWorkerToken,
+  reqUpgradeRunner,
 } from "@/services/workers.service";
+import { reqGetVersions } from "@/services/admin.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { timeAgo } from "@/lib/utils";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
+import WorkerBadge from "@/components/ui/worker-badge";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faArrowUp } from "@fortawesome/free-solid-svg-icons";
+import toast from "react-hot-toast";
 
 export default function WorkersPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
+  const [latestRunner, setLatestRunner] = useState<string | null>(null);
+  const [upgradingWorker, setUpgradingWorker] = useState<number | null>(null);
 
   // Create form
   const [showForm, setShowForm] = useState(false);
@@ -35,8 +43,12 @@ export default function WorkersPage() {
 
   useEffect(() => {
     const load = async () => {
-      const res = await reqGetWorkers();
-      if (res.success) setWorkers(res.data ?? []);
+      const [workersRes, versionsRes] = await Promise.all([
+        reqGetWorkers(),
+        reqGetVersions(),
+      ]);
+      if (workersRes.success) setWorkers(workersRes.data ?? []);
+      if (versionsRes.success) setLatestRunner(versionsRes.data.runner.latest);
       setLoading(false);
     };
     load();
@@ -45,6 +57,7 @@ export default function WorkersPage() {
   // Live updates via WebSocket
   const handleSocketEvent = useCallback((event: AdminSocketEvent) => {
     if (event.type === "worker_heartbeat" && event.worker_id) {
+      const payload = event.payload as { runner_version?: string } | undefined;
       setWorkers((prev) =>
         prev.map((w) =>
           w.id === event.worker_id
@@ -52,6 +65,7 @@ export default function WorkersPage() {
                 ...w,
                 status: "online",
                 last_heartbeat_at: new Date().toISOString(),
+                ...(payload?.runner_version ? { runner_version: payload.runner_version } : {}),
               }
             : w,
         ),
@@ -237,6 +251,9 @@ WORKER_NAME=${createdWorker.name}`}
                 Docker
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                Runner
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Last Heartbeat
               </th>
             </tr>
@@ -245,7 +262,7 @@ WORKER_NAME=${createdWorker.name}`}
             {workers.length === 0 ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="px-4 py-12 text-center text-sm text-muted"
                 >
                   No workers found
@@ -258,15 +275,16 @@ WORKER_NAME=${createdWorker.name}`}
                   className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors"
                 >
                   <td className="px-4 py-3">
-                    <Link
-                      href={`/workers/${worker.id}`}
-                      className="text-sm font-medium text-primary hover:text-[#3b82f6] transition-colors"
-                    >
-                      {worker.name}
-                    </Link>
+                    <WorkerBadge id={worker.id} name={worker.name} />
                   </td>
                   <td className="px-4 py-3 text-sm text-secondary font-mono">
-                    {worker.hostname}
+                    <Link
+                      href={`http://${worker.hostname}:9100`}
+                      target="_blank"
+                      className="text-sm font-medium text-primary hover:text-[#3b82f6] transition-colors"
+                    >
+                      {worker.hostname}
+                    </Link>
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={worker.status} />
@@ -276,6 +294,38 @@ WORKER_NAME=${createdWorker.name}`}
                   </td>
                   <td className="px-4 py-3 text-sm text-secondary font-mono">
                     {worker.docker_version ?? "-"}
+                  </td>
+                  <td className="px-4 py-3">
+                    {worker.runner_version ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-secondary font-mono">
+                          {worker.runner_version}
+                        </span>
+                        {latestRunner && worker.runner_version !== latestRunner && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              setUpgradingWorker(worker.id);
+                              const res = await reqUpgradeRunner(worker.id);
+                              if (res.success) {
+                                toast.success(`Upgrade command sent to ${worker.name}`);
+                              } else {
+                                toast.error("error_message" in res ? res.error_message : "Upgrade failed");
+                              }
+                              setUpgradingWorker(null);
+                            }}
+                            disabled={upgradingWorker === worker.id || worker.status !== "online"}
+                            title={`Upgrade to ${latestRunner}`}
+                            className="flex items-center gap-1 rounded-md bg-[#eab308]/10 border border-[#eab308]/30 px-2 py-0.5 text-[10px] font-medium text-[#eab308] hover:bg-[#eab308]/20 transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            <FontAwesomeIcon icon={faArrowUp} className="h-2.5 w-2.5" />
+                            {upgradingWorker === worker.id ? "..." : latestRunner}
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted">-</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-muted">
                     {worker.last_heartbeat_at

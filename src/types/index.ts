@@ -2,6 +2,7 @@ export * from "./user.types";
 export * from "./worker.types";
 export * from "./stack.types";
 export * from "./deployment.types";
+export * from "./version.types";
 
 export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 

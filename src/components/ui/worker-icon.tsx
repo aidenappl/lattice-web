@@ -20,14 +20,14 @@ export function WorkerIcon({ size = "md", className }: WorkerIconProps) {
   return (
     <>
       <Image
-        src="/lattice-worker-light.png"
+        src="/lattice-worker-dark.png"
         alt="Worker"
         width={px}
         height={px}
         className={cn("shrink-0 dark:hidden rounded-md", className)}
       />
       <Image
-        src="/lattice-worker-dark.png"
+        src="/lattice-worker-light.png"
         alt="Worker"
         width={px}
         height={px}

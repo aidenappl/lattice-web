@@ -12,7 +12,7 @@ import {
   faXmark,
   faRotate,
   faPause,
-  faArrowsRotate,
+  faRecycle,
   faTrash,
   faPenToSquare,
   faSpinner,
@@ -43,6 +43,7 @@ import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { Alert } from "@/components/ui/alert";
 import { useConfirm } from "@/components/ui/confirm-modal";
+import WorkerBadge from "@/components/ui/worker-badge";
 import {
   LogViewer,
   LogLimit,
@@ -602,6 +603,7 @@ export default function ContainerDetailPage() {
         {/* Kill */}
         <ActionButton
           label="Kill"
+          title="Force-kill container (SIGKILL)"
           icon={<FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />}
           disabled={!isRunning || controlsDisabled}
           loading={actionLoading === "kill"}
@@ -659,8 +661,9 @@ export default function ContainerDetailPage() {
         {/* Recreate */}
         <ActionButton
           label="Recreate"
+          title="Remove and recreate container from config"
           icon={
-            <FontAwesomeIcon icon={faArrowsRotate} className="h-3.5 w-3.5" />
+            <FontAwesomeIcon icon={faRecycle} className="h-3.5 w-3.5" />
           }
           disabled={controlsDisabled}
           loading={actionLoading === "recreate"}
@@ -679,6 +682,7 @@ export default function ContainerDetailPage() {
         {/* Remove */}
         <ActionButton
           label="Remove"
+          title="Permanently remove container from Docker"
           icon={<FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />}
           disabled={controlsDisabled}
           loading={actionLoading === "remove"}
@@ -696,6 +700,7 @@ export default function ContainerDetailPage() {
         {/* Edit */}
         <button
           onClick={() => setEditing((e) => !e)}
+          title="Edit container config"
           className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 h-8 text-sm font-medium text-secondary hover:text-primary hover:bg-surface-active transition-colors cursor-pointer"
         >
           <FontAwesomeIcon icon={faPenToSquare} className="h-3.5 w-3.5" />
@@ -950,12 +955,11 @@ export default function ContainerDetailPage() {
               <InfoRow
                 label="Worker"
                 value={
-                  <Link
-                    href={`/workers/${worker.id}`}
-                    className="text-[#3b82f6] hover:underline"
-                  >
-                    {worker.name}
-                  </Link>
+                  <WorkerBadge
+                    id={worker.id}
+                    name={worker.name}
+                    size="sm"
+                  />
                 }
               />
             )}
@@ -1282,6 +1286,7 @@ function ActionButton({
   loading,
   color,
   onClick,
+  title,
 }: {
   label: string;
   icon: React.ReactNode;
@@ -1289,11 +1294,13 @@ function ActionButton({
   loading: boolean;
   color: string;
   onClick: () => void;
+  title?: string;
 }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
+      title={title ?? label}
       className={`inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 h-8 text-sm font-medium transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${color}`}
     >
       {loading ? (

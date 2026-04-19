@@ -4,15 +4,6 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faLayerGroup } from "@fortawesome/free-solid-svg-icons";
 import type { StackNodeData } from "../types";
 
-const statusColors: Record<string, string> = {
-  active: "text-[#22c55e]",
-  deployed: "text-[#22c55e]",
-  deploying: "text-[#eab308]",
-  stopped: "text-secondary",
-  failed: "text-[#ef4444]",
-  error: "text-[#ef4444]",
-};
-
 const statusDots: Record<string, string> = {
   active: "bg-[#22c55e]",
   deployed: "bg-[#22c55e]",
@@ -26,22 +17,22 @@ function StackNodeComponent({ data }: { data: StackNodeData }) {
   const dotClass = statusDots[data.status] ?? "bg-[#888888]";
 
   return (
-    <div className="rounded-xl border border-border-strong bg-surface-alt px-4 py-3 min-w-[220px]">
+    <div className="rounded-xl border border-border-strong bg-surface-alt px-5 py-4 min-w-[260px] cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-[#a855f7]/30">
       <Handle
         type="target"
         position={Position.Top}
-        className="!bg-accent !w-2 !h-2 !border-0"
+        className="!bg-accent !w-2.5 !h-2.5 !border-0"
       />
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!bg-accent !w-2 !h-2 !border-0"
+        className="!bg-accent !w-2.5 !h-2.5 !border-0"
       />
-      <div className="flex items-center gap-2.5">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#a855f7]/10">
+      <div className="flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#a855f7]/10">
           <FontAwesomeIcon
             icon={faLayerGroup}
-            className="h-3.5 w-3.5 text-[#a855f7]"
+            className="h-4 w-4 text-[#a855f7]"
           />
         </div>
         <div className="flex-1 min-w-0">
@@ -49,9 +40,9 @@ function StackNodeComponent({ data }: { data: StackNodeData }) {
             <p className="text-sm font-semibold text-primary truncate">
               {data.label}
             </p>
-            <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotClass}`} />
+            <span className={`h-2 w-2 rounded-full shrink-0 ${dotClass}`} />
           </div>
-          <p className="text-[10px] text-muted">
+          <p className="text-[11px] text-muted">
             {data.containerCount} container
             {data.containerCount !== 1 ? "s" : ""}
             {data.workerName ? ` on ${data.workerName}` : ""}

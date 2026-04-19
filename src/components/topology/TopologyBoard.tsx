@@ -28,6 +28,7 @@ import { StackNode } from "./nodes/StackNode";
 import { ContainerNode } from "./nodes/ContainerNode";
 import { DataFlowEdge } from "./edges/DataFlowEdge";
 import type { ViewMode } from "./types";
+import type { NodeScale } from "./layout";
 
 const nodeTypes: NodeTypes = {
   system: SystemNode,
@@ -39,6 +40,12 @@ const nodeTypes: NodeTypes = {
 const edgeTypes: EdgeTypes = {
   dataFlow: DataFlowEdge,
 };
+
+const SCALE_OPTIONS: { value: NodeScale; label: string }[] = [
+  { value: "sm", label: "S" },
+  { value: "md", label: "M" },
+  { value: "lg", label: "L" },
+];
 
 export function TopologyBoard() {
   return (
@@ -52,12 +59,13 @@ function TopologyBoardInner() {
   const router = useRouter();
   const { fitView } = useReactFlow();
   const [viewMode, setViewMode] = useState<ViewMode>("system");
+  const [nodeScale, setNodeScale] = useState<NodeScale>("md");
   const {
     nodes: layoutNodes,
     edges: layoutEdges,
     loading,
     refresh,
-  } = useTopologyData(viewMode);
+  } = useTopologyData(viewMode, nodeScale);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutEdges);
@@ -67,7 +75,7 @@ function TopologyBoardInner() {
     setNodes(layoutNodes);
     setEdges(layoutEdges);
     // Give React Flow a tick to render, then fit
-    requestAnimationFrame(() => fitView({ padding: 0.2 }));
+    requestAnimationFrame(() => fitView({ padding: 0.05, duration: 400 }));
   }, [layoutNodes, layoutEdges, setNodes, setEdges, fitView]);
 
   const onNodeClick: NodeMouseHandler = useCallback(
@@ -93,13 +101,33 @@ function TopologyBoardInner() {
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-3">
         <ViewModeSelector value={viewMode} onChange={setViewMode} />
-        <button
-          onClick={refresh}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-border-strong text-secondary hover:text-primary hover:bg-surface-active transition-colors cursor-pointer"
-          aria-label="Refresh"
-        >
-          <FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Node scale selector */}
+          <div className="flex items-center gap-0.5 rounded-lg border border-border-strong bg-surface-alt p-0.5">
+            {SCALE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setNodeScale(opt.value)}
+                title={`Node size: ${opt.label === "S" ? "Small" : opt.label === "M" ? "Medium" : "Large"}`}
+                className={`flex items-center justify-center rounded-md w-7 h-7 text-[10px] font-semibold transition-colors cursor-pointer ${
+                  nodeScale === opt.value
+                    ? "bg-surface-active text-primary shadow-sm"
+                    : "text-muted hover:text-secondary"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={refresh}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border-strong text-secondary hover:text-primary hover:bg-surface-active transition-colors cursor-pointer"
+            title="Refresh topology"
+            aria-label="Refresh"
+          >
+            <FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Canvas */}
@@ -113,7 +141,7 @@ function TopologyBoardInner() {
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView
-          fitViewOptions={{ padding: 0.2 }}
+          fitViewOptions={{ padding: 0.05, duration: 400 }}
           minZoom={0.1}
           maxZoom={2}
           proOptions={{ hideAttribution: true }}
@@ -121,7 +149,7 @@ function TopologyBoardInner() {
         >
           <Background
             variant={BackgroundVariant.Dots}
-            gap={20}
+            gap={24}
             size={1}
             color="var(--border-subtle)"
           />

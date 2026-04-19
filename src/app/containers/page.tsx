@@ -10,6 +10,7 @@ import {
   reqStopContainer,
   reqRestartContainer,
   reqRecreateContainer,
+  reqUnpauseContainer,
 } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { reqGetStacks } from "@/services/stacks.service";
@@ -20,7 +21,7 @@ import {
   faPlay,
   faStop,
   faSpinner,
-  faArrowsRotate,
+  faRecycle,
   faChevronRight,
 } from "@fortawesome/free-solid-svg-icons";
 import { StatusBadge } from "@/components/ui/badge";
@@ -30,6 +31,7 @@ import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
 import { StalePill } from "@/components/ui/worker-offline-banner";
 import { useConfirm } from "@/components/ui/confirm-modal";
+import WorkerBadge from "@/components/ui/worker-badge";
 
 function parsePortMappings(raw: string | null): string {
   if (!raw) return "—";
@@ -173,6 +175,7 @@ export default function ContainersPage() {
         stop: reqStopContainer,
         restart: reqRestartContainer,
         recreate: reqRecreateContainer,
+        unpause: reqUnpauseContainer,
       };
       const res = await fns[action]?.(id);
       if (res?.success) {
@@ -379,12 +382,11 @@ export default function ContainersPage() {
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">
                       {worker ? (
-                        <Link
-                          href={`/workers/${worker.id}`}
-                          className="text-xs text-secondary hover:text-primary transition-colors"
-                        >
-                          {worker.name}
-                        </Link>
+                        <WorkerBadge
+                          id={worker.id}
+                          name={worker.name}
+                          size="sm"
+                        />
                       ) : (
                         <span className="text-xs text-dimmed">—</span>
                       )}
@@ -413,10 +415,31 @@ export default function ContainersPage() {
                           <button
                             onClick={() => runAction(c.id, "start")}
                             disabled={!!busy || !workerOnline}
-                            title={!workerOnline ? "Worker offline" : "Start"}
+                            title={!workerOnline ? "Worker offline" : "Start container"}
                             className="h-7 w-7 rounded flex items-center justify-center text-[#22c55e] hover:bg-[#22c55e]/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "start" ? (
+                              <FontAwesomeIcon
+                                icon={faSpinner}
+                                className="h-3.5 w-3.5 animate-spin"
+                              />
+                            ) : (
+                              <FontAwesomeIcon
+                                icon={faPlay}
+                                className="h-3.5 w-3.5"
+                              />
+                            )}
+                          </button>
+                        )}
+                        {/* Resume (only when paused) */}
+                        {c.status === "paused" && (
+                          <button
+                            onClick={() => runAction(c.id, "unpause")}
+                            disabled={!!busy || !workerOnline}
+                            title={!workerOnline ? "Worker offline" : "Resume container"}
+                            className="h-7 w-7 rounded flex items-center justify-center text-[#22c55e] hover:bg-[#22c55e]/10 disabled:opacity-40 transition-colors cursor-pointer"
+                          >
+                            {busy === "unpause" ? (
                               <FontAwesomeIcon
                                 icon={faSpinner}
                                 className="h-3.5 w-3.5 animate-spin"
@@ -434,7 +457,7 @@ export default function ContainersPage() {
                           <button
                             onClick={() => confirmAndRun(c.id, "stop")}
                             disabled={!!busy || !workerOnline}
-                            title={!workerOnline ? "Worker offline" : "Stop"}
+                            title={!workerOnline ? "Worker offline" : "Stop container"}
                             className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-[#ef4444] hover:bg-[#ef4444]/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "stop" ? (
@@ -455,7 +478,7 @@ export default function ContainersPage() {
                           <button
                             onClick={() => confirmAndRun(c.id, "restart")}
                             disabled={!!busy || !workerOnline}
-                            title={!workerOnline ? "Worker offline" : "Restart"}
+                            title={!workerOnline ? "Worker offline" : "Restart container"}
                             className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-[#3b82f6] hover:bg-[#3b82f6]/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "restart" ? (
@@ -475,7 +498,7 @@ export default function ContainersPage() {
                         <button
                           onClick={() => confirmAndRun(c.id, "recreate")}
                           disabled={!!busy || !workerOnline}
-                          title={!workerOnline ? "Worker offline" : "Recreate"}
+                          title={!workerOnline ? "Worker offline" : "Remove and recreate container from config"}
                           className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-[#a855f7] hover:bg-[#a855f7]/10 disabled:opacity-40 transition-colors cursor-pointer"
                         >
                           {busy === "recreate" ? (
@@ -485,7 +508,7 @@ export default function ContainersPage() {
                             />
                           ) : (
                             <FontAwesomeIcon
-                              icon={faArrowsRotate}
+                              icon={faRecycle}
                               className="h-3.5 w-3.5"
                             />
                           )}

@@ -1,4 +1,4 @@
-import { User } from "@/types";
+import { User, VersionInfo } from "@/types";
 import { fetchApi } from "./api.service";
 
 export type OverviewData = {
@@ -50,4 +50,24 @@ export const reqUpdateUser = (id: number, data: Partial<{ name: string; role: st
         method: "PUT",
         url: `/admin/users/${id}`,
         data,
+    });
+
+export const reqGetVersions = () =>
+    fetchApi<VersionInfo>({
+        method: "GET",
+        url: "/admin/versions",
+    });
+
+export const reqUpdateAPI = () =>
+    fetchApi<{ service: string; pull: string; up: string }>({
+        method: "POST",
+        url: "/admin/update/api",
+        timeout: 120000,
+    });
+
+export const reqUpdateWeb = () =>
+    fetchApi<{ service: string; pull: string; up: string }>({
+        method: "POST",
+        url: "/admin/update/web",
+        timeout: 120000,
     });

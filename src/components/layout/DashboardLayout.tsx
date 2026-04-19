@@ -3,6 +3,7 @@
 import { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Navbar } from "./Navbar";
+import { UpdateBanner } from "./UpdateBanner";
 import { Toaster } from "react-hot-toast";
 import { ConfirmProvider } from "@/components/ui/confirm-modal";
 
@@ -23,6 +24,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      <UpdateBanner />
       <ConfirmProvider>
         <main className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1600px] mx-auto w-full">
           {children}

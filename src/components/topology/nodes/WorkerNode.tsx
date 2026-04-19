@@ -21,17 +21,17 @@ function WorkerNodeComponent({ data }: { data: WorkerNodeData }) {
 
   return (
     <div
-      className={`rounded-xl border bg-surface-alt px-4 py-3 min-w-[240px] transition-shadow ${borderClass}`}
+      className={`rounded-xl border bg-surface-alt px-5 py-4 min-w-[280px] cursor-pointer transition-all duration-200 hover:shadow-lg ${borderClass}`}
     >
       <Handle
         type="target"
         position={Position.Top}
-        className="!bg-accent !w-2 !h-2 !border-0"
+        className="!bg-accent !w-2.5 !h-2.5 !border-0"
       />
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!bg-accent !w-2 !h-2 !border-0"
+        className="!bg-accent !w-2.5 !h-2.5 !border-0"
       />
       <div className="flex items-center gap-3">
         <WorkerIcon size="sm" />
@@ -40,12 +40,12 @@ function WorkerNodeComponent({ data }: { data: WorkerNodeData }) {
             <p className="text-sm font-semibold text-primary truncate">
               {data.label}
             </p>
-            <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotClass}`} />
+            <span className={`h-2 w-2 rounded-full shrink-0 ${dotClass}`} />
           </div>
-          <p className="text-[10px] text-muted truncate">{data.hostname}</p>
+          <p className="text-[11px] text-muted truncate">{data.hostname}</p>
         </div>
       </div>
-      <div className="mt-2 flex items-center gap-3 text-[10px]">
+      <div className="mt-2.5 flex items-center gap-4 text-[11px]">
         <span className="text-muted">
           {data.stackCount} stack{data.stackCount !== 1 ? "s" : ""}
         </span>

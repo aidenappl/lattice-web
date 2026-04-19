@@ -31,6 +31,7 @@ import {
   reqRestartContainer,
   reqRemoveContainer,
   reqRecreateContainer,
+  reqUnpauseContainer,
 } from "@/services/stacks.service";
 import {
   reqGetDeployments,
@@ -59,6 +60,7 @@ import {
   isSynthetic,
   lifecycleToContainerLog,
 } from "@/components/ui/log-viewer";
+import WorkerBadge from "@/components/ui/worker-badge";
 
 export default function StackDetailPage() {
   const params = useParams();
@@ -593,6 +595,7 @@ export default function StackDetailPage() {
       restart: reqRestartContainer,
       remove: reqRemoveContainer,
       recreate: reqRecreateContainer,
+      unpause: reqUnpauseContainer,
     };
 
     const fn = actionFns[action];
@@ -915,14 +918,10 @@ export default function StackDetailPage() {
                   </p>
                   <p className="text-sm text-secondary mt-1">
                     {stack.worker_id ? (
-                      <button
-                        onClick={() =>
-                          router.push(`/workers/${stack.worker_id}`)
-                        }
-                        className="text-[#3b82f6] hover:text-[#60a5fa] transition-colors"
-                      >
-                        {workerName(stack.worker_id)}
-                      </button>
+                      <WorkerBadge
+                        id={stack.worker_id}
+                        name={workerName(stack.worker_id)}
+                      />
                     ) : (
                       <span className="text-[#f59e0b]">Unassigned</span>
                     )}
@@ -1152,13 +1151,39 @@ export default function StackDetailPage() {
                                   !!actionLoading[`${container.id}-start`]
                                 }
                                 title={
-                                  !workerOnline ? "Worker offline" : undefined
+                                  !workerOnline
+                                    ? "Worker offline"
+                                    : "Start container"
                                 }
                                 className="px-2 py-1 text-xs text-[#22c55e] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
                               >
                                 {actionLoading[`${container.id}-start`]
                                   ? "..."
                                   : "Start"}
+                              </button>
+                            )}
+                            {container.status === "paused" && (
+                              <button
+                                onClick={() =>
+                                  handleContainerAction(
+                                    container.id,
+                                    "unpause",
+                                  )
+                                }
+                                disabled={
+                                  !workerOnline ||
+                                  !!actionLoading[`${container.id}-unpause`]
+                                }
+                                title={
+                                  !workerOnline
+                                    ? "Worker offline"
+                                    : "Resume container"
+                                }
+                                className="px-2 py-1 text-xs text-[#22c55e] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
+                              >
+                                {actionLoading[`${container.id}-unpause`]
+                                  ? "..."
+                                  : "Resume"}
                               </button>
                             )}
                             {container.status === "running" && (
@@ -1171,7 +1196,9 @@ export default function StackDetailPage() {
                                   !!actionLoading[`${container.id}-restart`]
                                 }
                                 title={
-                                  !workerOnline ? "Worker offline" : undefined
+                                  !workerOnline
+                                    ? "Worker offline"
+                                    : "Restart container"
                                 }
                                 className="px-2 py-1 text-xs text-[#3b82f6] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
                               >
@@ -1190,7 +1217,9 @@ export default function StackDetailPage() {
                                   !!actionLoading[`${container.id}-stop`]
                                 }
                                 title={
-                                  !workerOnline ? "Worker offline" : undefined
+                                  !workerOnline
+                                    ? "Worker offline"
+                                    : "Stop container"
                                 }
                                 className="px-2 py-1 text-xs text-[#f59e0b] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
                               >
@@ -1208,7 +1237,9 @@ export default function StackDetailPage() {
                                 !!actionLoading[`${container.id}-recreate`]
                               }
                               title={
-                                !workerOnline ? "Worker offline" : undefined
+                                !workerOnline
+                                  ? "Worker offline"
+                                  : "Remove and recreate container from config"
                               }
                               className="px-2 py-1 text-xs text-[#8b5cf6] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
                             >
@@ -1218,6 +1249,7 @@ export default function StackDetailPage() {
                             </button>
                             <a
                               href={`/containers/${container.id}`}
+                              title="Edit container config"
                               className="px-2 py-1 text-xs text-secondary hover:bg-surface-elevated hover:text-primary rounded transition-colors"
                             >
                               Edit
@@ -1226,6 +1258,7 @@ export default function StackDetailPage() {
                               onClick={() =>
                                 handleDeleteContainer(container.id)
                               }
+                              title="Delete container"
                               className="px-2 py-1 text-xs text-[#ef4444] hover:bg-surface-elevated rounded transition-colors"
                             >
                               Delete

@@ -9,6 +9,7 @@ import { reqGetAllContainers, reqGetStacks } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
+import WorkerBadge from "@/components/ui/worker-badge";
 
 type PortEntry = {
   hostPort: string;
@@ -138,12 +139,11 @@ export default function NetworksPage() {
               {/* Worker header */}
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-border-subtle bg-background-alt">
                 <div className="flex items-center gap-3">
-                  <Link
-                    href={`/workers/${group.worker.id}`}
-                    className="text-sm font-medium text-primary hover:text-[#3b82f6] transition-colors"
-                  >
-                    {group.worker.name}
-                  </Link>
+                  <WorkerBadge
+                    id={group.worker.id}
+                    name={group.worker.name}
+                    size="sm"
+                  />
                   <StatusBadge status={group.worker.status} />
                   {group.worker.ip_address && (
                     <span className="text-xs text-muted font-mono">
