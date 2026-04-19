@@ -533,6 +533,23 @@ export default function WorkerDetailPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-muted uppercase tracking-wider">
+                  Hostname
+                </p>
+                {worker.hostname ? (
+                  <a
+                    href={`http://${worker.hostname}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-[#3b82f6] hover:underline mt-1 font-mono block break-all"
+                  >
+                    {worker.hostname}
+                  </a>
+                ) : (
+                  <p className="text-sm text-secondary mt-1">Not set</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-muted uppercase tracking-wider">
                   IP Address
                 </p>
                 <p className="text-sm text-secondary mt-1 font-mono">
@@ -789,8 +806,8 @@ export default function WorkerDetailPage() {
                             icon={faChevronDown}
                             className={`h-3 w-3 text-muted transition-transform ${isExpanded ? "" : "-rotate-90"}`}
                           />
-                          <div>
-                            <p className="text-sm text-primary">{stack.name}</p>
+                          <div className="min-w-0">
+                            <p className="text-sm text-primary break-all">{stack.name}</p>
                             <p className="text-xs text-muted">
                               {stack.deployment_strategy} &middot;{" "}
                               {stackContainers.length} container
@@ -813,11 +830,11 @@ export default function WorkerDetailPage() {
                                 href={`/containers/${c.id}`}
                                 className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-surface-elevated transition-colors"
                               >
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-primary">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-xs text-primary break-all">
                                     {c.name}
                                   </span>
-                                  <span className="text-[10px] text-muted font-mono">
+                                  <span className="text-[10px] text-muted font-mono break-all">
                                     {c.image}:{c.tag}
                                   </span>
                                 </div>
