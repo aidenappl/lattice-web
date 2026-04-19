@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { Registry } from "@/types";
 import {
   reqGetRegistries,
@@ -15,9 +16,11 @@ import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate } from "@/lib/utils";
+import { useConfirm } from "@/components/ui/confirm-modal";
 
 export default function RegistriesPage() {
   const [registries, setRegistries] = useState<Registry[]>([]);
+  const showConfirm = useConfirm();
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
 
@@ -28,7 +31,9 @@ export default function RegistriesPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
+  const [testStatus, setTestStatus] = useState<
+    "idle" | "testing" | "success" | "error"
+  >("idle");
   const [testError, setTestError] = useState("");
 
   // Browse state
@@ -44,7 +49,9 @@ export default function RegistriesPage() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const handleTestInline = async () => {
     if (!url.trim()) return;
@@ -88,6 +95,14 @@ export default function RegistriesPage() {
   };
 
   const handleDelete = async (id: number) => {
+    const confirmed = await showConfirm({
+      title: "Delete registry",
+      message:
+        "This registry will be permanently removed. Any stacks using it may be affected.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!confirmed) return;
     const res = await reqDeleteRegistry(id);
     if (res.success) {
       setRegistries((prev) => prev.filter((r) => r.id !== id));
@@ -103,9 +118,11 @@ export default function RegistriesPage() {
   const handleTestExisting = async (id: number) => {
     const res = await reqTestRegistry(id);
     if (res.success) {
-      alert("Connection successful");
+      toast.success("Connection successful");
     } else {
-      alert("Connection failed: " + res.error_message);
+      toast.error(
+        "Connection failed: " + (res.error_message ?? "unknown error"),
+      );
     }
   };
 
@@ -150,16 +167,26 @@ export default function RegistriesPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white">Registries</h1>
-          <p className="text-sm text-[#888888] mt-1">Manage container registries</p>
+          <p className="text-sm text-[#888888] mt-1">
+            Manage container registries
+          </p>
         </div>
-        <Button onClick={() => { setShowForm(!showForm); if (showForm) resetForm(); }}>
+        <Button
+          onClick={() => {
+            setShowForm(!showForm);
+            if (showForm) resetForm();
+          }}
+        >
           {showForm ? "Cancel" : "Add Registry"}
         </Button>
       </div>
 
       {/* Create Form */}
       {showForm && (
-        <form onSubmit={handleCreate} className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6 mb-6 space-y-4">
+        <form
+          onSubmit={handleCreate}
+          className="rounded-xl border border-[#1a1a1a] bg-[#111111] p-6 mb-6 space-y-4"
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               id="reg-name"
@@ -174,17 +201,25 @@ export default function RegistriesPage() {
               label="URL"
               placeholder="https://registry.appleby.cloud"
               value={url}
-              onChange={(e) => { setUrl(e.target.value); setTestStatus("idle"); }}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                setTestStatus("idle");
+              }}
               required
             />
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="reg-type" className="text-xs font-medium text-[#888888] uppercase tracking-wider">
+              <label
+                htmlFor="reg-type"
+                className="text-xs font-medium text-[#888888] uppercase tracking-wider"
+              >
                 Type
               </label>
               <select
                 id="reg-type"
                 value={type}
-                onChange={(e) => setType(e.target.value as "dockerhub" | "ghcr" | "custom")}
+                onChange={(e) =>
+                  setType(e.target.value as "dockerhub" | "ghcr" | "custom")
+                }
                 className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
               >
                 <option value="custom">Custom Registry</option>
@@ -198,7 +233,10 @@ export default function RegistriesPage() {
               label="Username"
               placeholder="registry username"
               value={username}
-              onChange={(e) => { setUsername(e.target.value); setTestStatus("idle"); }}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                setTestStatus("idle");
+              }}
             />
             <Input
               id="reg-password"
@@ -206,7 +244,10 @@ export default function RegistriesPage() {
               type="password"
               placeholder="registry password"
               value={password}
-              onChange={(e) => { setPassword(e.target.value); setTestStatus("idle"); }}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setTestStatus("idle");
+              }}
             />
           </div>
 
@@ -221,14 +262,19 @@ export default function RegistriesPage() {
               {testStatus === "testing" ? "Testing..." : "Test Connection"}
             </Button>
             {testStatus === "success" && (
-              <span className="text-sm text-[#4ade80]">Connected successfully</span>
+              <span className="text-sm text-[#4ade80]">
+                Connected successfully
+              </span>
             )}
             {testStatus === "error" && (
               <span className="text-sm text-[#f87171]">{testError}</span>
             )}
           </div>
 
-          <Button type="submit" disabled={submitting || !name.trim() || !url.trim()}>
+          <Button
+            type="submit"
+            disabled={submitting || !name.trim() || !url.trim()}
+          >
             {submitting ? "Creating..." : "Create Registry"}
           </Button>
         </form>
@@ -239,27 +285,51 @@ export default function RegistriesPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-[#1a1a1a]">
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Name</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">URL</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Type</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Auth</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">Created</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-[#888888] uppercase tracking-wider">Actions</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Name
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                URL
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Type
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Auth
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Created
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-[#888888] uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
             {registries.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center text-sm text-[#555555]">
+                <td
+                  colSpan={6}
+                  className="px-4 py-12 text-center text-sm text-[#555555]"
+                >
                   No registries configured
                 </td>
               </tr>
             ) : (
               registries.map((reg) => (
-                <tr key={reg.id} className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#161616] transition-colors">
-                  <td className="px-4 py-3 text-sm font-medium text-white">{reg.name}</td>
-                  <td className="px-4 py-3 text-sm text-[#888888] font-mono">{reg.url}</td>
-                  <td className="px-4 py-3 text-sm text-[#888888]">{reg.type}</td>
+                <tr
+                  key={reg.id}
+                  className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#161616] transition-colors"
+                >
+                  <td className="px-4 py-3 text-sm font-medium text-white">
+                    {reg.name}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-[#888888] font-mono">
+                    {reg.url}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-[#888888]">
+                    {reg.type}
+                  </td>
                   <td className="px-4 py-3 text-sm text-[#888888]">
                     {reg.username ? (
                       <span className="text-[#4ade80]">{reg.username}</span>
@@ -267,15 +337,29 @@ export default function RegistriesPage() {
                       <span className="text-[#555555]">none</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#555555]">{formatDate(reg.inserted_at)}</td>
+                  <td className="px-4 py-3 text-sm text-[#555555]">
+                    {formatDate(reg.inserted_at)}
+                  </td>
                   <td className="px-4 py-3 text-right space-x-2">
-                    <Button variant="ghost" size="sm" onClick={() => handleTestExisting(reg.id)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleTestExisting(reg.id)}
+                    >
                       Test
                     </Button>
-                    <Button variant="secondary" size="sm" onClick={() => handleBrowse(reg.id)}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleBrowse(reg.id)}
+                    >
                       {browseId === reg.id ? "Close" : "Browse"}
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={() => handleDelete(reg.id)}>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDelete(reg.id)}
+                    >
                       Delete
                     </Button>
                   </td>

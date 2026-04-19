@@ -63,6 +63,39 @@ function parseVolumes(
   return Object.entries(data).map(([host, container]) => ({ host, container }));
 }
 
+interface HealthCheckConfig {
+  test?: string[] | string;
+  interval?: string;
+  timeout?: string;
+  retries?: number;
+  start_period?: string;
+  disable?: boolean;
+}
+
+function parseHealthCheck(raw: string | null): HealthCheckConfig | null {
+  return parseJSON<HealthCheckConfig>(raw);
+}
+
+function formatTestCommand(test: string[] | string | undefined): string {
+  if (!test) return "";
+  if (typeof test === "string") return test;
+  // ["CMD-SHELL", "curl ..."] or ["CMD", "arg1", "arg2"]
+  if (test[0] === "CMD-SHELL" && test.length === 2) return test[1];
+  if (test[0] === "CMD") return test.slice(1).join(" ");
+  return test.join(" ");
+}
+
+function prettyField(raw: string | null): string {
+  if (!raw) return "";
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.join(" ");
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return raw;
+  }
+}
+
 function LogLine({ line }: { line: ContainerLog }) {
   return (
     <div className="flex gap-2 text-xs font-mono hover:bg-[#161616] px-2 py-0.5 rounded">
@@ -321,6 +354,7 @@ export default function ContainerDetailPage() {
   const ports = parsePortMappings(container.port_mappings);
   const envVars = parseEnvVars(container.env_vars);
   const volumes = parseVolumes(container.volumes);
+  const healthConfig = parseHealthCheck(container.health_check);
 
   const isRunning = container.status === "running";
   const isStopped =
@@ -377,6 +411,39 @@ export default function ContainerDetailPage() {
           </p>
         </div>
       </div>
+
+      {/* Pending context banner */}
+      {container.status === "pending" && (
+        <div className="mb-6 rounded-xl border border-yellow-600/30 bg-yellow-600/5 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <svg
+              className="h-4 w-4 text-yellow-400 mt-0.5 shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+              />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-yellow-400">
+                Container is pending
+              </p>
+              <p className="text-xs text-[#888888] mt-1">
+                {!worker
+                  ? "No worker is assigned to this stack. Assign a worker and deploy to start this container."
+                  : !workerOnline
+                    ? `Worker "${worker.name}" is offline. The container will start once the worker reconnects.`
+                    : "This container has been configured but not yet deployed. Click Deploy on the stack page to push it to the worker."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2 mb-6 p-4 rounded-xl border border-[#1a1a1a] bg-[#111111]">
@@ -773,7 +840,7 @@ export default function ContainerDetailPage() {
           <h2 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-4">
             Health
           </h2>
-          {container.health_status === "none" && !container.health_check ? (
+          {container.health_status === "none" && !healthConfig ? (
             <p className="text-sm text-[#555555]">No health check configured</p>
           ) : (
             <dl className="space-y-3">
@@ -781,15 +848,21 @@ export default function ContainerDetailPage() {
                 label="Health Status"
                 value={<StatusBadge status={container.health_status} />}
               />
-              {container.health_check && (
+              {healthConfig && (
                 <InfoRow
-                  label="Health Check"
+                  label="Test Command"
                   value={
                     <span className="font-mono text-xs break-all">
-                      {container.health_check}
+                      {formatTestCommand(healthConfig.test)}
                     </span>
                   }
                 />
+              )}
+              {healthConfig?.interval && (
+                <InfoRow label="Interval" value={healthConfig.interval} />
+              )}
+              {healthConfig?.timeout && (
+                <InfoRow label="Timeout" value={healthConfig.timeout} />
               )}
             </dl>
           )}
@@ -903,7 +976,7 @@ export default function ContainerDetailPage() {
                   CMD
                 </h3>
                 <code className="text-sm text-[#d4d4d4] font-mono">
-                  {container.command}
+                  {prettyField(container.command)}
                 </code>
               </section>
             )}
@@ -915,7 +988,7 @@ export default function ContainerDetailPage() {
                   ENTRYPOINT
                 </h3>
                 <code className="text-sm text-[#d4d4d4] font-mono">
-                  {container.entrypoint}
+                  {prettyField(container.entrypoint)}
                 </code>
               </section>
             )}
@@ -985,19 +1058,76 @@ export default function ContainerDetailPage() {
               </h3>
               <StatusBadge status={container.health_status} />
             </div>
-            {container.health_check ? (
-              <div>
-                <h3 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-3">
-                  Health Check Command
-                </h3>
-                <code className="text-sm font-mono text-[#d4d4d4] bg-[#0d0d0d] rounded-lg px-3 py-2 block">
-                  {container.health_check}
-                </code>
-                <p className="text-xs text-[#555555] mt-2">
+            {healthConfig ? (
+              <>
+                {/* Test command */}
+                <section>
+                  <h3 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-3">
+                    Test Command
+                  </h3>
+                  <code className="text-sm font-mono text-[#d4d4d4] bg-[#0d0d0d] rounded-lg px-3 py-2 block whitespace-pre-wrap break-all">
+                    {formatTestCommand(healthConfig.test)}
+                  </code>
+                </section>
+
+                {/* Config table */}
+                <section>
+                  <h3 className="text-xs font-medium text-[#555555] uppercase tracking-wider mb-3">
+                    Configuration
+                  </h3>
+                  <div className="rounded-lg border border-[#1a1a1a] overflow-hidden">
+                    <table className="w-full">
+                      <tbody className="divide-y divide-[#141414]">
+                        {healthConfig.interval && (
+                          <tr>
+                            <td className="px-3 py-2 text-xs font-mono text-[#888888] w-1/3">
+                              Interval
+                            </td>
+                            <td className="px-3 py-2 text-xs font-mono text-white">
+                              {healthConfig.interval}
+                            </td>
+                          </tr>
+                        )}
+                        {healthConfig.timeout && (
+                          <tr>
+                            <td className="px-3 py-2 text-xs font-mono text-[#888888] w-1/3">
+                              Timeout
+                            </td>
+                            <td className="px-3 py-2 text-xs font-mono text-white">
+                              {healthConfig.timeout}
+                            </td>
+                          </tr>
+                        )}
+                        {healthConfig.retries != null && (
+                          <tr>
+                            <td className="px-3 py-2 text-xs font-mono text-[#888888] w-1/3">
+                              Retries
+                            </td>
+                            <td className="px-3 py-2 text-xs font-mono text-white">
+                              {healthConfig.retries}
+                            </td>
+                          </tr>
+                        )}
+                        {healthConfig.start_period && (
+                          <tr>
+                            <td className="px-3 py-2 text-xs font-mono text-[#888888] w-1/3">
+                              Start Period
+                            </td>
+                            <td className="px-3 py-2 text-xs font-mono text-white">
+                              {healthConfig.start_period}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <p className="text-xs text-[#555555]">
                   Health checks are configured in your compose file and synced
                   automatically.
                 </p>
-              </div>
+              </>
             ) : (
               <p className="text-sm text-[#555555]">
                 No health check detected. Configure a healthcheck in your

@@ -4,6 +4,7 @@ import { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Navbar } from "./Navbar";
 import { Toaster } from "react-hot-toast";
+import { ConfirmProvider } from "@/components/ui/confirm-modal";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -22,9 +23,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <Navbar />
-      <main className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1600px] mx-auto w-full">
-        {children}
-      </main>
+      <ConfirmProvider>
+        <main className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1600px] mx-auto w-full">
+          {children}
+        </main>
+      </ConfirmProvider>
       <Toaster
         position="bottom-right"
         toastOptions={{

@@ -43,6 +43,7 @@ import { formatDate, timeAgo, workerStaleReason } from "@/lib/utils";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
 import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
+import { useConfirm } from "@/components/ui/confirm-modal";
 
 export default function StackDetailPage() {
   const params = useParams();
@@ -59,6 +60,7 @@ export default function StackDetailPage() {
   // Worker liveness — must be declared unconditionally before any early return.
   // Passes all workers; we filter to the stack's worker after loading.
   const workerLiveness = useWorkerLiveness(workers);
+  const showConfirm = useConfirm();
 
   // Container actions state
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>(
@@ -252,12 +254,14 @@ export default function StackDetailPage() {
   };
 
   const handleDeleteStack = async () => {
-    if (
-      !confirm(
+    const confirmed = await showConfirm({
+      title: "Delete stack",
+      message:
         "Are you sure you want to delete this stack? This cannot be undone.",
-      )
-    )
-      return;
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!confirmed) return;
     setDeleting(true);
     const res = await reqDeleteStack(id);
     if (res.success) {
@@ -334,7 +338,13 @@ export default function StackDetailPage() {
   }, [selectedContainer, streamFilter, loadLogs]);
 
   const handleDeleteContainer = async (containerId: number) => {
-    if (!confirm("Delete this container?")) return;
+    const confirmed = await showConfirm({
+      title: "Delete container",
+      message: "This container will be permanently removed from this stack.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!confirmed) return;
     const res = await reqDeleteContainer(containerId);
     if (res.success) {
       setHasPendingChanges(true);
@@ -407,18 +417,23 @@ export default function StackDetailPage() {
     setSavingCompose(true);
     setComposeError("");
     const res = await reqUpdateCompose(id, { compose_yaml: composeYaml });
+    setSavingCompose(false);
     if (res.success) {
       setStack(res.data);
       setHasPendingChanges(true);
       await refreshContainers();
       setShowCompose(false);
-      if (confirm("Compose saved. Deploy now?")) {
-        handleDeploy();
-      }
+      const deploy = await showConfirm({
+        title: "Compose saved",
+        message:
+          "Deploy now to apply the updated definition to your containers?",
+        confirmLabel: "Deploy",
+        variant: "warning",
+      });
+      if (deploy) handleDeploy();
     } else {
       setComposeError(res.error_message || "Failed to update compose");
     }
-    setSavingCompose(false);
   };
 
   const handleSyncCompose = async () => {
