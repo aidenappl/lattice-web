@@ -99,6 +99,19 @@ function prettyField(raw: string | null): string {
   }
 }
 
+// Marker used to identify synthetic (WS/client-side) log entries.
+// A string UUID stored in the ContainerLog.id field won't collide with
+// integer DB ids and can be detected with typeof.
+const SYNTHETIC_ID_PREFIX = "syn_";
+function isSynthetic(log: ContainerLog): boolean {
+  return (
+    typeof log.id === "string" && String(log.id).startsWith(SYNTHETIC_ID_PREFIX)
+  );
+}
+function syntheticId(): string {
+  return SYNTHETIC_ID_PREFIX + crypto.randomUUID();
+}
+
 const SESSION_GAP_MS = 5_000;
 
 function isNewSession(prev: ContainerLog, curr: ContainerLog): boolean {
@@ -241,19 +254,13 @@ export default function ContainerDetailPage() {
     if (res.success) {
       const dbLogs = (res.data ?? []).slice().reverse();
       setLogs((prev) => {
-        // Preserve synthetic entries (WS/system messages; id > 1e12 = Date.now())
-        // that are newer than the newest persisted log — keeps them visible until
-        // real DB logs catch up after a restart or action.
-        const newestDbMs =
-          dbLogs.length > 0
-            ? new Date(dbLogs[dbLogs.length - 1].recorded_at).getTime()
-            : 0;
-        const synthetics = prev.filter(
-          (l) =>
-            l.id > 1_000_000_000_000 &&
-            new Date(l.recorded_at).getTime() > newestDbMs,
+        // Keep synthetic (WS-delivered) entries that haven't been persisted yet.
+        // Match by message content to avoid duplicates caused by clock skew.
+        const dbMessages = new Set(dbLogs.map((l) => l.message));
+        const pendingSynthetics = prev.filter(
+          (l) => isSynthetic(l) && !dbMessages.has(l.message),
         );
-        return [...dbLogs, ...synthetics];
+        return [...dbLogs, ...pendingSynthetics];
       });
     } else {
       console.warn(
@@ -292,7 +299,7 @@ export default function ContainerDetailPage() {
           rawStream === "stderr" ? "stderr" : "stdout";
         if (message) {
           const entry: ContainerLog = {
-            id: Date.now(), // synthetic — not persisted
+            id: syntheticId() as unknown as number, // string UUID; isSynthetic() detects it
             container_id: null,
             container_name: myName,
             worker_id: event.worker_id ?? 0,
@@ -359,7 +366,7 @@ export default function ContainerDetailPage() {
           setLogs((prev) => [
             ...prev,
             {
-              id: Date.now(),
+              id: syntheticId() as unknown as number,
               container_id: null,
               container_name: containerNameRef.current,
               worker_id: 0,
@@ -1072,7 +1079,7 @@ export default function ContainerDetailPage() {
             ) : (
               <>
                 {logs.map((line, i) => (
-                  <div key={line.id}>
+                  <div key={String(line.id)}>
                     {i > 0 && isNewSession(logs[i - 1], line) && (
                       <SessionBreak at={line.recorded_at} />
                     )}
