@@ -48,6 +48,7 @@ function buildSystemView(
             onlineWorkers: workers.filter((w) => w.status === "online").length,
             totalStacks: stacks.length,
             totalContainers: containers.length,
+            scale,
         } satisfies SystemNodeData,
     });
 
@@ -71,6 +72,7 @@ function buildSystemView(
                 containerCount: wContainers.length,
                 stackCount: wStacks.length,
                 lastHeartbeat: w.last_heartbeat_at,
+                scale,
             } satisfies WorkerNodeData,
         });
 
@@ -157,6 +159,7 @@ function buildSystemView(
                 status: s.status,
                 workerName: null,
                 containerCount: sContainers.length,
+                scale,
             } satisfies StackNodeData,
         });
 
@@ -200,6 +203,7 @@ function buildWorkerView(
                 containerCount: wContainers.length,
                 stackCount: wStacks.length,
                 lastHeartbeat: w.last_heartbeat_at,
+                scale,
             } satisfies WorkerNodeData,
         });
 
@@ -217,6 +221,7 @@ function buildWorkerView(
                     tag: c.tag,
                     healthStatus: c.health_status,
                     stackName: stack?.name ?? "unknown",
+                    scale,
                 } satisfies ContainerNodeData,
             });
 
@@ -259,6 +264,7 @@ function buildStackView(
                 status: s.status,
                 workerName: worker?.name ?? null,
                 containerCount: sContainers.length,
+                scale,
             } satisfies StackNodeData,
         });
 
@@ -275,6 +281,7 @@ function buildStackView(
                     tag: c.tag,
                     healthStatus: c.health_status,
                     stackName: s.name,
+                    scale,
                 } satisfies ContainerNodeData,
             });
 
@@ -323,6 +330,7 @@ function buildContainerView(
                 containerCount: wContainers.length,
                 stackCount: wStacks.length,
                 lastHeartbeat: w.last_heartbeat_at,
+                scale,
             } satisfies WorkerNodeData,
         });
     }
@@ -341,6 +349,7 @@ function buildContainerView(
                 status: s.status,
                 workerName: worker?.name ?? null,
                 containerCount: sContainers.length,
+                scale,
             } satisfies StackNodeData,
         });
 
@@ -370,6 +379,7 @@ function buildContainerView(
                     tag: c.tag,
                     healthStatus: c.health_status,
                     stackName: s.name,
+                    scale,
                 } satisfies ContainerNodeData,
             });
 

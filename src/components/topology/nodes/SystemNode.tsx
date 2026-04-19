@@ -3,9 +3,11 @@ import { Handle, Position } from "@xyflow/react";
 import { Logo } from "@/components/ui/logo";
 import type { SystemNodeData } from "../types";
 
+const scaleStyles = { sm: "scale-[0.85]", md: "", lg: "scale-[1.2]" } as const;
+
 function SystemNodeComponent({ data }: { data: SystemNodeData }) {
   return (
-    <div className="rounded-xl border border-border-strong bg-surface-alt shadow-lg px-6 py-5 min-w-[240px] cursor-pointer transition-all duration-200 hover:shadow-xl hover:border-accent/30">
+    <div className={`rounded-xl border border-border-strong bg-surface-alt shadow-lg px-6 py-5 min-w-[240px] cursor-pointer transition-all duration-200 hover:shadow-xl hover:border-accent/30 origin-center ${scaleStyles[data.scale]}`}>
       <Handle
         type="source"
         position={Position.Bottom}

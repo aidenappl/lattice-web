@@ -43,7 +43,7 @@ export function applyDagreLayout(
 
     const scaleFactor = SCALE_FACTORS[scale];
     const nodesep = Math.round(80 * scaleFactor);
-    const ranksep = Math.round(120 * scaleFactor);
+    const ranksep = Math.round(220 * scaleFactor);
 
     g.setGraph({
         rankdir: direction,

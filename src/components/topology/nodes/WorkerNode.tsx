@@ -15,13 +15,15 @@ const dotColors: Record<string, string> = {
   maintenance: "bg-[#eab308]",
 };
 
+const scaleStyles = { sm: "scale-[0.85]", md: "", lg: "scale-[1.2]" } as const;
+
 function WorkerNodeComponent({ data }: { data: WorkerNodeData }) {
   const borderClass = statusColors[data.status] ?? "border-border-strong";
   const dotClass = dotColors[data.status] ?? "bg-[#888888]";
 
   return (
     <div
-      className={`rounded-xl border bg-surface-alt px-5 py-4 min-w-[280px] cursor-pointer transition-all duration-200 hover:shadow-lg ${borderClass}`}
+      className={`rounded-xl border bg-surface-alt px-5 py-4 min-w-[280px] cursor-pointer transition-all duration-200 hover:shadow-lg origin-center ${borderClass} ${scaleStyles[data.scale]}`}
     >
       <Handle
         type="target"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -60,6 +60,7 @@ function TopologyBoardInner() {
   const { fitView } = useReactFlow();
   const [viewMode, setViewMode] = useState<ViewMode>("system");
   const [nodeScale, setNodeScale] = useState<NodeScale>("md");
+  const initialFit = useRef(true);
   const {
     nodes: layoutNodes,
     edges: layoutEdges,
@@ -74,8 +75,10 @@ function TopologyBoardInner() {
   useEffect(() => {
     setNodes(layoutNodes);
     setEdges(layoutEdges);
-    // Give React Flow a tick to render, then fit
-    requestAnimationFrame(() => fitView({ padding: 0.05, duration: 400 }));
+    // Skip animation on initial load to prevent zoom flash
+    const duration = initialFit.current ? 0 : 400;
+    initialFit.current = false;
+    requestAnimationFrame(() => fitView({ padding: 0.05, duration }));
   }, [layoutNodes, layoutEdges, setNodes, setEdges, fitView]);
 
   const onNodeClick: NodeMouseHandler = useCallback(
@@ -140,8 +143,6 @@ function TopologyBoardInner() {
           onNodeClick={onNodeClick}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          fitView
-          fitViewOptions={{ padding: 0.05, duration: 400 }}
           minZoom={0.1}
           maxZoom={2}
           proOptions={{ hideAttribution: true }}

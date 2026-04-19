@@ -1,4 +1,5 @@
 import { type Node, type Edge } from "@xyflow/react";
+import type { NodeScale } from "./layout";
 
 export type ViewMode = "system" | "worker" | "stack" | "container";
 
@@ -8,6 +9,7 @@ export type SystemNodeData = {
     onlineWorkers: number;
     totalStacks: number;
     totalContainers: number;
+    scale: NodeScale;
 };
 
 export type WorkerNodeData = {
@@ -18,6 +20,7 @@ export type WorkerNodeData = {
     containerCount: number;
     stackCount: number;
     lastHeartbeat: string | null;
+    scale: NodeScale;
 };
 
 export type StackNodeData = {
@@ -26,6 +29,7 @@ export type StackNodeData = {
     status: string;
     workerName: string | null;
     containerCount: number;
+    scale: NodeScale;
 };
 
 export type ContainerNodeData = {
@@ -36,6 +40,7 @@ export type ContainerNodeData = {
     tag: string;
     healthStatus: string;
     stackName: string;
+    scale: NodeScale;
 };
 
 export type TopologyNode =
