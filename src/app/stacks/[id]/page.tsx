@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 import {
   Stack,
   Container,
@@ -21,6 +23,7 @@ import {
   reqUpdateStack,
   reqDeleteStack,
   reqUpdateCompose,
+  reqStartContainer,
   reqStopContainer,
   reqRestartContainer,
   reqRemoveContainer,
@@ -37,7 +40,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { EnvVarEditor } from "@/components/ui/env-var-editor";
-import { formatDate, timeAgo } from "@/lib/utils";
+import { formatDate, timeAgo, workerStaleReason } from "@/lib/utils";
+import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
+import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
+import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
 
 type ContainerForm = {
   name: string;
@@ -265,6 +271,40 @@ export default function StackDetailPage() {
     if (res.success) setContainers(res.data ?? []);
   };
 
+  // WebSocket: refresh containers on any sync/status event for this stack's containers
+  const containerNamesRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    containerNamesRef.current = new Set(containers.map((c) => c.name));
+  }, [containers]);
+
+  const handleSocketEvent = useCallback(
+    (event: AdminSocketEvent) => {
+      if (
+        event.type === "container_status" ||
+        event.type === "container_sync" ||
+        event.type === "container_health_status"
+      ) {
+        const name = (event.payload?.["container_name"] as string) ?? "";
+        if (containerNamesRef.current.has(name)) {
+          console.log(
+            `[StackPage] WS ${event.type} for "${name}" — refreshing containers`,
+          );
+          refreshContainers();
+        }
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [id],
+  );
+  useAdminSocket(handleSocketEvent);
+
+  // Periodic lightweight container status refresh (every 8s)
+  useEffect(() => {
+    const interval = setInterval(refreshContainers, 8000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   const handleDeploy = async () => {
     setDeploying(true);
     const res = await reqDeployStack(id);
@@ -420,15 +460,45 @@ export default function StackDetailPage() {
   };
 
   const handleContainerAction = async (containerId: number, action: string) => {
+    const container = containers.find((c) => c.id === containerId);
+    const name = container?.name ?? String(containerId);
+    const label = action.charAt(0).toUpperCase() + action.slice(1);
     const key = `${containerId}-${action}`;
     setActionLoading((prev) => ({ ...prev, [key]: true }));
-    const actionFns: Record<string, (id: number) => Promise<unknown>> = {
+
+    const actionFns: Record<
+      string,
+      (id: number) => Promise<{ success: boolean; error_message?: string }>
+    > = {
+      start: reqStartContainer,
       stop: reqStopContainer,
       restart: reqRestartContainer,
       remove: reqRemoveContainer,
       recreate: reqRecreateContainer,
     };
-    await actionFns[action]?.(containerId);
+
+    const fn = actionFns[action];
+    if (!fn) {
+      console.warn(`[StackPage] unknown action "${action}"`);
+      setActionLoading((prev) => ({ ...prev, [key]: false }));
+      return;
+    }
+
+    const toastId = toast.loading(`Sending ${label.toLowerCase()} to ${name}…`);
+    console.log(
+      `[StackPage] sending action "${action}" to container ${containerId} (${name})`,
+    );
+
+    const res = await fn(containerId);
+    if (res.success) {
+      toast.success(`${label} command sent to ${name}`, { id: toastId });
+      console.log(`[StackPage] action "${action}" ok for ${name}`);
+    } else {
+      const msg = res.error_message ?? "Unknown error";
+      toast.error(`${label} failed: ${msg}`, { id: toastId });
+      console.error(`[StackPage] action "${action}" failed for ${name}:`, msg);
+    }
+
     // Give the worker a moment to execute, then refresh
     setTimeout(async () => {
       await refreshContainers();
@@ -478,8 +548,26 @@ export default function StackDetailPage() {
       </div>
     );
 
+  // Worker liveness — used to gate deploy + container controls
+  const stackWorker = workers.find((w) => w.id === stack.worker_id) ?? null;
+  const stackWorkerList = stackWorker ? [stackWorker] : [];
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const workerLiveness = useWorkerLiveness(stackWorkerList);
+  const workerOnline = stackWorker
+    ? (workerLiveness[stackWorker.id] ?? false)
+    : true; // no worker assigned → don't block
+  const staleReason = stackWorker ? workerStaleReason(stackWorker) : null;
+
   return (
     <div>
+      {/* Worker offline banner */}
+      {!workerOnline && (
+        <WorkerOfflineBanner
+          workerName={stackWorker?.name}
+          reason={staleReason}
+        />
+      )}
+
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -519,7 +607,8 @@ export default function StackDetailPage() {
               <div className="relative">
                 <Button
                   onClick={handleDeploy}
-                  disabled={isDeploying}
+                  disabled={isDeploying || !workerOnline}
+                  title={!workerOnline ? "Worker is offline — cannot deploy" : undefined}
                   onMouseEnter={() => showForce && setForceDeployHovered(true)}
                   onMouseLeave={() => setForceDeployHovered(false)}
                   className={
@@ -1021,8 +1110,13 @@ export default function StackDetailPage() {
                         key={container.id}
                         className="border-b border-[#1a1a1a] last:border-0"
                       >
-                        <td className="px-4 py-3 text-sm font-medium text-white">
-                          {container.name}
+                        <td className="px-4 py-3 text-sm font-medium">
+                          <Link
+                            href={`/containers/${container.id}`}
+                            className="text-white hover:text-[#3b82f6] transition-colors"
+                          >
+                            {container.name}
+                          </Link>
                         </td>
                         <td className="px-4 py-3 text-sm text-[#888888] font-mono">
                           {container.image}:{container.tag}
@@ -1032,30 +1126,52 @@ export default function StackDetailPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() =>
-                                handleContainerAction(container.id, "restart")
-                              }
-                              disabled={
-                                !!actionLoading[`${container.id}-restart`]
-                              }
-                              className="px-2 py-1 text-xs text-[#3b82f6] hover:bg-[#161616] rounded transition-colors disabled:opacity-40"
-                            >
-                              {actionLoading[`${container.id}-restart`]
-                                ? "..."
-                                : "Restart"}
-                            </button>
-                            <button
-                              onClick={() =>
-                                handleContainerAction(container.id, "stop")
-                              }
-                              disabled={!!actionLoading[`${container.id}-stop`]}
-                              className="px-2 py-1 text-xs text-[#f59e0b] hover:bg-[#161616] rounded transition-colors disabled:opacity-40"
-                            >
-                              {actionLoading[`${container.id}-stop`]
-                                ? "..."
-                                : "Stop"}
-                            </button>
+                            {(container.status === "stopped" ||
+                              container.status === "error") && (
+                              <button
+                                onClick={() =>
+                                  handleContainerAction(container.id, "start")
+                                }
+                                disabled={
+                                  !!actionLoading[`${container.id}-start`]
+                                }
+                                className="px-2 py-1 text-xs text-[#22c55e] hover:bg-[#161616] rounded transition-colors disabled:opacity-40"
+                              >
+                                {actionLoading[`${container.id}-start`]
+                                  ? "..."
+                                  : "Start"}
+                              </button>
+                            )}
+                            {container.status === "running" && (
+                              <button
+                                onClick={() =>
+                                  handleContainerAction(container.id, "restart")
+                                }
+                                disabled={
+                                  !!actionLoading[`${container.id}-restart`]
+                                }
+                                className="px-2 py-1 text-xs text-[#3b82f6] hover:bg-[#161616] rounded transition-colors disabled:opacity-40"
+                              >
+                                {actionLoading[`${container.id}-restart`]
+                                  ? "..."
+                                  : "Restart"}
+                              </button>
+                            )}
+                            {container.status === "running" && (
+                              <button
+                                onClick={() =>
+                                  handleContainerAction(container.id, "stop")
+                                }
+                                disabled={
+                                  !!actionLoading[`${container.id}-stop`]
+                                }
+                                className="px-2 py-1 text-xs text-[#f59e0b] hover:bg-[#161616] rounded transition-colors disabled:opacity-40"
+                              >
+                                {actionLoading[`${container.id}-stop`]
+                                  ? "..."
+                                  : "Stop"}
+                              </button>
+                            )}
                             <button
                               onClick={() =>
                                 handleContainerAction(container.id, "recreate")

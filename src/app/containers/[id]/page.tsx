@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import toast from "react-hot-toast";
 import { Container, ContainerLog, Stack, Worker } from "@/types";
 import {
   reqGetContainer,
@@ -21,7 +22,10 @@ import { reqGetStack } from "@/services/stacks.service";
 import { reqGetWorker } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
-import { formatDate, timeAgo } from "@/lib/utils";
+import { formatDate, timeAgo, workerStaleReason } from "@/lib/utils";
+import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
+import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
+import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -116,11 +120,13 @@ export default function ContainerDetailPage() {
   const [saving, setSaving] = useState(false);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const containerNameRef = useRef<string>("");
 
   const loadContainer = useCallback(async () => {
     const res = await reqGetContainer(id);
     if (res.success) {
       setContainer(res.data);
+      containerNameRef.current = res.data.name;
       if (!editing) {
         setEditName(res.data.name);
         setEditImage(res.data.image);
@@ -146,6 +152,11 @@ export default function ContainerDetailPage() {
           }
         }
       }
+    } else {
+      console.error(
+        `[ContainerInspector] failed to load container ${id}:`,
+        res.error_message,
+      );
     }
     setLoading(false);
   }, [id, editing]);
@@ -153,7 +164,39 @@ export default function ContainerDetailPage() {
   const loadLogs = useCallback(async () => {
     const res = await reqGetContainerLogs(id, { limit: 250 });
     if (res.success) setLogs(res.data ?? []);
+    else
+      console.warn(
+        `[ContainerInspector] failed to load logs for container ${id}:`,
+        res.error_message,
+      );
   }, [id]);
+
+  // WebSocket: refresh on events matching this container
+  const handleSocketEvent = useCallback(
+    (event: AdminSocketEvent) => {
+      const payload = event.payload ?? {};
+      const eventName = payload["container_name"] as string | undefined;
+      const myName = containerNameRef.current;
+
+      if (
+        (event.type === "container_status" ||
+          event.type === "container_sync" ||
+          event.type === "container_health_status") &&
+        eventName &&
+        myName &&
+        eventName === myName
+      ) {
+        console.log(
+          `[ContainerInspector] WS ${event.type} matched "${myName}"`,
+          payload,
+        );
+        loadContainer();
+        if (tab === "logs") loadLogs();
+      }
+    },
+    [loadContainer, loadLogs, tab],
+  );
+  useAdminSocket(handleSocketEvent);
 
   useEffect(() => {
     loadContainer();
@@ -170,10 +213,44 @@ export default function ContainerDetailPage() {
       logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs, tab]);
 
-  const runAction = async (action: string, fn: () => Promise<unknown>) => {
+  const runAction = async (
+    action: string,
+    fn: () => Promise<{ success: boolean; error_message?: string }>,
+  ) => {
+    const name = containerNameRef.current || String(id);
+    const label = action.charAt(0).toUpperCase() + action.slice(1);
     setActionError(null);
     setActionLoading(action);
-    await fn();
+
+    const toastId = toast.loading(`Sending ${label.toLowerCase()} to ${name}…`);
+    console.log(
+      `[ContainerInspector] sending action "${action}" to container ${id} (${name})`,
+    );
+
+    try {
+      const res = await fn();
+      if (res.success) {
+        toast.success(`${label} command sent to ${name}`, { id: toastId });
+        console.log(`[ContainerInspector] action "${action}" ok for ${name}`);
+      } else {
+        const msg = res.error_message ?? "Unknown error";
+        toast.error(`${label} failed: ${msg}`, { id: toastId });
+        console.error(
+          `[ContainerInspector] action "${action}" failed for ${name}:`,
+          msg,
+        );
+        setActionError(msg);
+      }
+    } catch (err) {
+      const msg = String(err);
+      toast.error(`${label} error: ${msg}`, { id: toastId });
+      console.error(
+        `[ContainerInspector] action "${action}" threw for ${name}:`,
+        err,
+      );
+      setActionError(msg);
+    }
+
     setActionLoading(null);
     setTimeout(() => {
       loadContainer();
@@ -184,7 +261,8 @@ export default function ContainerDetailPage() {
   const handleSave = async () => {
     if (!container) return;
     setSaving(true);
-    await reqUpdateContainer(container.id, {
+    const toastId = toast.loading("Saving container config…");
+    const res = await reqUpdateContainer(container.id, {
       name: editName || undefined,
       image: editImage || undefined,
       tag: editTag || undefined,
@@ -196,8 +274,15 @@ export default function ContainerDetailPage() {
       replicas: editReplicas ? Number(editReplicas) : undefined,
     } as Partial<Container>);
     setSaving(false);
-    setEditing(false);
-    loadContainer();
+    if (res.success) {
+      toast.success("Container config saved", { id: toastId });
+      setEditing(false);
+      loadContainer();
+    } else {
+      toast.error(`Save failed: ${res.error_message ?? "unknown error"}`, {
+        id: toastId,
+      });
+    }
   };
 
   if (loading) return <PageLoader />;
@@ -218,9 +303,25 @@ export default function ContainerDetailPage() {
     container.status === "stopped" || container.status === "error";
   const isPaused = container.status === "paused";
 
+  // Worker liveness — disable all controls when the worker is offline
+  const workerList = worker ? [worker] : [];
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const workerLiveness = useWorkerLiveness(workerList);
+  const workerOnline = worker ? (workerLiveness[worker.id] ?? false) : true;
+  const staleReason = worker ? workerStaleReason(worker) : null;
+  const controlsDisabled = !workerOnline || !!actionLoading;
+
   return (
     <div>
-      {/* Breadcrumb */}
+      {/* Worker offline banner */}
+      {!workerOnline && (
+        <WorkerOfflineBanner
+          workerName={worker?.name}
+          reason={staleReason}
+        />
+      )}
+
+      {/* Breadcrumb */}}
       <div className="flex items-center gap-2 text-sm text-[#555555] mb-6">
         <Link href="/containers" className="hover:text-white transition-colors">
           Containers
@@ -273,7 +374,7 @@ export default function ContainerDetailPage() {
               <path d="M8 5v14l11-7z" />
             </svg>
           }
-          disabled={!isStopped || !!actionLoading}
+          disabled={!isStopped || controlsDisabled}
           loading={actionLoading === "start"}
           color="text-[#22c55e] hover:bg-[#22c55e]/10"
           onClick={() =>
@@ -292,7 +393,7 @@ export default function ContainerDetailPage() {
               <rect x="6" y="6" width="12" height="12" />
             </svg>
           }
-          disabled={!isRunning || !!actionLoading}
+          disabled={!isRunning || controlsDisabled}
           loading={actionLoading === "stop"}
           color="text-[#888888] hover:bg-[#2a2a2a]"
           onClick={() =>
@@ -317,7 +418,7 @@ export default function ContainerDetailPage() {
               />
             </svg>
           }
-          disabled={!isRunning || !!actionLoading}
+          disabled={!isRunning || controlsDisabled}
           loading={actionLoading === "kill"}
           color="text-[#ef4444] hover:bg-[#ef4444]/10"
           onClick={() =>
@@ -342,7 +443,7 @@ export default function ContainerDetailPage() {
               />
             </svg>
           }
-          disabled={!isRunning || !!actionLoading}
+          disabled={!isRunning || controlsDisabled}
           loading={actionLoading === "restart"}
           color="text-[#3b82f6] hover:bg-[#3b82f6]/10"
           onClick={() =>
@@ -361,7 +462,7 @@ export default function ContainerDetailPage() {
               <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
             </svg>
           }
-          disabled={!isRunning || !!actionLoading}
+          disabled={!isRunning || controlsDisabled}
           loading={actionLoading === "pause"}
           color="text-[#888888] hover:bg-[#2a2a2a]"
           onClick={() =>
@@ -380,7 +481,7 @@ export default function ContainerDetailPage() {
               <path d="M8 5v14l11-7z" />
             </svg>
           }
-          disabled={!isPaused || !!actionLoading}
+          disabled={!isPaused || controlsDisabled}
           loading={actionLoading === "unpause"}
           color="text-[#22c55e] hover:bg-[#22c55e]/10"
           onClick={() =>
@@ -405,7 +506,7 @@ export default function ContainerDetailPage() {
               />
             </svg>
           }
-          disabled={!!actionLoading}
+          disabled={controlsDisabled}
           loading={actionLoading === "recreate"}
           color="text-[#a855f7] hover:bg-[#a855f7]/10"
           onClick={() =>
@@ -430,7 +531,7 @@ export default function ContainerDetailPage() {
               />
             </svg>
           }
-          disabled={!!actionLoading}
+          disabled={controlsDisabled}
           loading={actionLoading === "remove"}
           color="text-[#ef4444] hover:bg-[#ef4444]/10"
           onClick={() =>
@@ -874,10 +975,15 @@ export default function ContainerDetailPage() {
                 <code className="text-sm font-mono text-[#d4d4d4] bg-[#0d0d0d] rounded-lg px-3 py-2 block">
                   {container.health_check}
                 </code>
+                <p className="text-xs text-[#555555] mt-2">
+                  Health checks are configured in your compose file and synced
+                  automatically.
+                </p>
               </div>
             ) : (
               <p className="text-sm text-[#555555]">
-                No health check configured. Add one by editing the container.
+                No health check detected. Configure a healthcheck in your
+                compose file and redeploy — Lattice will sync it automatically.
               </p>
             )}
           </div>

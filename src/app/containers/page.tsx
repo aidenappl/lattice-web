@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import toast from "react-hot-toast";
 import { Container } from "@/types";
 import {
   reqGetAllContainers,
@@ -16,6 +17,9 @@ import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import { Stack, Worker } from "@/types";
 import { timeAgo } from "@/lib/utils";
+import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
+import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
+import { StalePill } from "@/components/ui/worker-offline-banner";
 
 function parsePortMappings(raw: string | null): string {
   if (!raw) return "—";
@@ -53,6 +57,9 @@ export default function ContainersPage() {
     {},
   );
 
+  // Debounce socket-driven refreshes
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const load = useCallback(async () => {
     const [cRes, sRes, wRes] = await Promise.all([
       reqGetAllContainers(),
@@ -60,38 +67,89 @@ export default function ContainersPage() {
       reqGetWorkers(),
     ]);
     if (cRes.success) setContainers(cRes.data ?? []);
+    else console.error("[Containers] failed to load:", cRes.error_message);
     if (sRes.success) setStacks(sRes.data ?? []);
     if (wRes.success) setWorkers(wRes.data ?? []);
     setLoading(false);
   }, []);
 
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(load, 1500);
+  }, [load]);
+
+  // Real-time WebSocket updates
+  const handleSocketEvent = useCallback(
+    (event: AdminSocketEvent) => {
+      if (
+        event.type === "container_sync" ||
+        event.type === "container_status" ||
+        event.type === "container_health_status"
+      ) {
+        const name = (event.payload?.["container_name"] as string) ?? "?";
+        console.log(
+          `[Containers] WS ${event.type} for "${name}"`,
+          event.payload,
+        );
+        scheduleRefresh();
+      }
+    },
+    [scheduleRefresh],
+  );
+  useAdminSocket(handleSocketEvent);
+
   useEffect(() => {
     load();
     const interval = setInterval(load, 15000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
   }, [load]);
 
   const runAction = async (id: number, action: string) => {
+    const container = containers.find((c) => c.id === id);
+    const name = container?.name ?? String(id);
+    const label = action.charAt(0).toUpperCase() + action.slice(1);
+
     setActionLoading((p) => ({ ...p, [id]: action }));
-    const fn =
-      action === "start"
-        ? reqStartContainer
-        : action === "stop"
-          ? reqStopContainer
-          : action === "restart"
-            ? reqRestartContainer
-            : reqRecreateContainer;
-    await fn(id);
+    const toastId = toast.loading(`Sending ${label.toLowerCase()} to ${name}…`);
+
+    try {
+      const fns: Record<
+        string,
+        (id: number) => Promise<{ success: boolean; error_message?: string }>
+      > = {
+        start: reqStartContainer,
+        stop: reqStopContainer,
+        restart: reqRestartContainer,
+        recreate: reqRecreateContainer,
+      };
+      const res = await fns[action]?.(id);
+      if (res?.success) {
+        toast.success(`${label} command sent to ${name}`, { id: toastId });
+        console.log(`[Containers] ${action} ok for container ${id} (${name})`);
+      } else {
+        const msg = res?.error_message ?? "Unknown error";
+        toast.error(`${label} failed: ${msg}`, { id: toastId });
+        console.error(`[Containers] ${action} failed for ${name}:`, msg);
+      }
+    } catch (err) {
+      toast.error(`${label} error: ${String(err)}`, { id: toastId });
+      console.error(`[Containers] ${action} threw for ${name}:`, err);
+    }
+
     setActionLoading((p) => {
       const n = { ...p };
       delete n[id];
       return n;
     });
-    setTimeout(load, 2000);
+    setTimeout(load, 2500);
   };
 
   const stackMap = Object.fromEntries(stacks.map((s) => [s.id, s]));
   const workerMap = Object.fromEntries(workers.map((w) => [w.id, w]));
+  const workerLiveness = useWorkerLiveness(workers);
 
   const filtered = containers.filter((c) => {
     if (filterStatus !== "all" && c.status !== filterStatus) return false;
@@ -241,6 +299,9 @@ export default function ContainersPage() {
                   ? workerMap[stack.worker_id]
                   : undefined;
                 const busy = actionLoading[c.id];
+                const workerOnline = worker
+                  ? (workerLiveness[worker.id] ?? false)
+                  : true; // unknown → don't block
                 return (
                   <tr
                     key={c.id}
@@ -255,7 +316,10 @@ export default function ContainersPage() {
                       </Link>
                     </td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={c.status} />
+                      <div className="flex items-center gap-1.5">
+                        <StatusBadge status={c.status} />
+                        {!workerOnline && <StalePill />}
+                      </div>
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
                       {c.health_status && c.health_status !== "none" ? (
@@ -299,7 +363,9 @@ export default function ContainersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 hidden xl:table-cell">
-                      <span className="text-xs text-[#555555]">
+                      <span
+                        className={`text-xs ${!workerOnline ? "text-[#7c3a00]" : "text-[#555555]"}`}
+                      >
                         {timeAgo(c.updated_at)}
                       </span>
                     </td>
@@ -309,8 +375,8 @@ export default function ContainersPage() {
                         {(c.status === "stopped" || c.status === "error") && (
                           <button
                             onClick={() => runAction(c.id, "start")}
-                            disabled={!!busy}
-                            title="Start"
+                            disabled={!!busy || !workerOnline}
+                            title={!workerOnline ? "Worker offline" : "Start"}
                             className="h-7 w-7 rounded flex items-center justify-center text-[#22c55e] hover:bg-[#22c55e]/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "start" ? (
@@ -348,8 +414,8 @@ export default function ContainersPage() {
                         {c.status === "running" && (
                           <button
                             onClick={() => runAction(c.id, "stop")}
-                            disabled={!!busy}
-                            title="Stop"
+                            disabled={!!busy || !workerOnline}
+                            title={!workerOnline ? "Worker offline" : "Stop"}
                             className="h-7 w-7 rounded flex items-center justify-center text-[#888888] hover:text-[#ef4444] hover:bg-[#ef4444]/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "stop" ? (
@@ -387,8 +453,8 @@ export default function ContainersPage() {
                         {c.status === "running" && (
                           <button
                             onClick={() => runAction(c.id, "restart")}
-                            disabled={!!busy}
-                            title="Restart"
+                            disabled={!!busy || !workerOnline}
+                            title={!workerOnline ? "Worker offline" : "Restart"}
                             className="h-7 w-7 rounded flex items-center justify-center text-[#888888] hover:text-[#3b82f6] hover:bg-[#3b82f6]/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "restart" ? (
@@ -428,6 +494,49 @@ export default function ContainersPage() {
                             )}
                           </button>
                         )}
+                        {/* Recreate */}
+                        <button
+                          onClick={() => runAction(c.id, "recreate")}
+                          disabled={!!busy || !workerOnline}
+                          title={!workerOnline ? "Worker offline" : "Recreate"}
+                          className="h-7 w-7 rounded flex items-center justify-center text-[#888888] hover:text-[#a855f7] hover:bg-[#a855f7]/10 disabled:opacity-40 transition-colors cursor-pointer"
+                        >
+                          {busy === "recreate" ? (
+                            <svg
+                              className="h-3.5 w-3.5 animate-spin"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              />
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"
+                              />
+                            </svg>
+                          ) : (
+                            <svg
+                              className="h-3.5 w-3.5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                              />
+                            </svg>
+                          )}
+                        </button>
                         {/* Details link */}
                         <Link
                           href={`/containers/${c.id}`}
