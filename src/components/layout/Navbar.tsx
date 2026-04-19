@@ -15,6 +15,7 @@ const navigation = [
   { name: "Containers", href: "/containers" },
   { name: "Deployments", href: "/deployments" },
   { name: "Registries", href: "/registries" },
+  { name: "Audit Log", href: "/audit-log" },
   { name: "Settings", href: "/settings" },
 ];
 

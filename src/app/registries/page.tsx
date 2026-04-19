@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { Registry } from "@/types";
 import {
   reqGetRegistries,
   reqCreateRegistry,
+  reqUpdateRegistry,
   reqDeleteRegistry,
   reqTestRegistry,
   reqTestRegistryInline,
@@ -42,6 +43,15 @@ export default function RegistriesPage() {
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [browseLoading, setBrowseLoading] = useState(false);
+
+  // Edit state
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editUrl, setEditUrl] = useState("");
+  const [editType, setEditType] = useState<"dockerhub" | "ghcr" | "custom">("custom");
+  const [editUsername, setEditUsername] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
 
   const load = async () => {
     const res = await reqGetRegistries();
@@ -92,6 +102,33 @@ export default function RegistriesPage() {
     setPassword("");
     setTestStatus("idle");
     setTestError("");
+  };
+
+  const startEdit = (reg: Registry) => {
+    setEditId(reg.id);
+    setEditName(reg.name);
+    setEditUrl(reg.url);
+    setEditType(reg.type);
+    setEditUsername(reg.username ?? "");
+    setEditPassword("");
+  };
+
+  const handleSaveEdit = async () => {
+    if (editId === null) return;
+    setEditSaving(true);
+    const data: Record<string, unknown> = {
+      name: editName.trim(),
+      url: editUrl.trim(),
+      type: editType,
+      username: editUsername || undefined,
+    };
+    if (editPassword) data.password = editPassword;
+    const res = await reqUpdateRegistry(editId, data as Parameters<typeof reqUpdateRegistry>[1]);
+    if (res.success) {
+      setRegistries((prev) => prev.map((r) => (r.id === editId ? res.data : r)));
+      setEditId(null);
+    }
+    setEditSaving(false);
   };
 
   const handleDelete = async (id: number) => {
@@ -317,8 +354,8 @@ export default function RegistriesPage() {
               </tr>
             ) : (
               registries.map((reg) => (
+                <React.Fragment key={reg.id}>
                 <tr
-                  key={reg.id}
                   className="border-b border-[#1a1a1a] last:border-0 hover:bg-[#161616] transition-colors"
                 >
                   <td className="px-4 py-3 text-sm font-medium text-white">
@@ -344,6 +381,13 @@ export default function RegistriesPage() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      onClick={() => startEdit(reg)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleTestExisting(reg.id)}
                     >
                       Test
@@ -364,6 +408,39 @@ export default function RegistriesPage() {
                     </Button>
                   </td>
                 </tr>
+                {editId === reg.id && (
+                  <tr className="border-b border-[#1a1a1a] bg-[#0d0d0d]">
+                    <td colSpan={6} className="px-4 py-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                        <Input id={`edit-name-${reg.id}`} label="Name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                        <Input id={`edit-url-${reg.id}`} label="URL" value={editUrl} onChange={(e) => setEditUrl(e.target.value)} />
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-medium text-[#888888] uppercase tracking-wider">Type</label>
+                          <select
+                            value={editType}
+                            onChange={(e) => setEditType(e.target.value as "dockerhub" | "ghcr" | "custom")}
+                            className="h-9 w-full rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 text-sm text-white cursor-pointer focus:border-[#444444] focus:outline-none"
+                          >
+                            <option value="custom">Custom Registry</option>
+                            <option value="dockerhub">Docker Hub</option>
+                            <option value="ghcr">GHCR</option>
+                          </select>
+                        </div>
+                        <Input id={`edit-username-${reg.id}`} label="Username" value={editUsername} onChange={(e) => setEditUsername(e.target.value)} />
+                        <Input id={`edit-password-${reg.id}`} label="Password (leave blank to keep)" type="password" value={editPassword} onChange={(e) => setEditPassword(e.target.value)} />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleSaveEdit} disabled={editSaving || !editName.trim() || !editUrl.trim()}>
+                          {editSaving ? "Saving..." : "Save"}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setEditId(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
               ))
             )}
           </tbody>

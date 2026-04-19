@@ -22,6 +22,7 @@ import {
   reqDeleteStack,
   reqUpdateCompose,
   reqSyncCompose,
+  reqCreateContainer,
   reqStartContainer,
   reqStopContainer,
   reqRestartContainer,
@@ -98,6 +99,13 @@ export default function StackDetailPage() {
 
   // Delete stack
   const [deleting, setDeleting] = useState(false);
+
+  // Create container
+  const [showCreateContainer, setShowCreateContainer] = useState(false);
+  const [newContainerName, setNewContainerName] = useState("");
+  const [newContainerImage, setNewContainerImage] = useState("");
+  const [newContainerTag, setNewContainerTag] = useState("latest");
+  const [creatingContainer, setCreatingContainer] = useState(false);
 
   // Deploy button state
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
@@ -268,6 +276,26 @@ export default function StackDetailPage() {
       router.push("/stacks");
     }
     setDeleting(false);
+  };
+
+  const handleCreateContainer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newContainerName.trim() || !newContainerImage.trim()) return;
+    setCreatingContainer(true);
+    const res = await reqCreateContainer(id, {
+      name: newContainerName.trim(),
+      image: newContainerImage.trim(),
+      tag: newContainerTag.trim() || "latest",
+    } as Partial<Container>);
+    if (res.success) {
+      setContainers((prev) => [...prev, res.data]);
+      setHasPendingChanges(true);
+      setShowCreateContainer(false);
+      setNewContainerName("");
+      setNewContainerImage("");
+      setNewContainerTag("latest");
+    }
+    setCreatingContainer(false);
   };
 
   const openEditStack = () => {
@@ -817,11 +845,49 @@ export default function StackDetailPage() {
           <div className="rounded-xl border border-[#1a1a1a] bg-[#111111] overflow-hidden">
             <div className="px-5 py-4 border-b border-[#1a1a1a] flex items-center justify-between">
               <h2 className="text-sm font-medium text-white">Containers</h2>
-              <span className="text-xs text-[#555555]">
-                {containers.length} container
-                {containers.length !== 1 ? "s" : ""}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-[#555555]">
+                  {containers.length} container
+                  {containers.length !== 1 ? "s" : ""}
+                </span>
+                <Button size="sm" variant="secondary" onClick={() => setShowCreateContainer(!showCreateContainer)}>
+                  {showCreateContainer ? "Cancel" : "Add Container"}
+                </Button>
+              </div>
             </div>
+
+            {showCreateContainer && (
+              <form onSubmit={handleCreateContainer} className="px-5 py-4 border-b border-[#1a1a1a] bg-[#0d0d0d]">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                  <Input
+                    id="new-container-name"
+                    label="Name"
+                    placeholder="my-service"
+                    value={newContainerName}
+                    onChange={(e) => setNewContainerName(e.target.value)}
+                    required
+                  />
+                  <Input
+                    id="new-container-image"
+                    label="Image"
+                    placeholder="nginx"
+                    value={newContainerImage}
+                    onChange={(e) => setNewContainerImage(e.target.value)}
+                    required
+                  />
+                  <Input
+                    id="new-container-tag"
+                    label="Tag"
+                    placeholder="latest"
+                    value={newContainerTag}
+                    onChange={(e) => setNewContainerTag(e.target.value)}
+                  />
+                </div>
+                <Button type="submit" size="sm" disabled={creatingContainer || !newContainerName.trim() || !newContainerImage.trim()}>
+                  {creatingContainer ? "Creating..." : "Create Container"}
+                </Button>
+              </form>
+            )}
 
             {containers.length === 0 ? (
               <div className="px-5 py-8 text-center text-sm text-[#555555]">
@@ -1026,15 +1092,7 @@ export default function StackDetailPage() {
                     <span className="text-[#555555] shrink-0 select-none">
                       {new Date(log.recorded_at).toLocaleTimeString()}
                     </span>
-                    <span
-                      className={
-                        log.stream === "stderr"
-                          ? "text-[#ef4444]"
-                          : "text-[#888888]"
-                      }
-                    >
-                      {log.message}
-                    </span>
+                    <span className="text-[#888888]">{log.message}</span>
                   </div>
                 ))}
                 <div ref={logsEndRef} />

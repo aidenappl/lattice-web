@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Worker } from "@/types";
 import { reqGetWorkers, reqCreateWorker, reqCreateWorkerToken } from "@/services/workers.service";
@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { timeAgo } from "@/lib/utils";
+import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 
 export default function WorkersPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
@@ -32,6 +33,37 @@ export default function WorkersPage() {
     };
     load();
   }, []);
+
+  // Live updates via WebSocket
+  const handleSocketEvent = useCallback(
+    (event: AdminSocketEvent) => {
+      if (event.type === "worker_heartbeat" && event.worker_id) {
+        setWorkers((prev) =>
+          prev.map((w) =>
+            w.id === event.worker_id
+              ? { ...w, status: "online", last_heartbeat_at: new Date().toISOString() }
+              : w,
+          ),
+        );
+      }
+      if (event.type === "worker_connected" && event.worker_id) {
+        setWorkers((prev) =>
+          prev.map((w) =>
+            w.id === event.worker_id
+              ? { ...w, status: "online", last_heartbeat_at: new Date().toISOString() }
+              : w,
+          ),
+        );
+      }
+      if (event.type === "worker_disconnected" && event.worker_id) {
+        setWorkers((prev) =>
+          prev.map((w) => (w.id === event.worker_id ? { ...w, status: "offline" } : w)),
+        );
+      }
+    },
+    [],
+  );
+  useAdminSocket(handleSocketEvent);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

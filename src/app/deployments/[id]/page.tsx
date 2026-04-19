@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Deployment } from "@/types";
-import { reqGetDeployment, reqApproveDeployment, reqRollbackDeployment } from "@/services/deployments.service";
+import { Deployment, DeploymentLog, Stack } from "@/types";
+import { reqGetDeployment, reqGetDeploymentLogs, reqApproveDeployment, reqRollbackDeployment } from "@/services/deployments.service";
+import { reqGetStacks } from "@/services/stacks.service";
+import { reqGetUsers } from "@/services/admin.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 
 const timelineSteps = ["pending", "approved", "deploying", "deployed"] as const;
 
@@ -18,17 +21,82 @@ export default function DeploymentDetailPage() {
   const id = Number(params.id);
 
   const [deployment, setDeployment] = useState<Deployment | null>(null);
+  const [logs, setLogs] = useState<DeploymentLog[]>([]);
+  const [stacks, setStacks] = useState<Stack[]>([]);
+  const [users, setUsers] = useState<{ id: number; name: string; email: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const load = async () => {
-      const res = await reqGetDeployment(id);
-      if (res.success) setDeployment(res.data);
+      const [depRes, logsRes, stacksRes, usersRes] = await Promise.all([
+        reqGetDeployment(id),
+        reqGetDeploymentLogs(id),
+        reqGetStacks(),
+        reqGetUsers(),
+      ]);
+      if (depRes.success) setDeployment(depRes.data);
+      if (logsRes.success) setLogs(logsRes.data ?? []);
+      if (stacksRes.success) setStacks(stacksRes.data ?? []);
+      if (usersRes.success) setUsers(usersRes.data ?? []);
       setLoading(false);
     };
     load();
   }, [id]);
+
+  // WS: listen for deployment_progress events for this deployment
+  const handleSocketEvent = useCallback(
+    (event: AdminSocketEvent) => {
+      if (event.type !== "deployment_progress") return;
+      const payload = event.payload ?? {};
+      const depId = payload["deployment_id"] as number | undefined;
+      if (depId !== id) return;
+
+      // Update deployment status if present
+      const status = payload["status"] as string | undefined;
+      if (status) {
+        setDeployment((prev) => prev ? { ...prev, status: status as Deployment["status"] } : prev);
+      }
+
+      // Append log entry if message present
+      const message = payload["message"] as string | undefined;
+      if (message) {
+        setLogs((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            deployment_id: id,
+            level: (payload["level"] as string) ?? "info",
+            stage: (payload["stage"] as string) ?? null,
+            message,
+            recorded_at: new Date().toISOString(),
+          },
+        ]);
+        setTimeout(() => logsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      }
+    },
+    [id],
+  );
+  useAdminSocket(handleSocketEvent);
+
+  // Poll while deploying
+  useEffect(() => {
+    if (!deployment || deployment.status !== "deploying") return;
+    const interval = setInterval(async () => {
+      const [depRes, logsRes] = await Promise.all([
+        reqGetDeployment(id),
+        reqGetDeploymentLogs(id),
+      ]);
+      if (depRes.success) setDeployment(depRes.data);
+      if (logsRes.success) setLogs(logsRes.data ?? []);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [deployment?.status, id]);
+
+  const stackName = stacks.find((s) => s.id === deployment?.stack_id)?.name;
+  const triggeredByUser = users.find((u) => u.id === deployment?.triggered_by);
+  const approvedByUser = users.find((u) => u.id === deployment?.approved_by);
 
   const handleApprove = async () => {
     setActing(true);
@@ -62,7 +130,7 @@ export default function DeploymentDetailPage() {
           </div>
           <p className="text-sm text-[#888888] mt-1">
             <Link href={`/stacks/${deployment.stack_id}`} className="text-[#3b82f6] hover:underline">
-              Stack #{deployment.stack_id}
+              {stackName ?? `Stack #${deployment.stack_id}`}
             </Link>
             {" "}&middot; {deployment.strategy}
           </p>
@@ -132,11 +200,11 @@ export default function DeploymentDetailPage() {
             </div>
             <div>
               <p className="text-xs text-[#555555] uppercase tracking-wider">Triggered By</p>
-              <p className="text-sm text-[#888888] mt-1">{deployment.triggered_by ? `User #${deployment.triggered_by}` : "System"}</p>
+              <p className="text-sm text-[#888888] mt-1">{triggeredByUser ? triggeredByUser.name || triggeredByUser.email : deployment.triggered_by ? `User #${deployment.triggered_by}` : "System"}</p>
             </div>
             <div>
               <p className="text-xs text-[#555555] uppercase tracking-wider">Approved By</p>
-              <p className="text-sm text-[#888888] mt-1">{deployment.approved_by ? `User #${deployment.approved_by}` : "-"}</p>
+              <p className="text-sm text-[#888888] mt-1">{approvedByUser ? approvedByUser.name || approvedByUser.email : deployment.approved_by ? `User #${deployment.approved_by}` : "-"}</p>
             </div>
             <div>
               <p className="text-xs text-[#555555] uppercase tracking-wider">Started At</p>
@@ -151,6 +219,43 @@ export default function DeploymentDetailPage() {
               <p className="text-sm text-[#888888] mt-1">{formatDate(deployment.inserted_at)}</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Deployment Logs */}
+      <div className="mt-6 rounded-xl border border-[#1a1a1a] bg-[#111111] p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-medium text-white">Deployment Logs</h2>
+          {deployment.status === "deploying" && (
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3b82f6] opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#3b82f6]" />
+            </span>
+          )}
+        </div>
+        <div className="max-h-[400px] overflow-y-auto rounded-lg bg-[#0a0a0a] border border-[#1a1a1a] p-4 font-mono text-xs space-y-1">
+          {logs.length === 0 ? (
+            <p className="text-[#555555] text-center py-8">No logs yet</p>
+          ) : (
+            logs.map((log) => (
+              <div key={log.id} className="flex gap-2">
+                <span className="text-[#444444] shrink-0 select-none">
+                  {new Date(log.recorded_at).toLocaleTimeString()}
+                </span>
+                {log.stage && (
+                  <span className="text-[#3b82f6] shrink-0">[{log.stage}]</span>
+                )}
+                <span
+                  className={cn(
+                    log.level === "error" ? "text-[#f87171]" : log.level === "warn" ? "text-[#eab308]" : "text-[#d4d4d4]",
+                  )}
+                >
+                  {log.message}
+                </span>
+              </div>
+            ))
+          )}
+          <div ref={logsEndRef} />
         </div>
       </div>
     </div>

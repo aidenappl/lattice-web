@@ -1,26 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Stack } from "@/types";
 import { reqGetStacks } from "@/services/stacks.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
+import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 
 export default function StacksPage() {
   const [stacks, setStacks] = useState<Stack[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
-      const res = await reqGetStacks();
-      if (res.success) {
-        setStacks(res.data ?? []);
-      }
-      setLoading(false);
-    };
-    load();
+  const refreshStacks = useCallback(async () => {
+    const res = await reqGetStacks();
+    if (res.success) setStacks(res.data ?? []);
   }, []);
+
+  useEffect(() => {
+    refreshStacks().then(() => setLoading(false));
+  }, [refreshStacks]);
+
+  // Live updates via WebSocket
+  const handleSocketEvent = useCallback(
+    (event: AdminSocketEvent) => {
+      if (
+        event.type === "container_status" ||
+        event.type === "container_sync" ||
+        event.type === "deployment_progress"
+      ) {
+        refreshStacks();
+      }
+    },
+    [refreshStacks],
+  );
+  useAdminSocket(handleSocketEvent);
 
   if (loading) return <PageLoader />;
 

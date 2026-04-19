@@ -10,6 +10,7 @@ import {
   reqGetWorkerTokens,
   reqCreateWorkerToken,
   reqDeleteWorkerToken,
+  reqDeleteWorker,
   reqRebootWorker,
   reqUpgradeRunner,
   reqStopAllContainers,
@@ -24,6 +25,7 @@ import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate, timeAgo } from "@/lib/utils";
+import { useConfirm } from "@/components/ui/confirm-modal";
 
 function formatDisk(usedMB: number, totalMB: number): string {
   if (totalMB >= 1024)
@@ -139,6 +141,8 @@ export default function WorkerDetailPage() {
   // Worker action state
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const showConfirm = useConfirm();
 
   const load = async () => {
     const [workerRes, metricsRes, tokensRes, stacksRes] = await Promise.all([
@@ -224,6 +228,19 @@ export default function WorkerDetailPage() {
         setWorker((prev) => (prev ? { ...prev, status: "offline" } : prev));
         toast.error(`Worker ${worker?.name ?? `#${id}`} went offline`);
       }
+
+      if (event.type === "worker_action_status") {
+        const p = event.payload ?? {};
+        const action = (p.action as string) ?? "action";
+        const status = (p.status as string) ?? "";
+        const message = (p.message as string) ?? "";
+        const label = action.replace(/_/g, " ");
+        if (status === "error" || status === "failed") {
+          toast.error(`${label}: ${message || "failed"}`);
+        } else {
+          toast.success(`${label}: ${message || status}`);
+        }
+      }
     },
     [id, worker?.name],
   );
@@ -301,6 +318,22 @@ export default function WorkerDetailPage() {
     setActionLoading(null);
   };
 
+  const handleDeleteWorker = async () => {
+    const confirmed = await showConfirm({
+      title: "Delete worker",
+      message: "Are you sure you want to delete this worker? This cannot be undone. All tokens for this worker will also be deleted.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+    setDeleteLoading(true);
+    const res = await reqDeleteWorker(id);
+    if (res.success) {
+      router.push("/workers");
+    }
+    setDeleteLoading(false);
+  };
+
   if (loading) return <PageLoader />;
   if (!worker)
     return (
@@ -334,9 +367,18 @@ export default function WorkerDetailPage() {
           <StatusBadge status={worker.status} />
         </div>
         {!editing && (
-          <Button variant="secondary" onClick={() => setEditing(true)}>
-            Edit Worker
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setEditing(true)}>
+              Edit Worker
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteWorker}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? "Deleting..." : "Delete Worker"}
+            </Button>
+          </div>
         )}
       </div>
 

@@ -109,13 +109,7 @@ function LogLine({ line }: { line: ContainerLog }) {
             })
           : ""}
       </span>
-      <span
-        className={
-          line.stream === "stderr" ? "text-[#ef4444]" : "text-[#d4d4d4]"
-        }
-      >
-        {line.message}
-      </span>
+      <span className="text-[#d4d4d4]">{line.message}</span>
     </div>
   );
 }
@@ -150,6 +144,11 @@ export default function ContainerDetailPage() {
   const [editCpuLimit, setEditCpuLimit] = useState("");
   const [editMemoryLimit, setEditMemoryLimit] = useState("");
   const [editReplicas, setEditReplicas] = useState("");
+  const [editEnvVars, setEditEnvVars] = useState("");
+  const [editPortMappings, setEditPortMappings] = useState("");
+  const [editVolumes, setEditVolumes] = useState("");
+  const [editHealthCheck, setEditHealthCheck] = useState("");
+  const [editRegistryId, setEditRegistryId] = useState("");
   const [saving, setSaving] = useState(false);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -178,6 +177,11 @@ export default function ContainerDetailPage() {
           res.data.memory_limit != null ? String(res.data.memory_limit) : "",
         );
         setEditReplicas(String(res.data.replicas));
+        setEditEnvVars(res.data.env_vars ?? "");
+        setEditPortMappings(res.data.port_mappings ?? "");
+        setEditVolumes(res.data.volumes ?? "");
+        setEditHealthCheck(res.data.health_check ?? "");
+        setEditRegistryId(res.data.registry_id != null ? String(res.data.registry_id) : "");
       }
       if (res.data.stack_id) {
         const sRes = await reqGetStack(res.data.stack_id);
@@ -329,6 +333,11 @@ export default function ContainerDetailPage() {
       cpu_limit: editCpuLimit ? Number(editCpuLimit) : null,
       memory_limit: editMemoryLimit ? Number(editMemoryLimit) : null,
       replicas: editReplicas ? Number(editReplicas) : undefined,
+      env_vars: editEnvVars || null,
+      port_mappings: editPortMappings || null,
+      volumes: editVolumes || null,
+      health_check: editHealthCheck || null,
+      registry_id: editRegistryId ? Number(editRegistryId) : null,
     } as Partial<Container>);
     setSaving(false);
     if (res.success) {
@@ -756,6 +765,69 @@ export default function ContainerDetailPage() {
                 onChange={(e) => setEditEntrypoint(e.target.value)}
                 placeholder="e.g. /bin/sh"
                 className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-[#888888] mb-1.5">
+                Registry ID
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={editRegistryId}
+                onChange={(e) => setEditRegistryId(e.target.value)}
+                placeholder="e.g. 1"
+                className={inputClass}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+            <div>
+              <label className="block text-xs text-[#888888] mb-1.5">
+                Environment Variables (JSON)
+              </label>
+              <textarea
+                rows={4}
+                value={editEnvVars}
+                onChange={(e) => setEditEnvVars(e.target.value)}
+                placeholder={'{"KEY": "value"}'}
+                className={inputClass + " resize-y font-mono text-xs"}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-[#888888] mb-1.5">
+                Port Mappings (JSON)
+              </label>
+              <textarea
+                rows={4}
+                value={editPortMappings}
+                onChange={(e) => setEditPortMappings(e.target.value)}
+                placeholder={'[{"host_port": "8080", "container_port": "80"}]'}
+                className={inputClass + " resize-y font-mono text-xs"}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-[#888888] mb-1.5">
+                Volumes (JSON)
+              </label>
+              <textarea
+                rows={4}
+                value={editVolumes}
+                onChange={(e) => setEditVolumes(e.target.value)}
+                placeholder={'[{"host": "/data", "container": "/app/data"}]'}
+                className={inputClass + " resize-y font-mono text-xs"}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-[#888888] mb-1.5">
+                Health Check (JSON)
+              </label>
+              <textarea
+                rows={4}
+                value={editHealthCheck}
+                onChange={(e) => setEditHealthCheck(e.target.value)}
+                placeholder={'{"test": ["CMD", "curl", "-f", "http://localhost"], "interval": "30s", "timeout": "10s", "retries": 3}'}
+                className={inputClass + " resize-y font-mono text-xs"}
               />
             </div>
           </div>
