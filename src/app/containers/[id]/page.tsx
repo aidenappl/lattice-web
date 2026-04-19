@@ -122,6 +122,10 @@ export default function ContainerDetailPage() {
   const logsEndRef = useRef<HTMLDivElement>(null);
   const containerNameRef = useRef<string>("");
 
+  // Worker liveness — must be declared unconditionally before any early return
+  const workerListForLiveness = worker ? [worker] : [];
+  const workerLiveness = useWorkerLiveness(workerListForLiveness);
+
   const loadContainer = useCallback(async () => {
     const res = await reqGetContainer(id);
     if (res.success) {
@@ -303,10 +307,7 @@ export default function ContainerDetailPage() {
     container.status === "stopped" || container.status === "error";
   const isPaused = container.status === "paused";
 
-  // Worker liveness — disable all controls when the worker is offline
-  const workerList = worker ? [worker] : [];
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const workerLiveness = useWorkerLiveness(workerList);
+  // Derive liveness values from the already-computed map
   const workerOnline = worker ? (workerLiveness[worker.id] ?? false) : true;
   const staleReason = worker ? workerStaleReason(worker) : null;
   const controlsDisabled = !workerOnline || !!actionLoading;

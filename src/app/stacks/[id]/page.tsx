@@ -125,6 +125,10 @@ export default function StackDetailPage() {
   const [loading, setLoading] = useState(true);
   const [deploying, setDeploying] = useState(false);
 
+  // Worker liveness — must be declared unconditionally before any early return.
+  // Passes all workers; we filter to the stack's worker after loading.
+  const workerLiveness = useWorkerLiveness(workers);
+
   // Container form state
   const [showContainerForm, setShowContainerForm] = useState(false);
   const [editingContainer, setEditingContainer] = useState<number | null>(null);
@@ -548,11 +552,8 @@ export default function StackDetailPage() {
       </div>
     );
 
-  // Worker liveness — used to gate deploy + container controls
+  // Derive liveness from the map computed above
   const stackWorker = workers.find((w) => w.id === stack.worker_id) ?? null;
-  const stackWorkerList = stackWorker ? [stackWorker] : [];
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const workerLiveness = useWorkerLiveness(stackWorkerList);
   const workerOnline = stackWorker
     ? (workerLiveness[stackWorker.id] ?? false)
     : true; // no worker assigned → don't block
@@ -608,7 +609,11 @@ export default function StackDetailPage() {
                 <Button
                   onClick={handleDeploy}
                   disabled={isDeploying || !workerOnline}
-                  title={!workerOnline ? "Worker is offline — cannot deploy" : undefined}
+                  title={
+                    !workerOnline
+                      ? "Worker is offline — cannot deploy"
+                      : undefined
+                  }
                   onMouseEnter={() => showForce && setForceDeployHovered(true)}
                   onMouseLeave={() => setForceDeployHovered(false)}
                   className={
@@ -1133,7 +1138,11 @@ export default function StackDetailPage() {
                                   handleContainerAction(container.id, "start")
                                 }
                                 disabled={
+                                  !workerOnline ||
                                   !!actionLoading[`${container.id}-start`]
+                                }
+                                title={
+                                  !workerOnline ? "Worker offline" : undefined
                                 }
                                 className="px-2 py-1 text-xs text-[#22c55e] hover:bg-[#161616] rounded transition-colors disabled:opacity-40"
                               >
@@ -1148,7 +1157,11 @@ export default function StackDetailPage() {
                                   handleContainerAction(container.id, "restart")
                                 }
                                 disabled={
+                                  !workerOnline ||
                                   !!actionLoading[`${container.id}-restart`]
+                                }
+                                title={
+                                  !workerOnline ? "Worker offline" : undefined
                                 }
                                 className="px-2 py-1 text-xs text-[#3b82f6] hover:bg-[#161616] rounded transition-colors disabled:opacity-40"
                               >
@@ -1163,7 +1176,11 @@ export default function StackDetailPage() {
                                   handleContainerAction(container.id, "stop")
                                 }
                                 disabled={
+                                  !workerOnline ||
                                   !!actionLoading[`${container.id}-stop`]
+                                }
+                                title={
+                                  !workerOnline ? "Worker offline" : undefined
                                 }
                                 className="px-2 py-1 text-xs text-[#f59e0b] hover:bg-[#161616] rounded transition-colors disabled:opacity-40"
                               >
@@ -1177,7 +1194,11 @@ export default function StackDetailPage() {
                                 handleContainerAction(container.id, "recreate")
                               }
                               disabled={
+                                !workerOnline ||
                                 !!actionLoading[`${container.id}-recreate`]
+                              }
+                              title={
+                                !workerOnline ? "Worker offline" : undefined
                               }
                               className="px-2 py-1 text-xs text-[#8b5cf6] hover:bg-[#161616] rounded transition-colors disabled:opacity-40"
                             >
