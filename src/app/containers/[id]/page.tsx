@@ -315,13 +315,10 @@ export default function ContainerDetailPage() {
     <div>
       {/* Worker offline banner */}
       {!workerOnline && (
-        <WorkerOfflineBanner
-          workerName={worker?.name}
-          reason={staleReason}
-        />
+        <WorkerOfflineBanner workerName={worker?.name} reason={staleReason} />
       )}
 
-      {/* Breadcrumb */}}
+      {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-[#555555] mb-6">
         <Link href="/containers" className="hover:text-white transition-colors">
           Containers
