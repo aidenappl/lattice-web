@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { VersionInfo } from "@/types";
 import { reqGetVersions } from "@/services/admin.service";
 import { APP_VERSION } from "@/lib/version";
@@ -11,13 +11,16 @@ type VersionState = {
     webUpdateAvailable: boolean;
     runnerUpdatesAvailable: number;
     loading: boolean;
+    refresh: () => Promise<void>;
 };
+
+const VersionCheckContext = createContext<VersionState | null>(null);
 
 const POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
-export function useVersionCheck() {
-    const [state, setState] = useState<VersionState>({
-        info: null,
+export function VersionCheckProvider({ children }: { children: ReactNode }) {
+    const [state, setState] = useState({
+        info: null as VersionInfo | null,
         apiUpdateAvailable: false,
         webUpdateAvailable: false,
         runnerUpdatesAvailable: 0,
@@ -33,13 +36,11 @@ export function useVersionCheck() {
 
         const info = res.data;
 
-        // Web is outdated if its version differs from what GitHub says is latest
         const webUpdateAvailable =
             APP_VERSION !== "dev" &&
             info.web.latest !== "" &&
             APP_VERSION !== info.web.latest;
 
-        // API is outdated if its running version differs from the latest GitHub release
         const apiUpdateAvailable =
             info.api.current !== "" &&
             info.api.latest !== "" &&
@@ -60,5 +61,16 @@ export function useVersionCheck() {
         return () => clearInterval(id);
     }, [check]);
 
-    return { ...state, refresh: check };
+    return (
+        <VersionCheckContext.Provider value= {{ ...state, refresh: check }
+}>
+    { children }
+    </VersionCheckContext.Provider>
+    );
+}
+
+export function useVersionCheck() {
+    const ctx = useContext(VersionCheckContext);
+    if (!ctx) throw new Error("useVersionCheck must be used inside VersionCheckProvider");
+    return ctx;
 }

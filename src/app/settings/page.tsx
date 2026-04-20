@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { User, VersionInfo } from "@/types";
+import { User } from "@/types";
 import {
   reqGetUsers,
   reqCreateUser,
   reqUpdateUser,
-  reqGetVersions,
-  reqRefreshVersions,
   reqUpdateAPI,
   reqUpdateWeb,
+  reqRefreshVersions,
 } from "@/services/admin.service";
 import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
@@ -29,6 +28,7 @@ import {
 import { APP_VERSION } from "@/lib/version";
 import toast from "react-hot-toast";
 import { RunnerUpgradePanel } from "@/components/layout/RunnerUpgradePanel";
+import { useVersionCheck } from "@/hooks/useVersionCheck";
 
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 
@@ -57,28 +57,17 @@ function waitForAPIRestart(toastId: string, onFail: () => void) {
 }
 
 function VersionCheckSection() {
-  const [info, setInfo] = useState<VersionInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { info, loading, refresh } = useVersionCheck();
   const [refreshing, setRefreshing] = useState(false);
   const [updatingAPI, setUpdatingAPI] = useState(false);
   const [updatingWeb, setUpdatingWeb] = useState(false);
-
-  const load = async () => {
-    const res = await reqGetVersions();
-    if (res.success) setInfo(res.data);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     const res = await reqRefreshVersions();
     if (res.success) {
       toast.success("Version cache refreshed from GitHub");
-      await load();
+      await refresh();
     } else {
       toast.error("Failed to refresh versions");
     }
