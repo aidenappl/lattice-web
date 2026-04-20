@@ -24,6 +24,16 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import type { Deployment } from "@/types";
 
+// Per-worker latest metrics for fleet aggregation
+type WorkerLatestMetrics = {
+  cpu: number;
+  memoryPct: number;
+  netRx: number;
+  netTx: number;
+  containers: number;
+  running: number;
+};
+
 // ── KPI Row ─────────────────────────────────────────────────────────
 
 function DashboardKPIRow({
@@ -892,7 +902,22 @@ export default function DashboardPage() {
   // Load overview + fleet metrics
   const loadOverview = useCallback(async () => {
     const res = await reqGetOverview();
-    if (res.success) setOverview(res.data);
+    if (res.success) {
+      setOverview(res.data);
+      // Seed per-worker metrics ref from overview if not already populated
+      if (res.data.worker_metrics && workerMetricsRef.current.size === 0) {
+        res.data.worker_metrics.forEach((w) => {
+          workerMetricsRef.current.set(w.worker_id, {
+            cpu: w.cpu ?? 0,
+            memoryPct: w.memory ?? 0,
+            netRx: w.net_rx ?? 0,
+            netTx: w.net_tx ?? 0,
+            containers: w.containers ?? 0,
+            running: w.running ?? 0,
+          });
+        });
+      }
+    }
   }, []);
 
   const loadFleetHistory = useCallback(async () => {
@@ -912,53 +937,95 @@ export default function DashboardPage() {
     };
   }, [loadOverview, loadFleetHistory]);
 
-  // WebSocket: push live metrics into fleet history + update overview counters
+  // Per-worker latest metrics for proper fleet aggregation (avoids sawtooth)
+  const workerMetricsRef = useRef<Map<number, WorkerLatestMetrics>>(new Map());
+  const workerHeartbeatCount = useRef<Map<number, number>>(new Map());
+  const lastFleetPushRef = useRef<number>(0);
+
+  // Compute fleet aggregate from all tracked workers
+  const computeFleetAggregate = useCallback((): FleetMetricsPoint => {
+    const workers = workerMetricsRef.current;
+    const count = workers.size || 1;
+    let cpuSum = 0, memSum = 0, netRxSum = 0, netTxSum = 0, containerSum = 0, runningSum = 0;
+    workers.forEach((w) => {
+      cpuSum += w.cpu;
+      memSum += w.memoryPct;
+      netRxSum += w.netRx;
+      netTxSum += w.netTx;
+      containerSum += w.containers;
+      runningSum += w.running;
+    });
+    return {
+      timestamp: new Date().toISOString(),
+      cpu_avg: cpuSum / count,
+      memory_avg: memSum / count,
+      network_rx_total: netRxSum,
+      network_tx_total: netTxSum,
+      container_count: containerSum,
+      running_count: runningSum,
+    };
+  }, []);
+
+  // WebSocket: aggregate per-worker metrics into fleet history + update overview
   const handleDashboardEvent = useCallback((event: AdminSocketEvent) => {
     if (event.type === "worker_heartbeat" && event.payload) {
       const p = event.payload;
-      const cpu = p.cpu_percent as number | undefined;
+      const workerId = event.worker_id as number | undefined;
+      if (workerId == null) return;
+
+      // Track heartbeat count per worker — skip the first one after connect
+      // because the runner's CPU delta calculation reports 0% on the first beat
+      const beatCount = (workerHeartbeatCount.current.get(workerId) ?? 0) + 1;
+      workerHeartbeatCount.current.set(workerId, beatCount);
+      if (beatCount === 1) {
+        // First heartbeat is calibration — don't use it for fleet metrics
+        // but still count containers since those are accurate immediately
+        const containers = (p.container_count as number) ?? 0;
+        const running = (p.container_running_count as number) ?? 0;
+        const existing = workerMetricsRef.current.get(workerId);
+        if (existing) {
+          workerMetricsRef.current.set(workerId, { ...existing, containers, running });
+        }
+        return;
+      }
+
+      const cpu = (p.cpu_percent as number) ?? 0;
       const memUsed = p.memory_used_mb as number | undefined;
       const memTotal = p.memory_total_mb as number | undefined;
-      const netRx = p.network_rx_bytes as number | undefined;
-      const netTx = p.network_tx_bytes as number | undefined;
-      const containers = p.container_count as number | undefined;
-      const running = p.container_running_count as number | undefined;
+      const netRx = (p.network_rx_bytes as number) ?? 0;
+      const netTx = (p.network_tx_bytes as number) ?? 0;
+      const containers = (p.container_count as number) ?? 0;
+      const running = (p.container_running_count as number) ?? 0;
 
-      // Push a new point to the fleet history (append, keep last 30 points)
-      setFleetHistory((prev) => {
-        const memPct =
-          memUsed != null && memTotal != null && memTotal > 0
-            ? (memUsed / memTotal) * 100
-            : prev.length > 0
-              ? prev[prev.length - 1].memory_avg
-              : 0;
-        const newPoint: FleetMetricsPoint = {
-          timestamp: new Date().toISOString(),
-          cpu_avg: cpu ?? (prev.length > 0 ? prev[prev.length - 1].cpu_avg : 0),
-          memory_avg: memPct,
-          network_rx_total: netRx ?? 0,
-          network_tx_total: netTx ?? 0,
-          container_count: containers ?? 0,
-          running_count: running ?? 0,
-        };
-        return [...prev.slice(-29), newPoint];
+      const memPct = memUsed != null && memTotal != null && memTotal > 0
+        ? (memUsed / memTotal) * 100
+        : 0;
+
+      // Update this worker's latest metrics
+      workerMetricsRef.current.set(workerId, {
+        cpu, memoryPct: memPct, netRx, netTx, containers, running,
       });
 
-      // Update overview fleet averages from latest heartbeat
-      if (cpu != null || memUsed != null) {
-        setOverview((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            fleet_cpu_avg: cpu ?? prev.fleet_cpu_avg,
-            fleet_memory_avg:
-              memUsed != null && memTotal != null && memTotal > 0
-                ? (memUsed / memTotal) * 100
-                : prev.fleet_memory_avg,
-            fleet_container_count: containers ?? prev.fleet_container_count,
-            fleet_running_count: running ?? prev.fleet_running_count,
-          };
-        });
+      // Compute fleet aggregate
+      const aggregate = computeFleetAggregate();
+
+      // Update overview with fleet averages
+      setOverview((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          fleet_cpu_avg: aggregate.cpu_avg,
+          fleet_memory_avg: aggregate.memory_avg,
+          fleet_container_count: aggregate.container_count,
+          fleet_running_count: aggregate.running_count,
+        };
+      });
+
+      // Push to fleet history at most once every 10s to avoid flooding the graph
+      const now = Date.now();
+      if (now - lastFleetPushRef.current >= 10000) {
+        lastFleetPushRef.current = now;
+        setFleetHistory((prev) => [...prev.slice(-(prev.length > 200 ? 200 : prev.length)), aggregate]);
       }
     }
 
@@ -967,6 +1034,10 @@ export default function DashboardPage() {
         if (!prev) return prev;
         return { ...prev, online_workers: prev.online_workers + 1 };
       });
+      // Reset heartbeat count so we skip the first calibration beat
+      if (event.worker_id != null) {
+        workerHeartbeatCount.current.set(event.worker_id, 0);
+      }
     }
 
     if (event.type === "worker_disconnected") {
@@ -977,6 +1048,11 @@ export default function DashboardPage() {
           online_workers: Math.max(0, prev.online_workers - 1),
         };
       });
+      // Remove disconnected worker from metrics map and reset beat count
+      if (event.worker_id != null) {
+        workerMetricsRef.current.delete(event.worker_id as number);
+        workerHeartbeatCount.current.delete(event.worker_id);
+      }
     }
 
     if (event.type === "container_status" && event.payload) {
@@ -1017,7 +1093,7 @@ export default function DashboardPage() {
         });
       }
     }
-  }, []);
+  }, [computeFleetAggregate]);
 
   useAdminSocket(handleDashboardEvent);
 
