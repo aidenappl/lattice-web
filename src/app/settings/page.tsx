@@ -8,6 +8,8 @@ import {
   reqUpdateUser,
   reqGetVersions,
   reqRefreshVersions,
+  reqUpdateAPI,
+  reqUpdateWeb,
 } from "@/services/admin.service";
 import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
@@ -26,11 +28,40 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { APP_VERSION } from "@/lib/version";
 import toast from "react-hot-toast";
+import { RunnerUpgradePanel } from "@/components/layout/RunnerUpgradePanel";
+
+const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
+
+function waitForAPIRestart(toastId: string, onFail: () => void) {
+  let attempts = 0;
+  const poll = setInterval(async () => {
+    attempts++;
+    try {
+      const res = await fetch(`${API_URL}/healthcheck`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      if (res.ok) {
+        clearInterval(poll);
+        toast.success("API restarted successfully.", { id: toastId });
+        setTimeout(() => window.location.reload(), 1500);
+      }
+    } catch {
+      // still down
+    }
+    if (attempts >= 60) {
+      clearInterval(poll);
+      toast.error("API did not come back within 60 seconds.", { id: toastId });
+      onFail();
+    }
+  }, 1000);
+}
 
 function VersionCheckSection() {
   const [info, setInfo] = useState<VersionInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [updatingAPI, setUpdatingAPI] = useState(false);
+  const [updatingWeb, setUpdatingWeb] = useState(false);
 
   const load = async () => {
     const res = await reqGetVersions();
@@ -54,6 +85,62 @@ function VersionCheckSection() {
     setRefreshing(false);
   };
 
+  const handleUpdateAPI = async () => {
+    setUpdatingAPI(true);
+    const toastId = toast.loading("Pulling latest API image and restarting...");
+    try {
+      const res = await reqUpdateAPI();
+      if (!res.success && "error_message" in res) {
+        toast.error(`API update failed: ${res.error_message}`, { id: toastId });
+        setUpdatingAPI(false);
+        return;
+      }
+    } catch {
+      // Container already restarting — expected.
+    }
+    waitForAPIRestart(toastId, () => setUpdatingAPI(false));
+  };
+
+  const handleUpdateWeb = async () => {
+    setUpdatingWeb(true);
+    const res = await reqUpdateWeb();
+    if (res.success) {
+      const toastId = toast.loading(
+        "Web container restarting — waiting for it to come back...",
+      );
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const r = await fetch("/api/health", {
+            signal: AbortSignal.timeout(2000),
+          });
+          if (r.ok) {
+            clearInterval(poll);
+            toast.success("Web updated successfully. Reloading...", {
+              id: toastId,
+            });
+            setTimeout(() => window.location.reload(), 1500);
+          }
+        } catch {
+          // still restarting
+        }
+        if (attempts >= 60) {
+          clearInterval(poll);
+          toast.error("Web did not come back within 60 seconds.", {
+            id: toastId,
+          });
+          setUpdatingWeb(false);
+        }
+      }, 1000);
+    } else {
+      toast.error(
+        `Failed to update web: ${"error_message" in res ? res.error_message : "Unknown error"}`,
+      );
+      setUpdatingWeb(false);
+    }
+  };
+
   const apiCurrent = info?.api.current ?? "—";
   const apiLatest = info?.api.latest ?? "";
   const webCurrent = APP_VERSION;
@@ -63,19 +150,16 @@ function VersionCheckSection() {
   const totalRunners = info?.runner.workers.length ?? 0;
 
   const apiUpToDate = !apiLatest || apiCurrent === apiLatest;
-  const webUpToDate = webCurrent === "dev" || !webLatest || webCurrent === webLatest;
+  const webUpToDate =
+    webCurrent === "dev" || !webLatest || webCurrent === webLatest;
 
-  const lastChecked = info?.last_checked
-    ? new Date(info.last_checked)
-    : null;
+  const lastChecked = info?.last_checked ? new Date(info.last_checked) : null;
 
   return (
     <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
         <div>
-          <h2 className="text-sm font-semibold text-primary">
-            Version Check
-          </h2>
+          <h2 className="text-sm font-semibold text-primary">Version Check</h2>
           {lastChecked && lastChecked.getTime() > 0 && (
             <p className="text-xs text-muted mt-0.5">
               Last checked:{" "}
@@ -117,16 +201,12 @@ function VersionCheckSection() {
               </div>
               <div>
                 <p className="text-sm font-medium text-primary">API</p>
-                <p className="text-xs text-muted">
-                  Current: {apiCurrent}
-                </p>
+                <p className="text-xs text-muted">Current: {apiCurrent}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {apiLatest && (
-                <span className="text-xs text-muted">
-                  Latest: {apiLatest}
-                </span>
+                <span className="text-xs text-muted">Latest: {apiLatest}</span>
               )}
               {apiUpToDate ? (
                 <Badge variant="success">
@@ -134,15 +214,19 @@ function VersionCheckSection() {
                   Up to date
                 </Badge>
               ) : (
-                <Badge variant="warning">
-                  <FontAwesomeIcon icon={faArrowUp} className="h-2.5 w-2.5" />
-                  Update available
-                </Badge>
+                <Button
+                  size="sm"
+                  onClick={handleUpdateAPI}
+                  disabled={updatingAPI}
+                >
+                  <FontAwesomeIcon icon={faArrowUp} className="h-3 w-3 mr-1" />
+                  {updatingAPI ? "Updating..." : "Update API"}
+                </Button>
               )}
             </div>
           </div>
 
-          {/* Web */}
+          {/* Web */
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-elevated">
@@ -153,16 +237,12 @@ function VersionCheckSection() {
               </div>
               <div>
                 <p className="text-sm font-medium text-primary">Web</p>
-                <p className="text-xs text-muted">
-                  Current: {webCurrent}
-                </p>
+                <p className="text-xs text-muted">Current: {webCurrent}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {webLatest && (
-                <span className="text-xs text-muted">
-                  Latest: {webLatest}
-                </span>
+                <span className="text-xs text-muted">Latest: {webLatest}</span>
               )}
               {webUpToDate ? (
                 <Badge variant="success">
@@ -170,15 +250,19 @@ function VersionCheckSection() {
                   Up to date
                 </Badge>
               ) : (
-                <Badge variant="warning">
-                  <FontAwesomeIcon icon={faArrowUp} className="h-2.5 w-2.5" />
-                  Update available
-                </Badge>
+                <Button
+                  size="sm"
+                  onClick={handleUpdateWeb}
+                  disabled={updatingWeb}
+                >
+                  <FontAwesomeIcon icon={faArrowUp} className="h-3 w-3 mr-1" />
+                  {updatingWeb ? "Updating..." : "Update Web"}
+                </Button>
               )}
             </div>
           </div>
 
-          {/* Runners */}
+          {/* Runners */
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-elevated">
@@ -190,7 +274,8 @@ function VersionCheckSection() {
               <div>
                 <p className="text-sm font-medium text-primary">Runners</p>
                 <p className="text-xs text-muted">
-                  {totalRunners} worker{totalRunners !== 1 ? "s" : ""} registered
+                  {totalRunners} worker{totalRunners !== 1 ? "s" : ""}{" "}
+                  registered
                 </p>
               </div>
             </div>
@@ -213,6 +298,19 @@ function VersionCheckSection() {
               )}
             </div>
           </div>
+
+          {/* Inline runner upgrade panel */}
+          {info && outdatedRunners > 0 && (
+            <div className="px-4 py-4 border-t border-border-subtle bg-surface-alt">
+              <p className="text-xs font-medium text-secondary uppercase tracking-wider mb-3">
+                Runner Upgrades
+              </p>
+              <RunnerUpgradePanel
+                workers={info.runner.workers}
+                latestVersion={runnerLatest}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>
