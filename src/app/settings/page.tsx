@@ -226,7 +226,7 @@ function VersionCheckSection() {
             </div>
           </div>
 
-          {/* Web */
+          {/* Web */}
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-elevated">
@@ -262,55 +262,52 @@ function VersionCheckSection() {
             </div>
           </div>
 
-          {/* Runners */
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-elevated">
-                <FontAwesomeIcon
-                  icon={faMicrochip}
-                  className="h-3.5 w-3.5 text-secondary"
-                />
+          {/* Runners */}
+          <div>
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-elevated">
+                  <FontAwesomeIcon
+                    icon={faMicrochip}
+                    className="h-3.5 w-3.5 text-secondary"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-primary">Runners</p>
+                  <p className="text-xs text-muted">
+                    {totalRunners} worker{totalRunners !== 1 ? "s" : ""}{" "}
+                    registered
+                    {runnerLatest ? ` · latest ${runnerLatest}` : ""}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-primary">Runners</p>
-                <p className="text-xs text-muted">
-                  {totalRunners} worker{totalRunners !== 1 ? "s" : ""}{" "}
-                  registered
-                </p>
+              <div className="flex items-center gap-2">
+                {outdatedRunners === 0 ? (
+                  <Badge variant="success">
+                    <FontAwesomeIcon icon={faCheck} className="h-2.5 w-2.5" />
+                    All up to date
+                  </Badge>
+                ) : (
+                  <Badge variant="warning">
+                    <FontAwesomeIcon icon={faArrowUp} className="h-2.5 w-2.5" />
+                    {outdatedRunners} outdated
+                  </Badge>
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {runnerLatest && (
-                <span className="text-xs text-muted">
-                  Latest: {runnerLatest}
-                </span>
-              )}
-              {outdatedRunners === 0 ? (
-                <Badge variant="success">
-                  <FontAwesomeIcon icon={faCheck} className="h-2.5 w-2.5" />
-                  All up to date
-                </Badge>
-              ) : (
-                <Badge variant="warning">
-                  <FontAwesomeIcon icon={faArrowUp} className="h-2.5 w-2.5" />
-                  {outdatedRunners} outdated
-                </Badge>
-              )}
-            </div>
-          </div>
 
-          {/* Inline runner upgrade panel */}
-          {info && outdatedRunners > 0 && (
-            <div className="px-4 py-4 border-t border-border-subtle bg-surface-alt">
-              <p className="text-xs font-medium text-secondary uppercase tracking-wider mb-3">
-                Runner Upgrades
-              </p>
-              <RunnerUpgradePanel
-                workers={info.runner.workers}
-                latestVersion={runnerLatest}
-              />
-            </div>
-          )}
+            {/* Worker list — always shown when data is loaded */}
+            {info && info.runner.workers.length > 0 && (
+              <div className="mx-4 mb-3 rounded-lg border border-border-subtle bg-surface-alt">
+                <div className="px-3 divide-y divide-border-subtle">
+                  <RunnerUpgradePanel
+                    workers={info.runner.workers}
+                    latestVersion={runnerLatest}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
