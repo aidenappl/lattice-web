@@ -27,7 +27,8 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatDate, timeAgo } from "@/lib/utils";
+import { formatDate, timeAgo, isAdmin, canEdit } from "@/lib/utils";
+import { useUser } from "@/store/hooks";
 import { useConfirm } from "@/components/ui/confirm-modal";
 
 function formatDisk(usedMB: number, totalMB: number): string {
@@ -148,6 +149,7 @@ export default function WorkerDetailPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const showConfirm = useConfirm();
+  const user = useUser();
 
   const load = async () => {
     const { reqGetVersions } = await import("@/services/admin.service");
@@ -423,7 +425,7 @@ export default function WorkerDetailPage() {
           <h1 className="text-xl font-semibold text-primary">{worker.name}</h1>
           <StatusBadge status={worker.status} />
         </div>
-        {!editing && (
+        {!editing && canEdit(user) && (
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setEditing(true)}>
               Edit Worker
@@ -440,7 +442,7 @@ export default function WorkerDetailPage() {
       </div>
 
       {/* Edit form */}
-      {editing && (
+      {editing && canEdit(user) && (
         <div className="rounded-xl border border-border-subtle bg-surface p-5 mb-6">
           <h2 className="text-sm font-medium text-primary mb-4">Edit Worker</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -479,7 +481,7 @@ export default function WorkerDetailPage() {
       )}
 
       {/* Worker Actions */}
-      {worker.status === "online" && (
+      {canEdit(user) && worker.status === "online" && (
         <div className="rounded-xl border border-border-subtle bg-surface p-5 mb-6">
           <h2 className="text-sm font-medium text-primary mb-4">
             Worker Actions
@@ -503,24 +505,28 @@ export default function WorkerDetailPage() {
             >
               Stop All Containers
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => handleWorkerAction("upgrade")}
-              disabled={!!actionLoading}
-              loading={actionLoading === "upgrade"}
-            >
-              Upgrade Runner
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => handleWorkerAction("reboot")}
-              disabled={!!actionLoading}
-              loading={actionLoading === "reboot"}
-            >
-              Reboot OS
-            </Button>
+            {isAdmin(user) && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleWorkerAction("upgrade")}
+                disabled={!!actionLoading}
+                loading={actionLoading === "upgrade"}
+              >
+                Upgrade Runner
+              </Button>
+            )}
+            {isAdmin(user) && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => handleWorkerAction("reboot")}
+                disabled={!!actionLoading}
+                loading={actionLoading === "reboot"}
+              >
+                Reboot OS
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -864,21 +870,23 @@ export default function WorkerDetailPage() {
             </h2>
 
             {/* Create Token */}
-            <div className="flex gap-2 mb-4">
-              <Input
-                placeholder="Token name"
-                value={newTokenName}
-                onChange={(e) => setNewTokenName(e.target.value)}
-                className="flex-1"
-              />
-              <Button
-                size="md"
-                onClick={handleCreateToken}
-                disabled={!newTokenName.trim()}
-              >
-                Create
-              </Button>
-            </div>
+            {canEdit(user) && (
+              <div className="flex gap-2 mb-4">
+                <Input
+                  placeholder="Token name"
+                  value={newTokenName}
+                  onChange={(e) => setNewTokenName(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  size="md"
+                  onClick={handleCreateToken}
+                  disabled={!newTokenName.trim()}
+                >
+                  Create
+                </Button>
+              </div>
+            )}
 
             {createdToken && (
               <div className="mb-4 rounded-lg border border-[#22c55e]/30 bg-[#22c55e]/5 p-3">
@@ -911,13 +919,15 @@ export default function WorkerDetailPage() {
                           : "Never used"}
                       </p>
                     </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleDeleteToken(token.id)}
-                    >
-                      Delete
-                    </Button>
+                    {canEdit(user) && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeleteToken(token.id)}
+                      >
+                        Delete
+                      </Button>
+                    )}
                   </div>
                 ))
               )}

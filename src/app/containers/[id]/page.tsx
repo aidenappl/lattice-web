@@ -36,7 +36,8 @@ import { reqGetStack } from "@/services/stacks.service";
 import { reqGetWorker } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
-import { formatDate, timeAgo, workerStaleReason } from "@/lib/utils";
+import { formatDate, timeAgo, workerStaleReason, canEdit } from "@/lib/utils";
+import { useUser } from "@/store/hooks";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
 import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
@@ -131,6 +132,7 @@ type Tab = "logs" | "details" | "health";
 export default function ContainerDetailPage() {
   const params = useParams();
   const id = Number(params.id);
+  const user = useUser();
 
   const [container, setContainer] = useState<Container | null>(null);
   const [stack, setStack] = useState<Stack | null>(null);
@@ -571,153 +573,155 @@ export default function ContainerDetailPage() {
       )}
 
       {/* Action buttons */}
-      <div className="flex flex-wrap gap-2 mb-6 p-4 rounded-xl border border-border-subtle bg-surface">
-        {/* Start */}
-        <ActionButton
-          label="Start"
-          icon={<FontAwesomeIcon icon={faPlay} className="h-3.5 w-3.5" />}
-          disabled={!isStopped || controlsDisabled}
-          loading={actionLoading === "start"}
-          color="text-[#22c55e] hover:bg-[#22c55e]/10"
-          onClick={() =>
-            runAction("start", () => reqStartContainer(container.id))
-          }
-        />
-        {/* Stop */}
-        <ActionButton
-          label="Stop"
-          icon={<FontAwesomeIcon icon={faStop} className="h-3.5 w-3.5" />}
-          disabled={!isRunning || controlsDisabled}
-          loading={actionLoading === "stop"}
-          color="text-secondary hover:bg-border-strong"
-          onClick={async () => {
-            const ok = await showConfirm({
-              title: "Stop container",
-              message: `Stop "${container.name}"? The container will be gracefully shut down.`,
-              confirmLabel: "Stop",
-              variant: "warning",
-            });
-            if (ok) runAction("stop", () => reqStopContainer(container.id));
-          }}
-        />
-        {/* Kill */}
-        <ActionButton
-          label="Kill"
-          title="Force-kill container (SIGKILL)"
-          icon={<FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />}
-          disabled={!isRunning || controlsDisabled}
-          loading={actionLoading === "kill"}
-          color="text-[#ef4444] hover:bg-[#ef4444]/10"
-          onClick={async () => {
-            const ok = await showConfirm({
-              title: "Kill container",
-              message: `Force-kill "${container.name}"? This sends SIGKILL immediately.`,
-              confirmLabel: "Kill",
-              variant: "danger",
-            });
-            if (ok) runAction("kill", () => reqKillContainer(container.id));
-          }}
-        />
-        {/* Restart */}
-        <ActionButton
-          label="Restart"
-          icon={<FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />}
-          disabled={!isRunning || controlsDisabled}
-          loading={actionLoading === "restart"}
-          color="text-[#3b82f6] hover:bg-[#3b82f6]/10"
-          onClick={async () => {
-            const ok = await showConfirm({
-              title: "Restart container",
-              message: `Restart "${container.name}"? The container will be stopped and started.`,
-              confirmLabel: "Restart",
-              variant: "warning",
-            });
-            if (ok)
-              runAction("restart", () => reqRestartContainer(container.id));
-          }}
-        />
-        {/* Pause */}
-        <ActionButton
-          label="Pause"
-          icon={<FontAwesomeIcon icon={faPause} className="h-3.5 w-3.5" />}
-          disabled={!isRunning || controlsDisabled}
-          loading={actionLoading === "pause"}
-          color="text-secondary hover:bg-border-strong"
-          onClick={() =>
-            runAction("pause", () => reqPauseContainer(container.id))
-          }
-        />
-        {/* Resume */}
-        <ActionButton
-          label="Resume"
-          icon={<FontAwesomeIcon icon={faPlay} className="h-3.5 w-3.5" />}
-          disabled={!isPaused || controlsDisabled}
-          loading={actionLoading === "unpause"}
-          color="text-[#22c55e] hover:bg-[#22c55e]/10"
-          onClick={() =>
-            runAction("unpause", () => reqUnpauseContainer(container.id))
-          }
-        />
-        {/* Recreate */}
-        <ActionButton
-          label="Recreate"
-          title="Remove and recreate container from config"
-          icon={
-            <FontAwesomeIcon icon={faRecycle} className="h-3.5 w-3.5" />
-          }
-          disabled={controlsDisabled}
-          loading={actionLoading === "recreate"}
-          color="text-[#a855f7] hover:bg-[#a855f7]/10"
-          onClick={async () => {
-            const ok = await showConfirm({
-              title: "Recreate container",
-              message: `Recreate "${container.name}"? The container will be removed and created fresh from its config.`,
-              confirmLabel: "Recreate",
-              variant: "warning",
-            });
-            if (ok)
-              runAction("recreate", () => reqRecreateContainer(container.id));
-          }}
-        />
-        {/* Remove */}
-        <ActionButton
-          label="Remove"
-          title="Permanently remove container from Docker"
-          icon={<FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />}
-          disabled={controlsDisabled}
-          loading={actionLoading === "remove"}
-          color="text-[#ef4444] hover:bg-[#ef4444]/10"
-          onClick={async () => {
-            const ok = await showConfirm({
-              title: "Remove container",
-              message: `Permanently remove "${container.name}" from Docker? This cannot be undone.`,
-              confirmLabel: "Remove",
-              variant: "danger",
-            });
-            if (ok) runAction("remove", () => reqRemoveContainer(container.id));
-          }}
-        />
-        {/* Edit */}
-        <button
-          onClick={() => setEditing((e) => !e)}
-          title="Edit container config"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 h-8 text-sm font-medium text-secondary hover:text-primary hover:bg-surface-active transition-colors cursor-pointer"
-        >
-          <FontAwesomeIcon icon={faPenToSquare} className="h-3.5 w-3.5" />
-          Edit
-        </button>
+      {canEdit(user) && (
+        <div className="flex flex-wrap gap-2 mb-6 p-4 rounded-xl border border-border-subtle bg-surface">
+          {/* Start */}
+          <ActionButton
+            label="Start"
+            icon={<FontAwesomeIcon icon={faPlay} className="h-3.5 w-3.5" />}
+            disabled={!isStopped || controlsDisabled}
+            loading={actionLoading === "start"}
+            color="text-[#22c55e] hover:bg-[#22c55e]/10"
+            onClick={() =>
+              runAction("start", () => reqStartContainer(container.id))
+            }
+          />
+          {/* Stop */}
+          <ActionButton
+            label="Stop"
+            icon={<FontAwesomeIcon icon={faStop} className="h-3.5 w-3.5" />}
+            disabled={!isRunning || controlsDisabled}
+            loading={actionLoading === "stop"}
+            color="text-secondary hover:bg-border-strong"
+            onClick={async () => {
+              const ok = await showConfirm({
+                title: "Stop container",
+                message: `Stop "${container.name}"? The container will be gracefully shut down.`,
+                confirmLabel: "Stop",
+                variant: "warning",
+              });
+              if (ok) runAction("stop", () => reqStopContainer(container.id));
+            }}
+          />
+          {/* Kill */}
+          <ActionButton
+            label="Kill"
+            title="Force-kill container (SIGKILL)"
+            icon={<FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />}
+            disabled={!isRunning || controlsDisabled}
+            loading={actionLoading === "kill"}
+            color="text-[#ef4444] hover:bg-[#ef4444]/10"
+            onClick={async () => {
+              const ok = await showConfirm({
+                title: "Kill container",
+                message: `Force-kill "${container.name}"? This sends SIGKILL immediately.`,
+                confirmLabel: "Kill",
+                variant: "danger",
+              });
+              if (ok) runAction("kill", () => reqKillContainer(container.id));
+            }}
+          />
+          {/* Restart */}
+          <ActionButton
+            label="Restart"
+            icon={<FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />}
+            disabled={!isRunning || controlsDisabled}
+            loading={actionLoading === "restart"}
+            color="text-[#3b82f6] hover:bg-[#3b82f6]/10"
+            onClick={async () => {
+              const ok = await showConfirm({
+                title: "Restart container",
+                message: `Restart "${container.name}"? The container will be stopped and started.`,
+                confirmLabel: "Restart",
+                variant: "warning",
+              });
+              if (ok)
+                runAction("restart", () => reqRestartContainer(container.id));
+            }}
+          />
+          {/* Pause */}
+          <ActionButton
+            label="Pause"
+            icon={<FontAwesomeIcon icon={faPause} className="h-3.5 w-3.5" />}
+            disabled={!isRunning || controlsDisabled}
+            loading={actionLoading === "pause"}
+            color="text-secondary hover:bg-border-strong"
+            onClick={() =>
+              runAction("pause", () => reqPauseContainer(container.id))
+            }
+          />
+          {/* Resume */}
+          <ActionButton
+            label="Resume"
+            icon={<FontAwesomeIcon icon={faPlay} className="h-3.5 w-3.5" />}
+            disabled={!isPaused || controlsDisabled}
+            loading={actionLoading === "unpause"}
+            color="text-[#22c55e] hover:bg-[#22c55e]/10"
+            onClick={() =>
+              runAction("unpause", () => reqUnpauseContainer(container.id))
+            }
+          />
+          {/* Recreate */}
+          <ActionButton
+            label="Recreate"
+            title="Remove and recreate container from config"
+            icon={
+              <FontAwesomeIcon icon={faRecycle} className="h-3.5 w-3.5" />
+            }
+            disabled={controlsDisabled}
+            loading={actionLoading === "recreate"}
+            color="text-[#a855f7] hover:bg-[#a855f7]/10"
+            onClick={async () => {
+              const ok = await showConfirm({
+                title: "Recreate container",
+                message: `Recreate "${container.name}"? The container will be removed and created fresh from its config.`,
+                confirmLabel: "Recreate",
+                variant: "warning",
+              });
+              if (ok)
+                runAction("recreate", () => reqRecreateContainer(container.id));
+            }}
+          />
+          {/* Remove */}
+          <ActionButton
+            label="Remove"
+            title="Permanently remove container from Docker"
+            icon={<FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />}
+            disabled={controlsDisabled}
+            loading={actionLoading === "remove"}
+            color="text-[#ef4444] hover:bg-[#ef4444]/10"
+            onClick={async () => {
+              const ok = await showConfirm({
+                title: "Remove container",
+                message: `Permanently remove "${container.name}" from Docker? This cannot be undone.`,
+                confirmLabel: "Remove",
+                variant: "danger",
+              });
+              if (ok) runAction("remove", () => reqRemoveContainer(container.id));
+            }}
+          />
+          {/* Edit */}
+          <button
+            onClick={() => setEditing((e) => !e)}
+            title="Edit container config"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 h-8 text-sm font-medium text-secondary hover:text-primary hover:bg-surface-active transition-colors cursor-pointer"
+          >
+            <FontAwesomeIcon icon={faPenToSquare} className="h-3.5 w-3.5" />
+            Edit
+          </button>
 
-        {actionError && (
-          <div className="ml-auto">
-            <Alert variant="error" onDismiss={() => setActionError(null)}>
-              {actionError}
-            </Alert>
-          </div>
-        )}
-      </div>
+          {actionError && (
+            <div className="ml-auto">
+              <Alert variant="error" onDismiss={() => setActionError(null)}>
+                {actionError}
+              </Alert>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Edit form */}
-      {editing && (
+      {editing && canEdit(user) && (
         <div className="mb-6 rounded-xl border border-border-strong bg-surface p-5 space-y-4">
           <h2 className="text-sm font-medium text-primary">Edit Container</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

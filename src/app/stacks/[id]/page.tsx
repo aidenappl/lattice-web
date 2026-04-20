@@ -44,7 +44,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { EnvVarEditor } from "@/components/ui/env-var-editor";
-import { formatDate, timeAgo, workerStaleReason } from "@/lib/utils";
+import { formatDate, timeAgo, workerStaleReason, canEdit } from "@/lib/utils";
+import { useUser } from "@/store/hooks";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
 import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
@@ -66,6 +67,7 @@ export default function StackDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params.id);
+  const user = useUser();
 
   const [stack, setStack] = useState<Stack | null>(null);
   const [containers, setContainers] = useState<Container[]>([]);
@@ -745,7 +747,7 @@ export default function StackDetailPage() {
           >
             Env Vars
           </Button>
-          {(() => {
+          {canEdit(user) && (() => {
             const isDeploying = deploying || stack.status === "deploying";
             const isFailed = stack.status === "failed";
             const needsDeploy = hasPendingChanges || isFailed;
@@ -781,14 +783,16 @@ export default function StackDetailPage() {
               </div>
             );
           })()}
-          <Button
-            variant="secondary"
-            onClick={handleDeleteStack}
-            disabled={deleting}
-            className="text-red-400 hover:text-red-300 border-red-900/50 hover:border-red-800"
-          >
-            {deleting ? "Deleting..." : "Delete"}
-          </Button>
+          {canEdit(user) && (
+            <Button
+              variant="secondary"
+              onClick={handleDeleteStack}
+              disabled={deleting}
+              className="text-red-400 hover:text-red-300 border-red-900/50 hover:border-red-800"
+            >
+              {deleting ? "Deleting..." : "Delete"}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -799,7 +803,7 @@ export default function StackDetailPage() {
           <div className="rounded-xl border border-border-subtle bg-surface p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-medium text-primary">Stack Info</h2>
-              {!editingStack && (
+              {!editingStack && canEdit(user) && (
                 <Button variant="ghost" size="sm" onClick={openEditStack}>
                   Edit
                 </Button>
@@ -962,15 +966,17 @@ export default function StackDetailPage() {
                 Stack Environment Variables
               </h2>
               <EnvVarEditor value={stackEnvVars} onChange={setStackEnvVars} />
-              <div className="mt-3 flex justify-end">
-                <Button
-                  size="sm"
-                  onClick={handleSaveEnvVars}
-                  disabled={savingEnvVars}
-                >
-                  {savingEnvVars ? "Saving..." : "Save"}
-                </Button>
-              </div>
+              {canEdit(user) && (
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={handleSaveEnvVars}
+                    disabled={savingEnvVars}
+                  >
+                    {savingEnvVars ? "Saving..." : "Save"}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
@@ -1007,28 +1013,30 @@ export default function StackDetailPage() {
                   </Alert>
                 </div>
               )}
-              <div className="mt-3 flex justify-between items-center">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={handleSyncCompose}
-                  disabled={
-                    syncingCompose || savingCompose || !composeYaml.trim()
-                  }
-                  title="Re-read the stored compose YAML and patch existing containers (health check, env, ports, etc.) without recreating them"
-                >
-                  {syncingCompose ? "Syncing…" : "Sync Config"}
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleSaveCompose}
-                  disabled={
-                    savingCompose || syncingCompose || !composeYaml.trim()
-                  }
-                >
-                  {savingCompose ? "Saving..." : "Save & Sync Containers"}
-                </Button>
-              </div>
+              {canEdit(user) && (
+                <div className="mt-3 flex justify-between items-center">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleSyncCompose}
+                    disabled={
+                      syncingCompose || savingCompose || !composeYaml.trim()
+                    }
+                    title="Re-read the stored compose YAML and patch existing containers (health check, env, ports, etc.) without recreating them"
+                  >
+                    {syncingCompose ? "Syncing…" : "Sync Config"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveCompose}
+                    disabled={
+                      savingCompose || syncingCompose || !composeYaml.trim()
+                    }
+                  >
+                    {savingCompose ? "Saving..." : "Save & Sync Containers"}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
@@ -1041,17 +1049,19 @@ export default function StackDetailPage() {
                   {containers.length} container
                   {containers.length !== 1 ? "s" : ""}
                 </span>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => setShowCreateContainer(!showCreateContainer)}
-                >
-                  {showCreateContainer ? "Cancel" : "Add Container"}
-                </Button>
+                {canEdit(user) && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setShowCreateContainer(!showCreateContainer)}
+                  >
+                    {showCreateContainer ? "Cancel" : "Add Container"}
+                  </Button>
+                )}
               </div>
             </div>
 
-            {showCreateContainer && (
+            {showCreateContainer && canEdit(user) && (
               <form
                 onSubmit={handleCreateContainer}
                 className="px-5 py-4 border-b border-border-subtle bg-background-alt"
@@ -1113,9 +1123,11 @@ export default function StackDetailPage() {
                       <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-secondary uppercase tracking-wider">
-                        Actions
-                      </th>
+                      {canEdit(user) && (
+                        <th className="px-4 py-3 text-right text-xs font-medium text-secondary uppercase tracking-wider">
+                          Actions
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -1138,133 +1150,135 @@ export default function StackDetailPage() {
                         <td className="px-4 py-3">
                           <StatusBadge status={container.status} />
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1">
-                            {(container.status === "stopped" ||
-                              container.status === "error") && (
+                        {canEdit(user) && (
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              {(container.status === "stopped" ||
+                                container.status === "error") && (
+                                <button
+                                  onClick={() =>
+                                    handleContainerAction(container.id, "start")
+                                  }
+                                  disabled={
+                                    !workerOnline ||
+                                    !!actionLoading[`${container.id}-start`]
+                                  }
+                                  title={
+                                    !workerOnline
+                                      ? "Worker offline"
+                                      : "Start container"
+                                  }
+                                  className="px-2 py-1 text-xs text-[#22c55e] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
+                                >
+                                  {actionLoading[`${container.id}-start`]
+                                    ? "..."
+                                    : "Start"}
+                                </button>
+                              )}
+                              {container.status === "paused" && (
+                                <button
+                                  onClick={() =>
+                                    handleContainerAction(
+                                      container.id,
+                                      "unpause",
+                                    )
+                                  }
+                                  disabled={
+                                    !workerOnline ||
+                                    !!actionLoading[`${container.id}-unpause`]
+                                  }
+                                  title={
+                                    !workerOnline
+                                      ? "Worker offline"
+                                      : "Resume container"
+                                  }
+                                  className="px-2 py-1 text-xs text-[#22c55e] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
+                                >
+                                  {actionLoading[`${container.id}-unpause`]
+                                    ? "..."
+                                    : "Resume"}
+                                </button>
+                              )}
+                              {container.status === "running" && (
+                                <button
+                                  onClick={() =>
+                                    handleContainerAction(container.id, "restart")
+                                  }
+                                  disabled={
+                                    !workerOnline ||
+                                    !!actionLoading[`${container.id}-restart`]
+                                  }
+                                  title={
+                                    !workerOnline
+                                      ? "Worker offline"
+                                      : "Restart container"
+                                  }
+                                  className="px-2 py-1 text-xs text-[#3b82f6] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
+                                >
+                                  {actionLoading[`${container.id}-restart`]
+                                    ? "..."
+                                    : "Restart"}
+                                </button>
+                              )}
+                              {container.status === "running" && (
+                                <button
+                                  onClick={() =>
+                                    handleContainerAction(container.id, "stop")
+                                  }
+                                  disabled={
+                                    !workerOnline ||
+                                    !!actionLoading[`${container.id}-stop`]
+                                  }
+                                  title={
+                                    !workerOnline
+                                      ? "Worker offline"
+                                      : "Stop container"
+                                  }
+                                  className="px-2 py-1 text-xs text-[#f59e0b] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
+                                >
+                                  {actionLoading[`${container.id}-stop`]
+                                    ? "..."
+                                    : "Stop"}
+                                </button>
+                              )}
                               <button
                                 onClick={() =>
-                                  handleContainerAction(container.id, "start")
+                                  handleContainerAction(container.id, "recreate")
                                 }
                                 disabled={
                                   !workerOnline ||
-                                  !!actionLoading[`${container.id}-start`]
+                                  !!actionLoading[`${container.id}-recreate`]
                                 }
                                 title={
                                   !workerOnline
                                     ? "Worker offline"
-                                    : "Start container"
+                                    : "Remove and recreate container from config"
                                 }
-                                className="px-2 py-1 text-xs text-[#22c55e] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
+                                className="px-2 py-1 text-xs text-[#8b5cf6] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
                               >
-                                {actionLoading[`${container.id}-start`]
+                                {actionLoading[`${container.id}-recreate`]
                                   ? "..."
-                                  : "Start"}
+                                  : "Recreate"}
                               </button>
-                            )}
-                            {container.status === "paused" && (
+                              <a
+                                href={`/containers/${container.id}`}
+                                title="Edit container config"
+                                className="px-2 py-1 text-xs text-secondary hover:bg-surface-elevated hover:text-primary rounded transition-colors"
+                              >
+                                Edit
+                              </a>
                               <button
                                 onClick={() =>
-                                  handleContainerAction(
-                                    container.id,
-                                    "unpause",
-                                  )
+                                  handleDeleteContainer(container.id)
                                 }
-                                disabled={
-                                  !workerOnline ||
-                                  !!actionLoading[`${container.id}-unpause`]
-                                }
-                                title={
-                                  !workerOnline
-                                    ? "Worker offline"
-                                    : "Resume container"
-                                }
-                                className="px-2 py-1 text-xs text-[#22c55e] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
+                                title="Delete container"
+                                className="px-2 py-1 text-xs text-[#ef4444] hover:bg-surface-elevated rounded transition-colors"
                               >
-                                {actionLoading[`${container.id}-unpause`]
-                                  ? "..."
-                                  : "Resume"}
+                                Delete
                               </button>
-                            )}
-                            {container.status === "running" && (
-                              <button
-                                onClick={() =>
-                                  handleContainerAction(container.id, "restart")
-                                }
-                                disabled={
-                                  !workerOnline ||
-                                  !!actionLoading[`${container.id}-restart`]
-                                }
-                                title={
-                                  !workerOnline
-                                    ? "Worker offline"
-                                    : "Restart container"
-                                }
-                                className="px-2 py-1 text-xs text-[#3b82f6] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
-                              >
-                                {actionLoading[`${container.id}-restart`]
-                                  ? "..."
-                                  : "Restart"}
-                              </button>
-                            )}
-                            {container.status === "running" && (
-                              <button
-                                onClick={() =>
-                                  handleContainerAction(container.id, "stop")
-                                }
-                                disabled={
-                                  !workerOnline ||
-                                  !!actionLoading[`${container.id}-stop`]
-                                }
-                                title={
-                                  !workerOnline
-                                    ? "Worker offline"
-                                    : "Stop container"
-                                }
-                                className="px-2 py-1 text-xs text-[#f59e0b] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
-                              >
-                                {actionLoading[`${container.id}-stop`]
-                                  ? "..."
-                                  : "Stop"}
-                              </button>
-                            )}
-                            <button
-                              onClick={() =>
-                                handleContainerAction(container.id, "recreate")
-                              }
-                              disabled={
-                                !workerOnline ||
-                                !!actionLoading[`${container.id}-recreate`]
-                              }
-                              title={
-                                !workerOnline
-                                  ? "Worker offline"
-                                  : "Remove and recreate container from config"
-                              }
-                              className="px-2 py-1 text-xs text-[#8b5cf6] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
-                            >
-                              {actionLoading[`${container.id}-recreate`]
-                                ? "..."
-                                : "Recreate"}
-                            </button>
-                            <a
-                              href={`/containers/${container.id}`}
-                              title="Edit container config"
-                              className="px-2 py-1 text-xs text-secondary hover:bg-surface-elevated hover:text-primary rounded transition-colors"
-                            >
-                              Edit
-                            </a>
-                            <button
-                              onClick={() =>
-                                handleDeleteContainer(container.id)
-                              }
-                              title="Delete container"
-                              className="px-2 py-1 text-xs text-[#ef4444] hover:bg-surface-elevated rounded transition-colors"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

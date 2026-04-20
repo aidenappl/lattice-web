@@ -6,16 +6,19 @@ import {
   reqGetUsers,
   reqCreateUser,
   reqUpdateUser,
+  reqDeleteUser,
   reqUpdateAPI,
   reqUpdateWeb,
   reqRefreshVersions,
 } from "@/services/admin.service";
+import { useUser } from "@/store/hooks";
+import { isAdmin, formatDate } from "@/lib/utils";
+import { useConfirm } from "@/components/ui/confirm-modal";
 import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
-import { formatDate } from "@/lib/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faRotate,
@@ -56,7 +59,7 @@ function waitForAPIRestart(toastId: string, onFail: () => void) {
   }, 1000);
 }
 
-function VersionCheckSection() {
+function VersionCheckSection({ adminUser }: { adminUser: boolean }) {
   const { info, loading, refresh } = useVersionCheck();
   const [refreshing, setRefreshing] = useState(false);
   const [updatingAPI, setUpdatingAPI] = useState(false);
@@ -159,18 +162,20 @@ function VersionCheckSection() {
             </p>
           )}
         </div>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={handleRefresh}
-          disabled={refreshing || loading}
-        >
-          <FontAwesomeIcon
-            icon={faRotate}
-            className={`h-3 w-3 mr-1.5 ${refreshing ? "animate-spin" : ""}`}
-          />
-          {refreshing ? "Checking..." : "Check Now"}
-        </Button>
+        {adminUser && (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={handleRefresh}
+            disabled={refreshing || loading}
+          >
+            <FontAwesomeIcon
+              icon={faRotate}
+              className={`h-3 w-3 mr-1.5 ${refreshing ? "animate-spin" : ""}`}
+            />
+            {refreshing ? "Checking..." : "Check Now"}
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -203,14 +208,16 @@ function VersionCheckSection() {
                   Up to date
                 </Badge>
               ) : (
-                <Button
-                  size="sm"
-                  onClick={handleUpdateAPI}
-                  disabled={updatingAPI}
-                >
-                  <FontAwesomeIcon icon={faArrowUp} className="h-3 w-3 mr-1" />
-                  {updatingAPI ? "Updating..." : "Update API"}
-                </Button>
+                adminUser && (
+                  <Button
+                    size="sm"
+                    onClick={handleUpdateAPI}
+                    disabled={updatingAPI}
+                  >
+                    <FontAwesomeIcon icon={faArrowUp} className="h-3 w-3 mr-1" />
+                    {updatingAPI ? "Updating..." : "Update API"}
+                  </Button>
+                )
               )}
             </div>
           </div>
@@ -239,14 +246,16 @@ function VersionCheckSection() {
                   Up to date
                 </Badge>
               ) : (
-                <Button
-                  size="sm"
-                  onClick={handleUpdateWeb}
-                  disabled={updatingWeb}
-                >
-                  <FontAwesomeIcon icon={faArrowUp} className="h-3 w-3 mr-1" />
-                  {updatingWeb ? "Updating..." : "Update Web"}
-                </Button>
+                adminUser && (
+                  <Button
+                    size="sm"
+                    onClick={handleUpdateWeb}
+                    disabled={updatingWeb}
+                  >
+                    <FontAwesomeIcon icon={faArrowUp} className="h-3 w-3 mr-1" />
+                    {updatingWeb ? "Updating..." : "Update Web"}
+                  </Button>
+                )
               )}
             </div>
           </div>
@@ -304,6 +313,9 @@ function VersionCheckSection() {
 }
 
 export default function SettingsPage() {
+  const currentUser = useUser();
+  const showConfirm = useConfirm();
+  const admin = isAdmin(currentUser);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -352,10 +364,27 @@ export default function SettingsPage() {
     setSubmitting(false);
   };
 
-  const handleToggleActive = async (user: User) => {
-    const res = await reqUpdateUser(user.id, { active: !user.active });
+  const handleToggleActive = async (u: User) => {
+    const res = await reqUpdateUser(u.id, { active: !u.active });
     if (res.success) {
-      setUsers((prev) => prev.map((u) => (u.id === user.id ? res.data : u)));
+      setUsers((prev) => prev.map((x) => (x.id === u.id ? res.data : x)));
+    }
+  };
+
+  const handleDeleteUser = async (u: User) => {
+    const ok = await showConfirm({
+      title: "Delete user",
+      message: `Are you sure you want to permanently delete "${u.name || u.email}"? This action cannot be undone.`,
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
+    const res = await reqDeleteUser(u.id);
+    if (res.success) {
+      toast.success("User deleted");
+      await load();
+    } else {
+      toast.error("error_message" in res ? res.error_message : "Failed to delete user");
     }
   };
 
@@ -372,19 +401,21 @@ export default function SettingsPage() {
 
       {/* Version Check */}
       <div className="mb-8">
-        <VersionCheckSection />
+        <VersionCheckSection adminUser={admin} />
       </div>
 
       {/* Users Section */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-primary">Users</h2>
-        <Button onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Cancel" : "Create User"}
-        </Button>
+        {admin && (
+          <Button onClick={() => setShowForm(!showForm)}>
+            {showForm ? "Cancel" : "Create User"}
+          </Button>
+        )}
       </div>
 
       {/* Create User Form */}
-      {showForm && (
+      {admin && showForm && (
         <form
           onSubmit={handleCreate}
           className="rounded-xl border border-border-subtle bg-surface p-6 mb-6 space-y-4"
@@ -429,6 +460,7 @@ export default function SettingsPage() {
                 className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
               >
                 <option value="viewer">Viewer</option>
+                <option value="editor">Editor</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
@@ -483,48 +515,59 @@ export default function SettingsPage() {
                 </td>
               </tr>
             ) : (
-              users.map((user) => (
+              users.map((u) => (
                 <tr
-                  key={user.id}
+                  key={u.id}
                   className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors"
                 >
                   <td className="px-4 py-3">
                     <p className="text-sm font-medium text-primary">
-                      {user.name || user.email}
+                      {u.name || u.email}
                     </p>
-                    {user.name && (
-                      <p className="text-xs text-muted">{user.email}</p>
+                    {u.name && (
+                      <p className="text-xs text-muted">{u.email}</p>
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm text-secondary">
-                    {user.auth_type}
+                    {u.auth_type}
                   </td>
                   <td className="px-4 py-3">
                     <Badge
-                      variant={user.role === "admin" ? "warning" : "default"}
+                      variant={u.role === "admin" ? "warning" : "default"}
                     >
-                      {user.role}
+                      {u.role}
                     </Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <Badge variant={user.active ? "success" : "error"}>
+                    <Badge variant={u.active ? "success" : "error"}>
                       <span
-                        className={`h-1.5 w-1.5 rounded-full ${user.active ? "bg-[#22c55e]" : "bg-[#ef4444]"}`}
+                        className={`h-1.5 w-1.5 rounded-full ${u.active ? "bg-[#22c55e]" : "bg-[#ef4444]"}`}
                       />
-                      {user.active ? "active" : "inactive"}
+                      {u.active ? "active" : "inactive"}
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-sm text-muted">
-                    {formatDate(user.inserted_at)}
+                    {formatDate(u.inserted_at)}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button
-                      variant={user.active ? "destructive" : "secondary"}
-                      size="sm"
-                      onClick={() => handleToggleActive(user)}
-                    >
-                      {user.active ? "Deactivate" : "Activate"}
-                    </Button>
+                  <td className="px-4 py-3 text-right flex items-center justify-end gap-2">
+                    {admin && (
+                      <Button
+                        variant={u.active ? "destructive" : "secondary"}
+                        size="sm"
+                        onClick={() => handleToggleActive(u)}
+                      >
+                        {u.active ? "Deactivate" : "Activate"}
+                      </Button>
+                    )}
+                    {admin && currentUser?.id !== u.id && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeleteUser(u)}
+                      >
+                        Delete
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))

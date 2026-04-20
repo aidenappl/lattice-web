@@ -16,11 +16,13 @@ import {
 import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatDate } from "@/lib/utils";
+import { formatDate, canEdit } from "@/lib/utils";
+import { useUser } from "@/store/hooks";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { Alert } from "@/components/ui/alert";
 
 export default function RegistriesPage() {
+  const user = useUser();
   const [registries, setRegistries] = useState<Registry[]>([]);
   const showConfirm = useConfirm();
   const [loading, setLoading] = useState(true);
@@ -220,18 +222,20 @@ export default function RegistriesPage() {
             Manage container registries
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setShowForm(!showForm);
-            if (showForm) resetForm();
-          }}
-        >
-          {showForm ? "Cancel" : "Add Registry"}
-        </Button>
+        {canEdit(user) && (
+          <Button
+            onClick={() => {
+              setShowForm(!showForm);
+              if (showForm) resetForm();
+            }}
+          >
+            {showForm ? "Cancel" : "Add Registry"}
+          </Button>
+        )}
       </div>
 
       {/* Create Form */}
-      {showForm && (
+      {canEdit(user) && showForm && (
         <form
           onSubmit={handleCreate}
           className="rounded-xl border border-border-subtle bg-surface p-6 mb-6 space-y-4"
@@ -388,20 +392,24 @@ export default function RegistriesPage() {
                       {formatDate(reg.inserted_at)}
                     </td>
                     <td className="px-4 py-3 text-right space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => startEdit(reg)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleTestExisting(reg.id)}
-                      >
-                        Test
-                      </Button>
+                      {canEdit(user) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => startEdit(reg)}
+                        >
+                          Edit
+                        </Button>
+                      )}
+                      {canEdit(user) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleTestExisting(reg.id)}
+                        >
+                          Test
+                        </Button>
+                      )}
                       <Button
                         variant="secondary"
                         size="sm"
@@ -409,16 +417,18 @@ export default function RegistriesPage() {
                       >
                         {browseId === reg.id ? "Close" : "Browse"}
                       </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDelete(reg.id)}
-                      >
-                        Delete
-                      </Button>
+                      {canEdit(user) && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(reg.id)}
+                        >
+                          Delete
+                        </Button>
+                      )}
                     </td>
                   </tr>
-                  {editId === reg.id && (
+                  {canEdit(user) && editId === reg.id && (
                     <tr className="border-b border-border-subtle bg-background-alt">
                       <td colSpan={6} className="px-4 py-4">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">

@@ -52,6 +52,12 @@ export const reqUpdateUser = (id: number, data: Partial<{ name: string; role: st
         data,
     });
 
+export const reqDeleteUser = (id: number) =>
+    fetchApi<null>({
+        method: "DELETE",
+        url: `/admin/users/${id}`,
+    });
+
 export const reqGetVersions = () =>
     fetchApi<VersionInfo>({
         method: "GET",

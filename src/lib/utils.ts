@@ -1,4 +1,4 @@
-import type { Worker } from "@/types";
+import type { User, Worker } from "@/types";
 
 export function cn(...classes: (string | boolean | undefined | null)[]): string {
     return classes.filter(Boolean).join(' ');
@@ -14,6 +14,14 @@ export function timeAgo(dateString: string): string {
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
     return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+export function isAdmin(user: User | null): boolean {
+    return user?.role === "admin";
+}
+
+export function canEdit(user: User | null): boolean {
+    return user?.role === "admin" || user?.role === "editor";
 }
 
 // A worker is considered online only if its status is "online" AND
