@@ -5,7 +5,11 @@ import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
-import { useAdminSocket, sendAdminMessage, AdminSocketEvent } from "@/hooks/useAdminSocket";
+import {
+  useAdminSocket,
+  sendAdminMessage,
+  AdminSocketEvent,
+} from "@/hooks/useAdminSocket";
 
 type TerminalProps = {
   containerId: number;
@@ -14,7 +18,12 @@ type TerminalProps = {
   onClose: () => void;
 };
 
-export function Terminal({ containerId, containerName, workerId, onClose }: TerminalProps) {
+export function Terminal({
+  containerId,
+  containerName,
+  workerId,
+  onClose,
+}: TerminalProps) {
   const termRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -22,29 +31,30 @@ export function Terminal({ containerId, containerName, workerId, onClose }: Term
   const startedRef = useRef(false);
 
   // Handle incoming exec output from WebSocket
-  const handleEvent = useCallback(
-    (event: AdminSocketEvent) => {
-      if (event.type !== "exec_output") return;
-      const p = event.payload ?? {};
-      if (p.command_id !== commandIdRef.current) return;
+  const handleEvent = useCallback((event: AdminSocketEvent) => {
+    if (event.type !== "exec_output") return;
+    const p = event.payload ?? {};
+    if (p.command_id !== commandIdRef.current) return;
 
-      if (p.error) {
-        xtermRef.current?.write(`\r\n\x1b[31mError: ${p.error as string}\x1b[0m\r\n`);
-        return;
-      }
+    if (p.error) {
+      xtermRef.current?.write(
+        `\r\n\x1b[31mError: ${p.error as string}\x1b[0m\r\n`,
+      );
+      return;
+    }
 
-      if (p.closed) {
-        xtermRef.current?.write("\r\n\x1b[33m[Session closed]\x1b[0m\r\n");
-        return;
-      }
+    if (p.closed) {
+      xtermRef.current?.write("\r\n\x1b[33m[Session closed]\x1b[0m\r\n");
+      return;
+    }
 
-      if (p.data) {
-        const bytes = Uint8Array.from(atob(p.data as string), (c) => c.charCodeAt(0));
-        xtermRef.current?.write(bytes);
-      }
-    },
-    [],
-  );
+    if (p.data) {
+      const bytes = Uint8Array.from(atob(p.data as string), (c) =>
+        c.charCodeAt(0),
+      );
+      xtermRef.current?.write(bytes);
+    }
+  }, []);
 
   useAdminSocket(handleEvent);
 
@@ -136,13 +146,24 @@ export function Terminal({ containerId, containerName, workerId, onClose }: Term
     };
   }, [containerName, workerId, containerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-[#0a0a0a] rounded-xl border border-border-subtle w-[90vw] max-w-4xl h-[70vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2 border-b border-border-subtle bg-surface">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-primary">Terminal</span>
-            <span className="text-xs text-muted font-mono">{containerName}</span>
+            <span className="text-xs text-muted font-mono">
+              {containerName}
+            </span>
           </div>
           <button
             onClick={onClose}

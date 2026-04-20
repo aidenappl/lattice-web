@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import {
   reqGetOverview,
   reqGetFleetMetrics,
+  reqGetAuditLog,
   OverviewData,
   WorkerMetricsSummary,
   FleetMetricsPoint,
+  AuditLogEntry,
 } from "@/services/admin.service";
 import { APP_VERSION } from "@/lib/version";
 import { timeAgo } from "@/lib/utils";
@@ -50,18 +52,13 @@ function DashboardKPIRow({
   containerHistory: number[];
 }) {
   return (
-    <div
-      className="card"
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(6, 1fr)",
-        marginBottom: 16,
-      }}
-    >
+    <div className="card dash-kpi-row">
       <div className="kpi">
         <div className="kpi-label">Fleet Health</div>
         <div className="kpi-value">
-          {overview ? `${overview.online_workers}/${overview.total_workers}` : "-"}
+          {overview
+            ? `${overview.online_workers}/${overview.total_workers}`
+            : "-"}
           <span className="unit">workers</span>
         </div>
         <div className="kpi-sub">
@@ -69,7 +66,8 @@ function DashboardKPIRow({
             <>
               <span className="up">●</span>{" "}
               {Math.round(
-                (overview.online_workers / Math.max(overview.total_workers, 1)) *
+                (overview.online_workers /
+                  Math.max(overview.total_workers, 1)) *
                   100,
               )}
               % online
@@ -79,10 +77,7 @@ function DashboardKPIRow({
           )}
         </div>
         <div className="kpi-spark">
-          <Sparkline
-            data={containerHistory.length > 1 ? containerHistory : [0.5]}
-            color="var(--healthy)"
-          />
+          <Sparkline data={cpuHistory} color="var(--healthy)" />
         </div>
       </div>
 
@@ -90,18 +85,13 @@ function DashboardKPIRow({
         <div className="kpi-label">Running Containers</div>
         <div className="kpi-value">
           {overview?.running_containers ?? "-"}
-          <span className="unit">
-            / {overview?.total_containers ?? "-"}
-          </span>
+          <span className="unit">/ {overview?.total_containers ?? "-"}</span>
         </div>
         <div className="kpi-sub">
           <span className="up mono">active</span>
         </div>
         <div className="kpi-spark">
-          <Sparkline
-            data={containerHistory.length > 1 ? containerHistory : [0.5]}
-            color="var(--healthy)"
-          />
+          <Sparkline data={containerHistory} color="var(--healthy)" />
         </div>
       </div>
 
@@ -116,7 +106,9 @@ function DashboardKPIRow({
           {overview && overview.deploying_stacks > 0 && (
             <>
               <span className="pulse-dot pending" />{" "}
-              <span className="mono">{overview.deploying_stacks} deploying</span>
+              <span className="mono">
+                {overview.deploying_stacks} deploying
+              </span>
             </>
           )}
           {overview && overview.failed_stacks > 0 && (
@@ -132,10 +124,7 @@ function DashboardKPIRow({
             )}
         </div>
         <div className="kpi-spark">
-          <Sparkline
-            data={netHistory.length > 1 ? netHistory : [0.5]}
-            color="var(--info)"
-          />
+          <Sparkline data={containerHistory} color="var(--info)" />
         </div>
       </div>
 
@@ -149,10 +138,7 @@ function DashboardKPIRow({
           <span className="mono text-muted">across fleet</span>
         </div>
         <div className="kpi-spark">
-          <Sparkline
-            data={cpuHistory.length > 1 ? cpuHistory : [0.5]}
-            color="var(--pending)"
-          />
+          <Sparkline data={cpuHistory} color="var(--pending)" />
         </div>
       </div>
 
@@ -166,10 +152,7 @@ function DashboardKPIRow({
           <span className="mono text-muted">across fleet</span>
         </div>
         <div className="kpi-spark">
-          <Sparkline
-            data={memHistory.length > 1 ? memHistory : [0.5]}
-            color="var(--info)"
-          />
+          <Sparkline data={memHistory} color="var(--info)" />
         </div>
       </div>
 
@@ -252,7 +235,12 @@ function EventStream() {
         const p = event.payload ?? {};
         source = `deploy:${p.deployment_id ?? "?"}`;
         msg = (p.message as string) ?? `status → ${p.status ?? "?"}`;
-        level = p.status === "failed" ? "err" : p.status === "deployed" ? "ok" : "info";
+        level =
+          p.status === "failed"
+            ? "err"
+            : p.status === "deployed"
+              ? "ok"
+              : "info";
         break;
       }
       case "worker_crash": {
@@ -282,7 +270,6 @@ function EventStream() {
       <div className="panel-header">
         <span className="pulse-dot healthy" />
         <span>Live event stream</span>
-        <span className="muted">/ws/admin</span>
         <div className="panel-header-right">
           <span
             className="mono"
@@ -291,10 +278,16 @@ function EventStream() {
             {events.length} events
           </span>
           <button className="icon-btn" style={{ width: 22, height: 22 }}>
-            <FontAwesomeIcon icon={faFilter} style={{ width: 10, height: 10 }} />
+            <FontAwesomeIcon
+              icon={faFilter}
+              style={{ width: 10, height: 10 }}
+            />
           </button>
           <button className="icon-btn" style={{ width: 22, height: 22 }}>
-            <FontAwesomeIcon icon={faArrowDown} style={{ width: 10, height: 10 }} />
+            <FontAwesomeIcon
+              icon={faArrowDown}
+              style={{ width: 10, height: 10 }}
+            />
           </button>
         </div>
       </div>
@@ -410,7 +403,10 @@ function DeploymentTimelineMini({
               </span>
             </div>
             <div className="progress-bar">
-              <div className="progress-bar-fill pending" style={{ width: "50%" }} />
+              <div
+                className="progress-bar-fill pending"
+                style={{ width: "50%" }}
+              />
             </div>
             <div
               className="mono text-muted"
@@ -584,10 +580,7 @@ function FleetResourcePanel({
   const chartData = historyMap[metric];
 
   return (
-    <div
-      className="panel"
-      style={{ display: "flex", flexDirection: "column" }}
-    >
+    <div className="panel" style={{ display: "flex", flexDirection: "column" }}>
       <div className="panel-header">
         <FontAwesomeIcon
           icon={faChartLine}
@@ -692,6 +685,7 @@ function FleetResourcePanel({
 
         {/* Right: area chart */}
         <div
+          className="dash-chart-area"
           style={{
             flex: 1,
             display: "flex",
@@ -700,13 +694,130 @@ function FleetResourcePanel({
           }}
         >
           <Sparkline
-            data={chartData.length > 1 ? chartData : [0.5]}
+            data={chartData}
             width={460}
             height={260}
             color={colors[metric]}
             fill
+            maxValue={
+              metric === "cpu" || metric === "mem"
+                ? 100
+                : metric === "req"
+                  ? Math.max(overview?.total_containers ?? 1, 1)
+                  : undefined
+            }
           />
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Recent Activity Panel ────────────────────────────────────────────
+
+const activityColors: Record<string, string> = {
+  create: "healthy",
+  update: "info",
+  delete: "failed",
+  deploy: "violet",
+  login: "pending",
+  approve: "healthy",
+  rollback: "pending",
+  start: "healthy",
+  stop: "failed",
+  restart: "info",
+};
+
+function activityDotClass(action: string): string {
+  const key = Object.keys(activityColors).find((k) =>
+    action.toLowerCase().includes(k),
+  );
+  return key ? activityColors[key] : "muted";
+}
+
+function RecentActivityPanel({ entries }: { entries: AuditLogEntry[] }) {
+  const router = useRouter();
+  const recent = entries.slice(0, 15);
+
+  return (
+    <div
+      className="panel"
+      style={{ display: "flex", flexDirection: "column", height: "100%" }}
+    >
+      <div className="panel-header">
+        <span>Activity</span>
+        <span className="muted">· recent</span>
+        <div className="panel-header-right">
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => router.push("/audit-log")}
+          >
+            View all{" "}
+            <FontAwesomeIcon icon={faChevronRight} style={{ width: 9 }} />
+          </button>
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {recent.map((e) => (
+          <div
+            key={e.id}
+            style={{
+              padding: "8px 16px",
+              borderBottom: "1px solid var(--border-subtle)",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <span className={`status-dot ${activityDotClass(e.action)}`} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 500,
+                  display: "flex",
+                  gap: 6,
+                  alignItems: "center",
+                }}
+              >
+                <span className="truncate">{e.action}</span>
+                <span
+                  className="mono text-muted"
+                  style={{
+                    fontSize: 10,
+                    padding: "1px 5px",
+                    background: "var(--surface-alt)",
+                    borderRadius: 3,
+                  }}
+                >
+                  {e.resource_type}
+                </span>
+              </div>
+              {e.details && (
+                <div
+                  className="text-muted truncate"
+                  style={{ fontSize: 10, marginTop: 1 }}
+                >
+                  {e.details}
+                </div>
+              )}
+            </div>
+            <div
+              className="mono text-muted"
+              style={{ fontSize: 11, textAlign: "right", flexShrink: 0 }}
+            >
+              {timeAgo(e.inserted_at)}
+            </div>
+          </div>
+        ))}
+        {recent.length === 0 && (
+          <div
+            className="text-muted mono"
+            style={{ padding: 16, fontSize: 11 }}
+          >
+            No recent activity.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -875,16 +986,26 @@ function ResizableSplit({
   );
 }
 
-// ── Helper: normalize fleet metrics to 0-1 range for sparklines ─────
+// ── Helper: extract raw metric values from fleet history for sparklines ─────
 
-function normalizeHistory(
+function extractHistory(
   points: FleetMetricsPoint[],
   key: "cpu_avg" | "memory_avg" | "network_rx_total" | "running_count",
 ): number[] {
   if (points.length === 0) return [];
-  const values = points.map((p) => p[key]);
-  const max = Math.max(...values, 1);
-  return values.map((v) => v / max);
+  const raw = points.map((p) => p[key]);
+  // Trim leading zeros — these are empty buckets before data started flowing.
+  // This prevents "spike up from zero" visual on graphs where the value is
+  // actually stable (e.g., container count = 16 for the entire session).
+  let firstNonZero = 0;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] !== 0) {
+      firstNonZero = i;
+      break;
+    }
+    if (i === raw.length - 1) firstNonZero = i; // all zeros, show last point
+  }
+  return raw.slice(firstNonZero);
 }
 
 // ── Dashboard Page ──────────────────────────────────────────────────
@@ -894,6 +1015,7 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState<OverviewData | null>(null);
   const [stackNames, setStackNames] = useState<Record<number, string>>({});
   const [fleetHistory, setFleetHistory] = useState<FleetMetricsPoint[]>([]);
+  const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
 
   useEffect(() => {
     document.title = "Lattice - Dashboard";
@@ -921,32 +1043,37 @@ export default function DashboardPage() {
   }, []);
 
   const loadFleetHistory = useCallback(async () => {
-    const res = await reqGetFleetMetrics("24h");
+    const res = await reqGetFleetMetrics("1h");
     if (res.success && res.data) setFleetHistory(res.data);
   }, []);
 
   useEffect(() => {
     loadOverview();
     loadFleetHistory();
-    // Refresh overview every 30s, history every 60s
+    reqGetAuditLog().then((res) => {
+      if (res.success) setAuditLog(res.data ?? []);
+    });
+    // Refresh overview every 30s; fleet history is extended in real-time via WS
     const overviewInterval = setInterval(loadOverview, 30000);
-    const historyInterval = setInterval(loadFleetHistory, 60000);
     return () => {
       clearInterval(overviewInterval);
-      clearInterval(historyInterval);
     };
   }, [loadOverview, loadFleetHistory]);
 
   // Per-worker latest metrics for proper fleet aggregation (avoids sawtooth)
   const workerMetricsRef = useRef<Map<number, WorkerLatestMetrics>>(new Map());
   const workerHeartbeatCount = useRef<Map<number, number>>(new Map());
-  const lastFleetPushRef = useRef<number>(0);
 
   // Compute fleet aggregate from all tracked workers
   const computeFleetAggregate = useCallback((): FleetMetricsPoint => {
     const workers = workerMetricsRef.current;
     const count = workers.size || 1;
-    let cpuSum = 0, memSum = 0, netRxSum = 0, netTxSum = 0, containerSum = 0, runningSum = 0;
+    let cpuSum = 0,
+      memSum = 0,
+      netRxSum = 0,
+      netTxSum = 0,
+      containerSum = 0,
+      runningSum = 0;
     workers.forEach((w) => {
       cpuSum += w.cpu;
       memSum += w.memoryPct;
@@ -967,133 +1094,151 @@ export default function DashboardPage() {
   }, []);
 
   // WebSocket: aggregate per-worker metrics into fleet history + update overview
-  const handleDashboardEvent = useCallback((event: AdminSocketEvent) => {
-    if (event.type === "worker_heartbeat" && event.payload) {
-      const p = event.payload;
-      const workerId = event.worker_id as number | undefined;
-      if (workerId == null) return;
+  const handleDashboardEvent = useCallback(
+    (event: AdminSocketEvent) => {
+      if (event.type === "worker_heartbeat" && event.payload) {
+        const p = event.payload;
+        const workerId = event.worker_id as number | undefined;
+        if (workerId == null) return;
 
-      // Track heartbeat count per worker — skip the first one after connect
-      // because the runner's CPU delta calculation reports 0% on the first beat
-      const beatCount = (workerHeartbeatCount.current.get(workerId) ?? 0) + 1;
-      workerHeartbeatCount.current.set(workerId, beatCount);
-      if (beatCount === 1) {
-        // First heartbeat is calibration — don't use it for fleet metrics
-        // but still count containers since those are accurate immediately
+        // Track heartbeat count per worker — skip the first one after connect
+        // because the runner's CPU delta calculation reports 0% on the first beat
+        const beatCount = (workerHeartbeatCount.current.get(workerId) ?? 0) + 1;
+        workerHeartbeatCount.current.set(workerId, beatCount);
+        if (beatCount === 1) {
+          // First heartbeat is calibration — don't use it for fleet metrics
+          // but still count containers since those are accurate immediately
+          const containers = (p.container_count as number) ?? 0;
+          const running = (p.container_running_count as number) ?? 0;
+          const existing = workerMetricsRef.current.get(workerId);
+          if (existing) {
+            workerMetricsRef.current.set(workerId, {
+              ...existing,
+              containers,
+              running,
+            });
+          }
+          return;
+        }
+
+        const cpu = (p.cpu_percent as number) ?? 0;
+        const memUsed = p.memory_used_mb as number | undefined;
+        const memTotal = p.memory_total_mb as number | undefined;
+        const netRx = (p.network_rx_bytes as number) ?? 0;
+        const netTx = (p.network_tx_bytes as number) ?? 0;
         const containers = (p.container_count as number) ?? 0;
         const running = (p.container_running_count as number) ?? 0;
-        const existing = workerMetricsRef.current.get(workerId);
-        if (existing) {
-          workerMetricsRef.current.set(workerId, { ...existing, containers, running });
+
+        const memPct =
+          memUsed != null && memTotal != null && memTotal > 0
+            ? (memUsed / memTotal) * 100
+            : 0;
+
+        // Update this worker's latest metrics
+        workerMetricsRef.current.set(workerId, {
+          cpu,
+          memoryPct: memPct,
+          netRx,
+          netTx,
+          containers,
+          running,
+        });
+
+        // Compute fleet aggregate
+        const aggregate = computeFleetAggregate();
+
+        // Update overview with fleet averages
+        setOverview((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            fleet_cpu_avg: aggregate.cpu_avg,
+            fleet_memory_avg: aggregate.memory_avg,
+            fleet_container_count: aggregate.container_count,
+            fleet_running_count: aggregate.running_count,
+          };
+        });
+
+        // Push to fleet history on every heartbeat for near-real-time updates
+        // Cap at 300 points to prevent unbounded growth
+        setFleetHistory((prev) => [...prev.slice(-299), aggregate]);
+      }
+
+      if (event.type === "worker_connected") {
+        setOverview((prev) => {
+          if (!prev) return prev;
+          return { ...prev, online_workers: prev.online_workers + 1 };
+        });
+        // Reset heartbeat count so we skip the first calibration beat
+        if (event.worker_id != null) {
+          workerHeartbeatCount.current.set(event.worker_id, 0);
         }
-        return;
       }
 
-      const cpu = (p.cpu_percent as number) ?? 0;
-      const memUsed = p.memory_used_mb as number | undefined;
-      const memTotal = p.memory_total_mb as number | undefined;
-      const netRx = (p.network_rx_bytes as number) ?? 0;
-      const netTx = (p.network_tx_bytes as number) ?? 0;
-      const containers = (p.container_count as number) ?? 0;
-      const running = (p.container_running_count as number) ?? 0;
-
-      const memPct = memUsed != null && memTotal != null && memTotal > 0
-        ? (memUsed / memTotal) * 100
-        : 0;
-
-      // Update this worker's latest metrics
-      workerMetricsRef.current.set(workerId, {
-        cpu, memoryPct: memPct, netRx, netTx, containers, running,
-      });
-
-      // Compute fleet aggregate
-      const aggregate = computeFleetAggregate();
-
-      // Update overview with fleet averages
-      setOverview((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          fleet_cpu_avg: aggregate.cpu_avg,
-          fleet_memory_avg: aggregate.memory_avg,
-          fleet_container_count: aggregate.container_count,
-          fleet_running_count: aggregate.running_count,
-        };
-      });
-
-      // Push to fleet history at most once every 10s to avoid flooding the graph
-      const now = Date.now();
-      if (now - lastFleetPushRef.current >= 10000) {
-        lastFleetPushRef.current = now;
-        setFleetHistory((prev) => [...prev.slice(-(prev.length > 200 ? 200 : prev.length)), aggregate]);
-      }
-    }
-
-    if (event.type === "worker_connected") {
-      setOverview((prev) => {
-        if (!prev) return prev;
-        return { ...prev, online_workers: prev.online_workers + 1 };
-      });
-      // Reset heartbeat count so we skip the first calibration beat
-      if (event.worker_id != null) {
-        workerHeartbeatCount.current.set(event.worker_id, 0);
-      }
-    }
-
-    if (event.type === "worker_disconnected") {
-      setOverview((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          online_workers: Math.max(0, prev.online_workers - 1),
-        };
-      });
-      // Remove disconnected worker from metrics map and reset beat count
-      if (event.worker_id != null) {
-        workerMetricsRef.current.delete(event.worker_id as number);
-        workerHeartbeatCount.current.delete(event.worker_id);
-      }
-    }
-
-    if (event.type === "container_status" && event.payload) {
-      const status = event.payload.status as string | undefined;
-      if (status === "running") {
-        setOverview((prev) => {
-          if (!prev) return prev;
-          return { ...prev, running_containers: prev.running_containers + 1 };
-        });
-      } else if (status === "stopped" || status === "error") {
+      if (event.type === "worker_disconnected") {
         setOverview((prev) => {
           if (!prev) return prev;
           return {
             ...prev,
-            running_containers: Math.max(0, prev.running_containers - 1),
+            online_workers: Math.max(0, prev.online_workers - 1),
           };
         });
+        // Remove disconnected worker from metrics map and reset beat count
+        if (event.worker_id != null) {
+          workerMetricsRef.current.delete(event.worker_id as number);
+          workerHeartbeatCount.current.delete(event.worker_id);
+        }
       }
-    }
 
-    if (event.type === "deployment_progress" && event.payload) {
-      const status = event.payload.status as string | undefined;
-      if (status === "deploying") {
-        setOverview((prev) => {
-          if (!prev) return prev;
-          return { ...prev, deploying_stacks: prev.deploying_stacks + 1 };
-        });
-      } else if (status === "deployed" || status === "failed") {
-        setOverview((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            deploying_stacks: Math.max(0, prev.deploying_stacks - 1),
-            ...(status === "failed"
-              ? { failed_stacks: prev.failed_stacks + 1 }
-              : {}),
-          };
-        });
+      if (event.type === "container_status" && event.payload) {
+        const actionStatus = event.payload.status as string | undefined;
+        const containerState = event.payload.container_state as
+          | string
+          | undefined;
+        if (actionStatus === "success" && containerState) {
+          if (containerState === "running") {
+            setOverview((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                running_containers: prev.running_containers + 1,
+              };
+            });
+          } else if (containerState === "stopped") {
+            setOverview((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                running_containers: Math.max(0, prev.running_containers - 1),
+              };
+            });
+          }
+        }
       }
-    }
-  }, [computeFleetAggregate]);
+
+      if (event.type === "deployment_progress" && event.payload) {
+        const status = event.payload.status as string | undefined;
+        if (status === "deploying") {
+          setOverview((prev) => {
+            if (!prev) return prev;
+            return { ...prev, deploying_stacks: prev.deploying_stacks + 1 };
+          });
+        } else if (status === "deployed" || status === "failed") {
+          setOverview((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              deploying_stacks: Math.max(0, prev.deploying_stacks - 1),
+              ...(status === "failed"
+                ? { failed_stacks: prev.failed_stacks + 1 }
+                : {}),
+            };
+          });
+        }
+      }
+    },
+    [computeFleetAggregate],
+  );
 
   useAdminSocket(handleDashboardEvent);
 
@@ -1112,26 +1257,26 @@ export default function DashboardPage() {
     });
   }, []);
 
-  // Derive sparkline arrays from fleet history
+  // Derive sparkline arrays from fleet history (raw values — Sparkline auto-scales)
   const cpuHistory = useMemo(
-    () => normalizeHistory(fleetHistory, "cpu_avg"),
+    () => extractHistory(fleetHistory, "cpu_avg"),
     [fleetHistory],
   );
   const memHistory = useMemo(
-    () => normalizeHistory(fleetHistory, "memory_avg"),
+    () => extractHistory(fleetHistory, "memory_avg"),
     [fleetHistory],
   );
   const netHistory = useMemo(
-    () => normalizeHistory(fleetHistory, "network_rx_total"),
+    () => extractHistory(fleetHistory, "network_rx_total"),
     [fleetHistory],
   );
   const containerHistory = useMemo(
-    () => normalizeHistory(fleetHistory, "running_count"),
+    () => extractHistory(fleetHistory, "running_count"),
     [fleetHistory],
   );
 
   return (
-    <div style={{ padding: 28 }}>
+    <div className="dash-page">
       {/* Failing stacks banner */}
       <FailingStacksBanner
         count={overview?.failed_stacks ?? 0}
@@ -1148,30 +1293,37 @@ export default function DashboardPage() {
       />
 
       {/* Topology + Event Stream (resizable) */}
-      <ResizableSplit
-        leftMin={400}
-        rightMin={260}
-        defaultRightWidth={360}
-        storageKey="lattice-dash-topo-split"
-        height={540}
-        style={{ marginBottom: 16 }}
-        left={
-          <div className="panel" style={{ height: "100%", overflow: "hidden" }}>
-            <TopologyBoard />
-          </div>
-        }
-        right={<EventStream />}
-      />
+      <div className="dash-topology-split">
+        <ResizableSplit
+          leftMin={400}
+          rightMin={260}
+          defaultRightWidth={360}
+          storageKey="lattice-dash-topo-split"
+          height={540}
+          left={
+            <div
+              className="panel"
+              style={{ height: "100%", overflow: "hidden" }}
+            >
+              <TopologyBoard />
+            </div>
+          }
+          right={<EventStream />}
+        />
+      </div>
 
-      {/* Deployment Timeline + Fleet Resources */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 20,
-          height: 340,
-        }}
-      >
+      {/* Mobile: stacked topology + events */}
+      <div className="dash-topology-stacked">
+        <div className="panel" style={{ height: 360, overflow: "hidden" }}>
+          <TopologyBoard />
+        </div>
+        <div style={{ height: 300 }}>
+          <EventStream />
+        </div>
+      </div>
+
+      {/* Deployment Timeline + Fleet Resources + Activity */}
+      <div className="dash-bottom-grid">
         <DeploymentTimelineMini
           deployments={overview?.recent_deployments ?? null}
           stackNames={stackNames}
@@ -1184,6 +1336,7 @@ export default function DashboardPage() {
           netHistory={netHistory}
           containerHistory={containerHistory}
         />
+        <RecentActivityPanel entries={auditLog} />
       </div>
     </div>
   );

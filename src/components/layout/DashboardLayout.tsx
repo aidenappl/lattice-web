@@ -22,6 +22,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const isPublic = publicPaths.includes(pathname);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   useNotifications();
@@ -32,6 +33,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (saved === "true") setSidebarCollapsed(true);
   }, []);
 
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [pathname]);
+
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => {
       const next = !prev;
@@ -40,17 +46,24 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     });
   }, []);
 
-  // Global ⌘K handler
+  const toggleMobileSidebar = useCallback(() => {
+    setMobileSidebarOpen((prev) => !prev);
+  }, []);
+
+  // Global ⌘K handler + Escape to close mobile sidebar
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setPaletteOpen((prev) => !prev);
       }
+      if (e.key === "Escape" && mobileSidebarOpen) {
+        setMobileSidebarOpen(false);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [mobileSidebarOpen]);
 
   if (isPublic) {
     return <>{children}</>;
@@ -59,14 +72,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <VersionCheckProvider>
       <div className={cn("app-grid", sidebarCollapsed && "sidebar-collapsed")}>
-        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggle={toggleSidebar}
+          mobileOpen={mobileSidebarOpen}
+        />
+        <div
+          className={cn("sidebar-overlay", mobileSidebarOpen && "open")}
+          onClick={() => setMobileSidebarOpen(false)}
+        />
         <div className="app-main">
-          <Topbar onOpenPalette={() => setPaletteOpen(true)} />
+          <Topbar
+            onOpenPalette={() => setPaletteOpen(true)}
+            onToggleMobileMenu={toggleMobileSidebar}
+          />
           <UpdateBanner />
           <ConfirmProvider>
-            <div className="app-content">
-              {children}
-            </div>
+            <div className="app-content">{children}</div>
           </ConfirmProvider>
         </div>
       </div>

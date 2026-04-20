@@ -44,6 +44,7 @@ import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
 import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import WorkerBadge from "@/components/ui/worker-badge";
 import { Terminal } from "@/components/ui/terminal";
@@ -526,517 +527,540 @@ export default function ContainerDetailPage() {
   const controlsDisabled = !workerOnline || !!actionLoading;
 
   return (
-    <div className="p-6">
+    <div className="p-6 space-y-6">
       {/* Worker offline banner */}
       {!workerOnline && (
         <WorkerOfflineBanner workerName={worker?.name} reason={staleReason} />
       )}
 
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-muted mb-6">
-        <Link
-          href="/containers"
-          className="hover:text-primary transition-colors"
-        >
-          Containers
-        </Link>
-        <FontAwesomeIcon icon={faChevronRight} className="h-3 w-3" />
-        <span className="text-primary font-medium">{container.name}</span>
-      </div>
-
       {/* Header */}
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="page-title text-xl">
-              {container.name}
-            </h1>
-            <StatusBadge status={container.status} />
-            {container.health_status !== "none" && (
-              <StatusBadge status={container.health_status} />
-            )}
-          </div>
-          <p className="text-sm text-secondary mt-1 font-mono">
-            {container.image}:{container.tag}
-          </p>
-        </div>
-      </div>
-
-      {/* Pending context banner */}
-      {container.status === "pending" && (
-        <div className="mb-6">
-          <Alert variant="warning">
-            <strong>Container is pending</strong>
-            <br />
-            {!worker
-              ? "No worker is assigned to this stack. Assign a worker and deploy to start this container."
-              : !workerOnline
-                ? `Worker "${worker.name}" is offline. The container will start once the worker reconnects.`
-                : "This container has been configured but not yet deployed. Click Deploy on the stack page to push it to the worker."}
-          </Alert>
-        </div>
-      )}
-
-      {/* Action buttons */}
-      {canEdit(user) && (
-        <div className="flex flex-wrap gap-2 mb-6 p-4 card">
-          {/* Start */}
-          <ActionButton
-            label="Start"
-            icon={<FontAwesomeIcon icon={faPlay} className="h-3.5 w-3.5" />}
-            disabled={!isStopped || controlsDisabled}
-            loading={actionLoading === "start"}
-            color="text-healthy hover:bg-healthy/10"
-            onClick={() =>
-              runAction("start", () => reqStartContainer(container.id))
-            }
-          />
-          {/* Stop */}
-          <ActionButton
-            label="Stop"
-            icon={<FontAwesomeIcon icon={faStop} className="h-3.5 w-3.5" />}
-            disabled={!isRunning || controlsDisabled}
-            loading={actionLoading === "stop"}
-            color="text-secondary hover:bg-border-strong"
-            onClick={async () => {
-              const ok = await showConfirm({
-                title: "Stop container",
-                message: `Stop "${container.name}"? The container will be gracefully shut down.`,
-                confirmLabel: "Stop",
-                variant: "warning",
-              });
-              if (ok) runAction("stop", () => reqStopContainer(container.id));
-            }}
-          />
-          {/* Kill */}
-          <ActionButton
-            label="Kill"
-            title="Force-kill container (SIGKILL)"
-            icon={<FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />}
-            disabled={!isRunning || controlsDisabled}
-            loading={actionLoading === "kill"}
-            color="text-failed hover:bg-failed/10"
-            onClick={async () => {
-              const ok = await showConfirm({
-                title: "Kill container",
-                message: `Force-kill "${container.name}"? This sends SIGKILL immediately.`,
-                confirmLabel: "Kill",
-                variant: "danger",
-              });
-              if (ok) runAction("kill", () => reqKillContainer(container.id));
-            }}
-          />
-          {/* Restart */}
-          <ActionButton
-            label="Restart"
-            icon={<FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />}
-            disabled={!isRunning || controlsDisabled}
-            loading={actionLoading === "restart"}
-            color="text-info hover:bg-info/10"
-            onClick={async () => {
-              const ok = await showConfirm({
-                title: "Restart container",
-                message: `Restart "${container.name}"? The container will be stopped and started.`,
-                confirmLabel: "Restart",
-                variant: "warning",
-              });
-              if (ok)
-                runAction("restart", () => reqRestartContainer(container.id));
-            }}
-          />
-          {/* Pause */}
-          <ActionButton
-            label="Pause"
-            icon={<FontAwesomeIcon icon={faPause} className="h-3.5 w-3.5" />}
-            disabled={!isRunning || controlsDisabled}
-            loading={actionLoading === "pause"}
-            color="text-secondary hover:bg-border-strong"
-            onClick={() =>
-              runAction("pause", () => reqPauseContainer(container.id))
-            }
-          />
-          {/* Resume */}
-          <ActionButton
-            label="Resume"
-            icon={<FontAwesomeIcon icon={faPlay} className="h-3.5 w-3.5" />}
-            disabled={!isPaused || controlsDisabled}
-            loading={actionLoading === "unpause"}
-            color="text-healthy hover:bg-healthy/10"
-            onClick={() =>
-              runAction("unpause", () => reqUnpauseContainer(container.id))
-            }
-          />
-          {/* Recreate */}
-          <ActionButton
-            label="Recreate"
-            title="Remove and recreate container from config"
-            icon={
-              <FontAwesomeIcon icon={faRecycle} className="h-3.5 w-3.5" />
-            }
-            disabled={controlsDisabled}
-            loading={actionLoading === "recreate"}
-            color="text-violet hover:bg-[#a855f7]/10"
-            onClick={async () => {
-              const ok = await showConfirm({
-                title: "Recreate container",
-                message: `Recreate "${container.name}"? The container will be removed and created fresh from its config.`,
-                confirmLabel: "Recreate",
-                variant: "warning",
-              });
-              if (ok)
-                runAction("recreate", () => reqRecreateContainer(container.id));
-            }}
-          />
-          {/* Remove */}
-          <ActionButton
-            label="Remove"
-            title="Permanently remove container from Docker"
-            icon={<FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />}
-            disabled={controlsDisabled}
-            loading={actionLoading === "remove"}
-            color="text-failed hover:bg-failed/10"
-            onClick={async () => {
-              const ok = await showConfirm({
-                title: "Remove container",
-                message: `Permanently remove "${container.name}" from Docker? This cannot be undone.`,
-                confirmLabel: "Remove",
-                variant: "danger",
-              });
-              if (ok) runAction("remove", () => reqRemoveContainer(container.id));
-            }}
-          />
-          {/* Edit */}
-          <button
-            onClick={() => setEditing((e) => !e)}
-            title="Edit container config"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 h-8 text-sm font-medium text-secondary hover:text-primary hover:bg-surface-active transition-colors cursor-pointer"
+      <div>
+        <div className="breadcrumb mb-2">
+          <Link
+            href="/containers"
+            className="breadcrumb-link flex items-center gap-1.5"
           >
-            <FontAwesomeIcon icon={faPenToSquare} className="h-3.5 w-3.5" />
-            Edit
-          </button>
-          {/* Terminal */}
-          {isRunning && worker && (
-            <button
-              onClick={() => setShowTerminal(true)}
-              title="Open terminal session"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 h-8 text-sm font-medium text-secondary hover:text-primary hover:bg-surface-active transition-colors cursor-pointer"
-            >
-              <FontAwesomeIcon icon={faTerminal} className="h-3.5 w-3.5" />
-              Terminal
-            </button>
-          )}
-
-          {actionError && (
-            <div className="ml-auto">
-              <Alert variant="error" onDismiss={() => setActionError(null)}>
-                {actionError}
-              </Alert>
-            </div>
-          )}
+            <FontAwesomeIcon
+              icon={faChevronRight}
+              className="h-3 w-3 rotate-180"
+            />
+            Containers
+          </Link>
+          <span className="breadcrumb-sep">/</span>
+          <span className="breadcrumb-current">{container.name}</span>
         </div>
-      )}
-
-      {/* Edit form */}
-      {editing && canEdit(user) && (
-        <div className="mb-6 rounded-xl border border-border-strong bg-surface p-5 space-y-4">
-          <h2 className="text-sm font-medium text-primary">Edit Container</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs text-secondary mb-1.5">
-                Name
-              </label>
-              <input
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className={inputClass}
-              />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="page-title text-xl">{container.name}</h1>
+              <StatusBadge status={container.status} />
+              {container.health_status !== "none" && (
+                <StatusBadge status={container.health_status} />
+              )}
             </div>
-            <div>
-              <label className="block text-xs text-secondary mb-1.5">
-                Image
-              </label>
-              <input
-                value={editImage}
-                onChange={(e) => setEditImage(e.target.value)}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-secondary mb-1.5">Tag</label>
-              <input
-                value={editTag}
-                onChange={(e) => setEditTag(e.target.value)}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-secondary mb-1.5">
-                Restart Policy
-              </label>
-              <select
-                value={editRestartPolicy}
-                onChange={(e) => setEditRestartPolicy(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">none</option>
-                <option value="always">always</option>
-                <option value="unless-stopped">unless-stopped</option>
-                <option value="on-failure">on-failure</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-secondary mb-1.5">
-                CPU Limit (cores)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                value={editCpuLimit}
-                onChange={(e) => setEditCpuLimit(e.target.value)}
-                placeholder="e.g. 0.5"
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-secondary mb-1.5">
-                Memory Limit (MB)
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={editMemoryLimit}
-                onChange={(e) => setEditMemoryLimit(e.target.value)}
-                placeholder="e.g. 512"
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-secondary mb-1.5">
-                Replicas
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={editReplicas}
-                onChange={(e) => setEditReplicas(e.target.value)}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-secondary mb-1.5">
-                Command
-              </label>
-              <input
-                value={editCommand}
-                onChange={(e) => setEditCommand(e.target.value)}
-                placeholder="e.g. npm start"
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-secondary mb-1.5">
-                Entrypoint
-              </label>
-              <input
-                value={editEntrypoint}
-                onChange={(e) => setEditEntrypoint(e.target.value)}
-                placeholder="e.g. /bin/sh"
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-secondary mb-1.5">
-                Registry ID
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={editRegistryId}
-                onChange={(e) => setEditRegistryId(e.target.value)}
-                placeholder="e.g. 1"
-                className={inputClass}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-            <div>
-              <label className="block text-xs text-secondary mb-1.5">
-                Environment Variables (JSON)
-              </label>
-              <CodeEditor
-                rows={4}
-                value={editEnvVars}
-                onChange={setEditEnvVars}
-                placeholder={'{"KEY": "value"}'}
-                language="json"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-secondary mb-1.5">
-                Port Mappings (JSON)
-              </label>
-              <CodeEditor
-                rows={4}
-                value={editPortMappings}
-                onChange={setEditPortMappings}
-                placeholder={'[{"host_port": "8080", "container_port": "80"}]'}
-                language="json"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-secondary mb-1.5">
-                Volumes (JSON)
-              </label>
-              <CodeEditor
-                rows={4}
-                value={editVolumes}
-                onChange={setEditVolumes}
-                placeholder={'[{"host": "/data", "container": "/app/data"}]'}
-                language="json"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-secondary mb-1.5">
-                Health Check (JSON)
-              </label>
-              <CodeEditor
-                rows={4}
-                value={editHealthCheck}
-                onChange={setEditHealthCheck}
-                placeholder={
-                  '{"test": ["CMD", "curl", "-f", "http://localhost"], "interval": "30s", "timeout": "10s", "retries": 3}'
-                }
-                language="json"
-              />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="inline-flex items-center justify-center h-8 px-4 text-sm font-medium rounded-lg bg-white text-black hover:bg-zinc-100 disabled:opacity-50 cursor-pointer transition-colors"
-            >
-              {saving ? "Saving…" : "Save Changes"}
-            </button>
-            <button
-              onClick={() => setEditing(false)}
-              className="inline-flex items-center justify-center h-8 px-4 text-sm font-medium rounded-lg border border-border-strong text-secondary hover:text-primary hover:bg-surface-active cursor-pointer transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        {/* Status card */}
-        <div className="lg:col-span-2 card p-5">
-          <h2 className="text-xs font-medium text-muted uppercase tracking-wider mb-4">
-            Container Status
-          </h2>
-          <dl className="grid grid-cols-2 gap-x-8 gap-y-3">
-            <InfoRow
-              label="Container ID"
-              value={<span className="font-mono text-xs">{container.id}</span>}
-            />
-            <InfoRow label="Name" value={container.name} />
-            <InfoRow
-              label="Status"
-              value={<StatusBadge status={container.status} />}
-            />
-            <InfoRow label="Replicas" value={String(container.replicas)} />
-            <InfoRow
-              label="Created"
-              value={formatDate(container.inserted_at)}
-            />
-            <InfoRow
-              label="Last Updated"
-              value={timeAgo(container.updated_at)}
-            />
-            <InfoRow
-              label="Restart Policy"
-              value={container.restart_policy ?? "none"}
-            />
-            {stack && (
-              <InfoRow
-                label="Stack"
-                value={
+            <div className="flex items-center gap-3 mt-1.5 text-xs text-muted flex-wrap">
+              <span className="font-mono text-secondary">
+                {container.image}:{container.tag}
+              </span>
+              {stack && (
+                <>
+                  <span className="text-dimmed">·</span>
                   <Link
                     href={`/stacks/${stack.id}`}
                     className="text-info hover:underline"
                   >
                     {stack.name}
                   </Link>
+                </>
+              )}
+              {worker && (
+                <>
+                  <span className="text-dimmed">·</span>
+                  <WorkerBadge id={worker.id} name={worker.name} size="sm" />
+                </>
+              )}
+            </div>
+          </div>
+          {canEdit(user) && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setEditing((e) => !e)}
+                title="Edit container config"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 h-8 text-sm font-medium text-secondary hover:text-primary hover:bg-surface-active transition-colors cursor-pointer"
+              >
+                <FontAwesomeIcon icon={faPenToSquare} className="h-3.5 w-3.5" />
+                Edit
+              </button>
+              {isRunning && worker && (
+                <button
+                  onClick={() => setShowTerminal(true)}
+                  title="Open terminal session"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 h-8 text-sm font-medium text-secondary hover:text-primary hover:bg-surface-active transition-colors cursor-pointer"
+                >
+                  <FontAwesomeIcon icon={faTerminal} className="h-3.5 w-3.5" />
+                  Terminal
+                </button>
+              )}
+              <ActionButton
+                label="Recreate"
+                title="Remove and recreate container from config"
+                icon={
+                  <FontAwesomeIcon icon={faRecycle} className="h-3.5 w-3.5" />
                 }
+                disabled={controlsDisabled}
+                loading={actionLoading === "recreate"}
+                color="text-violet hover:bg-[#a855f7]/10"
+                onClick={async () => {
+                  const ok = await showConfirm({
+                    title: "Recreate container",
+                    message: `Recreate "${container.name}"? The container will be removed and created fresh from its config.`,
+                    confirmLabel: "Recreate",
+                    variant: "warning",
+                  });
+                  if (ok)
+                    runAction("recreate", () =>
+                      reqRecreateContainer(container.id),
+                    );
+                }}
               />
-            )}
-            {worker && (
-              <InfoRow
-                label="Worker"
-                value={
-                  <WorkerBadge
-                    id={worker.id}
-                    name={worker.name}
-                    size="sm"
-                  />
-                }
-              />
-            )}
-          </dl>
+            </div>
+          )}
         </div>
+      </div>
 
-        {/* Health card */}
-        <div className="card p-5">
-          <h2 className="text-xs font-medium text-muted uppercase tracking-wider mb-4">
-            Health
-          </h2>
-          {container.health_status === "none" && !healthConfig ? (
-            <p className="text-sm text-muted">No health check configured</p>
-          ) : (
-            <dl className="space-y-3">
-              <InfoRow
-                label="Health Status"
-                value={<StatusBadge status={container.health_status} />}
-              />
-              {healthConfig && (
-                <InfoRow
-                  label="Test Command"
-                  value={
-                    <span className="font-mono text-xs break-all">
-                      {formatTestCommand(healthConfig.test)}
-                    </span>
+      {/* Pending context banner */}
+      {container.status === "pending" && (
+        <Alert variant="warning">
+          <strong>Container is pending</strong>
+          <br />
+          {!worker
+            ? "No worker is assigned to this stack. Assign a worker and deploy to start this container."
+            : !workerOnline
+              ? `Worker "${worker.name}" is offline. The container will start once the worker reconnects.`
+              : "This container has been configured but not yet deployed. Click Deploy on the stack page to push it to the worker."}
+        </Alert>
+      )}
+
+      {/* Action bar */}
+      {canEdit(user) && (
+        <div className="panel">
+          <div className="flex flex-wrap items-center gap-2 p-3">
+            <ActionButton
+              label="Start"
+              icon={<FontAwesomeIcon icon={faPlay} className="h-3.5 w-3.5" />}
+              disabled={!isStopped || controlsDisabled}
+              loading={actionLoading === "start"}
+              color="text-healthy hover:bg-healthy/10"
+              onClick={() =>
+                runAction("start", () => reqStartContainer(container.id))
+              }
+            />
+            <ActionButton
+              label="Stop"
+              icon={<FontAwesomeIcon icon={faStop} className="h-3.5 w-3.5" />}
+              disabled={!isRunning || controlsDisabled}
+              loading={actionLoading === "stop"}
+              color="text-secondary hover:bg-border-strong"
+              onClick={async () => {
+                const ok = await showConfirm({
+                  title: "Stop container",
+                  message: `Stop "${container.name}"? The container will be gracefully shut down.`,
+                  confirmLabel: "Stop",
+                  variant: "warning",
+                });
+                if (ok) runAction("stop", () => reqStopContainer(container.id));
+              }}
+            />
+            <ActionButton
+              label="Kill"
+              title="Force-kill container (SIGKILL)"
+              icon={<FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />}
+              disabled={!isRunning || controlsDisabled}
+              loading={actionLoading === "kill"}
+              color="text-failed hover:bg-failed/10"
+              onClick={async () => {
+                const ok = await showConfirm({
+                  title: "Kill container",
+                  message: `Force-kill "${container.name}"? This sends SIGKILL immediately.`,
+                  confirmLabel: "Kill",
+                  variant: "danger",
+                });
+                if (ok) runAction("kill", () => reqKillContainer(container.id));
+              }}
+            />
+            <ActionButton
+              label="Restart"
+              icon={<FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />}
+              disabled={!isRunning || controlsDisabled}
+              loading={actionLoading === "restart"}
+              color="text-info hover:bg-info/10"
+              onClick={async () => {
+                const ok = await showConfirm({
+                  title: "Restart container",
+                  message: `Restart "${container.name}"? The container will be stopped and started.`,
+                  confirmLabel: "Restart",
+                  variant: "warning",
+                });
+                if (ok)
+                  runAction("restart", () => reqRestartContainer(container.id));
+              }}
+            />
+            <ActionButton
+              label="Pause"
+              icon={<FontAwesomeIcon icon={faPause} className="h-3.5 w-3.5" />}
+              disabled={!isRunning || controlsDisabled}
+              loading={actionLoading === "pause"}
+              color="text-secondary hover:bg-border-strong"
+              onClick={() =>
+                runAction("pause", () => reqPauseContainer(container.id))
+              }
+            />
+            <ActionButton
+              label="Resume"
+              icon={<FontAwesomeIcon icon={faPlay} className="h-3.5 w-3.5" />}
+              disabled={!isPaused || controlsDisabled}
+              loading={actionLoading === "unpause"}
+              color="text-healthy hover:bg-healthy/10"
+              onClick={() =>
+                runAction("unpause", () => reqUnpauseContainer(container.id))
+              }
+            />
+
+            <div className="h-5 w-px bg-border-strong mx-1 hidden sm:block" />
+
+            <ActionButton
+              label="Remove"
+              title="Permanently remove container from Docker"
+              icon={<FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />}
+              disabled={controlsDisabled}
+              loading={actionLoading === "remove"}
+              color="text-failed hover:bg-failed/10"
+              onClick={async () => {
+                const ok = await showConfirm({
+                  title: "Remove container",
+                  message: `Permanently remove "${container.name}" from Docker? This cannot be undone.`,
+                  confirmLabel: "Remove",
+                  variant: "danger",
+                });
+                if (ok)
+                  runAction("remove", () => reqRemoveContainer(container.id));
+              }}
+            />
+
+            {actionError && (
+              <div className="ml-auto">
+                <Alert variant="error" onDismiss={() => setActionError(null)}>
+                  {actionError}
+                </Alert>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit form */}
+      {editing && canEdit(user) && (
+        <div className="panel">
+          <div className="panel-header">
+            <FontAwesomeIcon
+              icon={faPenToSquare}
+              className="h-3.5 w-3.5 text-muted"
+            />
+            <span>Edit Container</span>
+          </div>
+          <div className="p-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                  Name
+                </label>
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                  Image
+                </label>
+                <input
+                  value={editImage}
+                  onChange={(e) => setEditImage(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                  Tag
+                </label>
+                <input
+                  value={editTag}
+                  onChange={(e) => setEditTag(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                  Restart Policy
+                </label>
+                <select
+                  value={editRestartPolicy}
+                  onChange={(e) => setEditRestartPolicy(e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">none</option>
+                  <option value="always">always</option>
+                  <option value="unless-stopped">unless-stopped</option>
+                  <option value="on-failure">on-failure</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                  CPU Limit (cores)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={editCpuLimit}
+                  onChange={(e) => setEditCpuLimit(e.target.value)}
+                  placeholder="e.g. 0.5"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                  Memory Limit (MB)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editMemoryLimit}
+                  onChange={(e) => setEditMemoryLimit(e.target.value)}
+                  placeholder="e.g. 512"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                  Replicas
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={editReplicas}
+                  onChange={(e) => setEditReplicas(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                  Command
+                </label>
+                <input
+                  value={editCommand}
+                  onChange={(e) => setEditCommand(e.target.value)}
+                  placeholder="e.g. npm start"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                  Entrypoint
+                </label>
+                <input
+                  value={editEntrypoint}
+                  onChange={(e) => setEditEntrypoint(e.target.value)}
+                  placeholder="e.g. /bin/sh"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                  Registry ID
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editRegistryId}
+                  onChange={(e) => setEditRegistryId(e.target.value)}
+                  placeholder="e.g. 1"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                  Environment Variables (JSON)
+                </label>
+                <CodeEditor
+                  rows={4}
+                  value={editEnvVars}
+                  onChange={setEditEnvVars}
+                  placeholder={'{"KEY": "value"}'}
+                  language="json"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                  Port Mappings (JSON)
+                </label>
+                <CodeEditor
+                  rows={4}
+                  value={editPortMappings}
+                  onChange={setEditPortMappings}
+                  placeholder={
+                    '[{"host_port": "8080", "container_port": "80"}]'
                   }
+                  language="json"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                  Volumes (JSON)
+                </label>
+                <CodeEditor
+                  rows={4}
+                  value={editVolumes}
+                  onChange={setEditVolumes}
+                  placeholder={'[{"host": "/data", "container": "/app/data"}]'}
+                  language="json"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                  Health Check (JSON)
+                </label>
+                <CodeEditor
+                  rows={4}
+                  value={editHealthCheck}
+                  onChange={setEditHealthCheck}
+                  placeholder={
+                    '{"test": ["CMD", "curl", "-f", "http://localhost"], "interval": "30s", "timeout": "10s", "retries": 3}'
+                  }
+                  language="json"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSave} disabled={saving} size="sm">
+                {saving ? "Saving…" : "Save Changes"}
+              </Button>
+              <Button
+                onClick={() => setEditing(false)}
+                variant="ghost"
+                size="sm"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Info panels */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 panel">
+          <div className="panel-header">
+            <span>Container Info</span>
+          </div>
+          <div className="p-4">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+              <InfoRow
+                label="Container ID"
+                value={
+                  <span className="font-mono text-xs">{container.id}</span>
+                }
+              />
+              <InfoRow
+                label="Status"
+                value={<StatusBadge status={container.status} />}
+              />
+              <InfoRow label="Replicas" value={String(container.replicas)} />
+              <InfoRow
+                label="Restart Policy"
+                value={container.restart_policy ?? "none"}
+              />
+              <InfoRow
+                label="Created"
+                value={formatDate(container.inserted_at)}
+              />
+              <InfoRow
+                label="Last Updated"
+                value={timeAgo(container.updated_at)}
+              />
+              {container.cpu_limit != null && (
+                <InfoRow
+                  label="CPU Limit"
+                  value={`${container.cpu_limit} cores`}
                 />
               )}
-              {healthConfig?.interval && (
-                <InfoRow label="Interval" value={healthConfig.interval} />
-              )}
-              {healthConfig?.timeout && (
-                <InfoRow label="Timeout" value={healthConfig.timeout} />
+              {container.memory_limit != null && (
+                <InfoRow
+                  label="Memory Limit"
+                  value={`${container.memory_limit} MB`}
+                />
               )}
             </dl>
-          )}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <span>Health</span>
+          </div>
+          <div className="p-4">
+            {container.health_status === "none" && !healthConfig ? (
+              <p className="text-xs text-muted">No health check configured</p>
+            ) : (
+              <dl className="space-y-3">
+                <InfoRow
+                  label="Health Status"
+                  value={<StatusBadge status={container.health_status} />}
+                />
+                {healthConfig && (
+                  <InfoRow
+                    label="Test Command"
+                    value={
+                      <span className="font-mono text-xs break-all">
+                        {formatTestCommand(healthConfig.test)}
+                      </span>
+                    }
+                  />
+                )}
+                {healthConfig?.interval && (
+                  <InfoRow label="Interval" value={healthConfig.interval} />
+                )}
+                {healthConfig?.timeout && (
+                  <InfoRow label="Timeout" value={healthConfig.timeout} />
+                )}
+                {healthConfig?.retries != null && (
+                  <InfoRow
+                    label="Retries"
+                    value={String(healthConfig.retries)}
+                  />
+                )}
+              </dl>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="panel">
-        <div className="flex border-b border-border-subtle">
+        <div className="tabs-bar !px-4 !gap-0">
           {(["logs", "details", "health"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-5 py-3 text-sm font-medium capitalize transition-colors cursor-pointer ${
-                tab === t
-                  ? "text-primary border-b-2 border-[#3b82f6]"
-                  : "text-muted hover:text-primary"
-              }`}
+              className={`tab-item ${tab === t ? "active" : ""}`}
             >
               {t === "health"
                 ? "Health Check"
                 : t === "details"
-                  ? "Container Details"
+                  ? "Details"
                   : "Logs"}
             </button>
           ))}
@@ -1303,7 +1327,9 @@ const inputClass =
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-xs text-muted">{label}</dt>
+      <dt className="text-[10px] text-muted uppercase tracking-wider font-mono">
+        {label}
+      </dt>
       <dd className="mt-0.5 text-sm text-primary">{value}</dd>
     </div>
   );

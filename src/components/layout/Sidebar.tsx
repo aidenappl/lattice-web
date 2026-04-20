@@ -63,9 +63,10 @@ const SIDEBAR_GROUPS: NavGroup[] = [
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  mobileOpen?: boolean;
 }
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
 
@@ -95,7 +96,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     : (user?.email?.[0]?.toUpperCase() ?? "?");
 
   return (
-    <aside className="sidebar">
+    <aside className={cn("sidebar", mobileOpen && "mobile-open")}>
       {/* Brand */}
       <div className="sidebar-brand">
         <div className="brand-mark">

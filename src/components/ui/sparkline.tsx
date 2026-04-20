@@ -10,6 +10,8 @@ type SparklineProps = {
   fill?: boolean;
   live?: boolean;
   className?: string;
+  /** Fixed max value for scaling (e.g. 100 for percentages). If omitted, auto-scales to data max. */
+  maxValue?: number;
 };
 
 export function Sparkline({
@@ -20,6 +22,7 @@ export function Sparkline({
   fill = true,
   live = false,
   className,
+  maxValue,
 }: SparklineProps) {
   const [liveData, setLiveData] = useState(data);
 
@@ -40,7 +43,7 @@ export function Sparkline({
   const d = useMemo(() => {
     const pts = live ? liveData : data;
     if (pts.length < 2) return "";
-    const max = Math.max(...pts, 0.01);
+    const max = maxValue != null ? maxValue : Math.max(...pts, 0.01);
     const step = width / (pts.length - 1);
     return pts
       .map((v, i) => {
@@ -49,7 +52,7 @@ export function Sparkline({
         return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
       })
       .join(" ");
-  }, [data, liveData, live, width, height]);
+  }, [data, liveData, live, width, height, maxValue]);
 
   const fillD = useMemo(() => {
     if (!fill || !d) return "";

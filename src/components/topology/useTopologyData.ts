@@ -66,28 +66,80 @@ export function useTopologyData() {
         }
 
         if (event.type === "worker_connected" && event.worker_id) {
+            const wid = event.worker_id;
             setState((prev) => ({
                 ...prev,
                 workers: prev.workers.map((w) =>
-                    w.id === event.worker_id
+                    w.id === wid
                         ? { ...w, status: "online" as const, last_heartbeat_at: new Date().toISOString() }
                         : w,
+                ),
+                // Restore stacks to deployed when worker comes back
+                stacks: prev.stacks.map((s) =>
+                    s.worker_id === wid ? { ...s, status: "deployed" as const } : s,
                 ),
             }));
         }
 
         if (event.type === "worker_disconnected" && event.worker_id) {
-            setState((prev) => ({
-                ...prev,
-                workers: prev.workers.map((w) =>
-                    w.id === event.worker_id ? { ...w, status: "offline" as const } : w,
-                ),
-            }));
+            const wid = event.worker_id;
+            setState((prev) => {
+                const workerStackIds = new Set(
+                    prev.stacks.filter((s) => s.worker_id === wid).map((s) => s.id),
+                );
+                return {
+                    ...prev,
+                    workers: prev.workers.map((w) =>
+                        w.id === wid ? { ...w, status: "offline" as const } : w,
+                    ),
+                    stacks: prev.stacks.map((s) =>
+                        s.worker_id === wid ? { ...s, status: "failed" as const } : s,
+                    ),
+                    containers: prev.containers.map((c) =>
+                        workerStackIds.has(c.stack_id)
+                            ? { ...c, status: "stopped" as const }
+                            : c,
+                    ),
+                };
+            });
+        }
+
+        if (event.type === "worker_shutdown" && event.worker_id) {
+            const wid = event.worker_id;
+            setState((prev) => {
+                const workerStackIds = new Set(
+                    prev.stacks.filter((s) => s.worker_id === wid).map((s) => s.id),
+                );
+                return {
+                    ...prev,
+                    workers: prev.workers.map((w) =>
+                        w.id === wid ? { ...w, status: "offline" as const } : w,
+                    ),
+                    stacks: prev.stacks.map((s) =>
+                        s.worker_id === wid ? { ...s, status: "failed" as const } : s,
+                    ),
+                    containers: prev.containers.map((c) =>
+                        workerStackIds.has(c.stack_id)
+                            ? { ...c, status: "stopped" as const }
+                            : c,
+                    ),
+                };
+            });
         }
 
         if (event.type === "container_status" && event.payload) {
-            const payload = event.payload as { container_id?: number; status?: string };
-            if (payload.container_id && payload.status) {
+            const payload = event.payload as {
+                container_id?: number;
+                container_name?: string;
+                container_state?: string;
+                action?: string;
+                status?: string;
+                health_status?: string;
+            };
+            // Use enriched container_state (the resolved DB state like "running"/"stopped")
+            // Only update if the action was successful
+            const newState = payload.container_state;
+            if (payload.status === "success" && newState && payload.container_id) {
                 const cid = payload.container_id;
                 recentContainerChanges.current.add(cid);
                 setTimeout(() => {
@@ -98,7 +150,11 @@ export function useTopologyData() {
                     ...prev,
                     containers: prev.containers.map((c) =>
                         c.id === cid
-                            ? { ...c, status: payload.status as Container["status"] }
+                            ? {
+                                ...c,
+                                status: newState as Container["status"],
+                                ...(payload.health_status ? { health_status: payload.health_status as Container["health_status"] } : {}),
+                            }
                             : c,
                     ),
                 }));

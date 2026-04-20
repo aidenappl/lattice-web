@@ -156,7 +156,9 @@ function buildLayout(
     const sX = 340;
     sortedStacks.forEach((s, i) => {
       const sContainers = containers.filter((c) => c.stack_id === s.id);
-      const runningCount = sContainers.filter((c) => c.status === "running").length;
+      const runningCount = sContainers.filter(
+        (c) => c.status === "running",
+      ).length;
       sNodes.push({
         id: `stack-${s.id}`,
         kind: "stack",
@@ -188,7 +190,8 @@ function buildLayout(
       if (stackContainers.length === 0) continue;
 
       const netNames = stackNetworks.get(stack.id);
-      const networkLabel = netNames && netNames.length > 0 ? netNames.join(", ") : null;
+      const networkLabel =
+        netNames && netNames.length > 0 ? netNames.join(", ") : null;
 
       const groupStartY = cY;
       if (networkLabel) {
@@ -295,7 +298,9 @@ function buildLayout(
     const sTop = COL_HEADER_H + 8;
     sortedStacks.forEach((s, i) => {
       const sContainers = containers.filter((c) => c.stack_id === s.id);
-      const runningCount = sContainers.filter((c) => c.status === "running").length;
+      const runningCount = sContainers.filter(
+        (c) => c.status === "running",
+      ).length;
       sNodes.push({
         id: `stack-${s.id}`,
         kind: "stack",
@@ -326,7 +331,8 @@ function buildLayout(
       if (stackContainers.length === 0) continue;
 
       const netNames = stackNetworks.get(stack.id);
-      const networkLabel = netNames && netNames.length > 0 ? netNames.join(", ") : null;
+      const networkLabel =
+        netNames && netNames.length > 0 ? netNames.join(", ") : null;
 
       const groupStartY = cY;
       if (networkLabel) {
@@ -376,7 +382,8 @@ function buildLayout(
     for (const sid of stackIds) {
       const stackContainers = containers.filter((c) => c.stack_id === sid);
       const netNames = stackNetworks.get(sid);
-      const networkLabel = netNames && netNames.length > 0 ? netNames.join(", ") : null;
+      const networkLabel =
+        netNames && netNames.length > 0 ? netNames.join(", ") : null;
 
       const groupStartY = cY;
       if (networkLabel) {
@@ -474,10 +481,12 @@ function EdgesSVG({
   edges,
   totalW,
   totalH,
+  hoveredTree,
 }: {
   edges: TopoEdge[];
   totalW: number;
   totalH: number;
+  hoveredTree: Set<string> | null;
 }) {
   return (
     <svg
@@ -498,11 +507,16 @@ function EdgesSVG({
         const cx = (x1 + x2) / 2;
         const d = `M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`;
         const active = isActiveEdge(e.status);
+        const dimmed =
+          hoveredTree != null &&
+          !hoveredTree.has(e.from.id) &&
+          !hoveredTree.has(e.to.id);
         return (
           <path
             key={i}
             d={d}
             className={`flow-edge ${active ? "active" : ""}`}
+            style={dimmed ? { opacity: 0.1 } : undefined}
           />
         );
       })}
@@ -512,7 +526,13 @@ function EdgesSVG({
 
 // ── Network group box ───────────────────────────────────────────────
 
-function NetworkGroupBox({ group }: { group: NetworkGroup }) {
+function NetworkGroupBox({
+  group,
+  dimmed,
+}: {
+  group: NetworkGroup;
+  dimmed: boolean;
+}) {
   return (
     <div
       className="topo-network-group"
@@ -522,6 +542,8 @@ function NetworkGroupBox({ group }: { group: NetworkGroup }) {
         top: group.y,
         width: group.w,
         height: group.h,
+        transition: "opacity 0.2s",
+        opacity: dimmed ? 0.15 : 1,
       }}
     >
       <div className="topo-network-label">
@@ -537,13 +559,19 @@ function NetworkGroupBox({ group }: { group: NetworkGroup }) {
 function WorkerNodeEl({
   node,
   selected,
+  dimmed,
   onSelect,
   onNavigate,
+  onHoverStart,
+  onHoverEnd,
 }: {
   node: TopoNode;
   selected: boolean;
+  dimmed: boolean;
   onSelect: () => void;
   onNavigate: () => void;
+  onHoverStart: () => void;
+  onHoverEnd: () => void;
 }) {
   const st = workerStatusClass(node.status);
   const meta = node.meta as {
@@ -555,9 +583,18 @@ function WorkerNodeEl({
   return (
     <div
       className={`topo-node ${selected ? "selected" : ""}`}
-      style={{ left: node.x, top: node.y, width: node.w, height: node.h }}
+      style={{
+        left: node.x,
+        top: node.y,
+        width: node.w,
+        height: node.h,
+        transition: "opacity 0.2s",
+        opacity: dimmed ? 0.15 : 1,
+      }}
       onClick={onSelect}
       onDoubleClick={onNavigate}
+      onMouseEnter={onHoverStart}
+      onMouseLeave={onHoverEnd}
     >
       <div
         style={{
@@ -628,13 +665,19 @@ function WorkerNodeEl({
 function StackNodeEl({
   node,
   selected,
+  dimmed,
   onSelect,
   onNavigate,
+  onHoverStart,
+  onHoverEnd,
 }: {
   node: TopoNode;
   selected: boolean;
+  dimmed: boolean;
   onSelect: () => void;
   onNavigate: () => void;
+  onHoverStart: () => void;
+  onHoverEnd: () => void;
 }) {
   const st = stackStatusClass(node.status);
   const meta = node.meta as {
@@ -651,6 +694,8 @@ function StackNodeEl({
         top: node.y,
         width: node.w,
         height: node.h,
+        transition: "opacity 0.2s",
+        opacity: dimmed ? 0.15 : 1,
         borderColor:
           st === "failed"
             ? "var(--failed-dim)"
@@ -660,6 +705,8 @@ function StackNodeEl({
       }}
       onClick={onSelect}
       onDoubleClick={onNavigate}
+      onMouseEnter={onHoverStart}
+      onMouseLeave={onHoverEnd}
     >
       <div
         style={{
@@ -719,10 +766,16 @@ function StackNodeEl({
 
 function ContainerNodeEl({
   node,
+  dimmed,
   onNavigate,
+  onHoverStart,
+  onHoverEnd,
 }: {
   node: TopoNode;
+  dimmed: boolean;
   onNavigate: () => void;
+  onHoverStart: () => void;
+  onHoverEnd: () => void;
 }) {
   const st = containerStatusClass(node.status);
 
@@ -735,8 +788,12 @@ function ContainerNodeEl({
         width: node.w,
         height: node.h,
         background: "var(--background)",
+        transition: "opacity 0.2s",
+        opacity: dimmed ? 0.15 : 1,
       }}
       onDoubleClick={onNavigate}
+      onMouseEnter={onHoverStart}
+      onMouseLeave={onHoverEnd}
     >
       <div
         style={{
@@ -783,11 +840,79 @@ const VIEW_MODES: { value: ViewMode; label: string }[] = [
 
 // ── Main component ──────────────────────────────────────────────────
 
+/** Compute the set of node IDs in the same tree as the given node. */
+function getTreeIds(
+  nodeId: string,
+  nodes: TopoNode[],
+  edges: TopoEdge[],
+): Set<string> {
+  const ids = new Set<string>();
+  ids.add(nodeId);
+  const node = nodes.find((n) => n.id === nodeId);
+  if (!node) return ids;
+
+  if (node.kind === "worker") {
+    // Worker → its stacks → their containers
+    for (const s of nodes) {
+      if (
+        s.kind === "stack" &&
+        (s.meta?.workerId as number) === node.entityId
+      ) {
+        ids.add(s.id);
+        for (const c of nodes) {
+          if (
+            c.kind === "container" &&
+            (c.meta?.stackId as number) === s.entityId
+          ) {
+            ids.add(c.id);
+          }
+        }
+      }
+    }
+  } else if (node.kind === "stack") {
+    // Parent worker + stack + its containers
+    const workerId = node.meta?.workerId as number | undefined;
+    if (workerId) {
+      const w = nodes.find(
+        (n) => n.kind === "worker" && n.entityId === workerId,
+      );
+      if (w) ids.add(w.id);
+    }
+    for (const c of nodes) {
+      if (
+        c.kind === "container" &&
+        (c.meta?.stackId as number) === node.entityId
+      ) {
+        ids.add(c.id);
+      }
+    }
+  } else if (node.kind === "container") {
+    // Parent stack + grandparent worker
+    const stackId = node.meta?.stackId as number | undefined;
+    if (stackId) {
+      const s = nodes.find((n) => n.kind === "stack" && n.entityId === stackId);
+      if (s) {
+        ids.add(s.id);
+        const workerId = s.meta?.workerId as number | undefined;
+        if (workerId) {
+          const w = nodes.find(
+            (n) => n.kind === "worker" && n.entityId === workerId,
+          );
+          if (w) ids.add(w.id);
+        }
+      }
+    }
+  }
+
+  return ids;
+}
+
 export function TopologyBoard() {
   const router = useRouter();
   const { workers, stacks, containers, networks, loading } = useTopologyData();
   const [viewMode, setViewMode] = useState<ViewMode>("system");
   const [selected, setSelected] = useState<string | null>(null);
+  const [hoveredTree, setHoveredTree] = useState<Set<string> | null>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -799,11 +924,23 @@ export function TopologyBoard() {
     setPan({ x: 0, y: 0 });
     setZoom(1);
     setSelected(null);
+    setHoveredTree(null);
   }, [viewMode]);
 
   const { nodes, edges, networkGroups, totalW, totalH } = useMemo(
     () => buildLayout(workers, stacks, containers, networks, viewMode),
     [workers, stacks, containers, networks, viewMode],
+  );
+
+  const onNodeHover = useCallback(
+    (nodeId: string | null) => {
+      if (!nodeId) {
+        setHoveredTree(null);
+        return;
+      }
+      setHoveredTree(getTreeIds(nodeId, nodes, edges));
+    },
+    [nodes, edges],
   );
 
   const handleNavigate = useCallback(
@@ -887,9 +1024,11 @@ export function TopologyBoard() {
   return (
     <div className="flex flex-col h-full select-none">
       {/* Header */}
-      <div className="panel-header" style={{ whiteSpace: "nowrap", minWidth: 0 }}>
+      <div
+        className="panel-header"
+        style={{ whiteSpace: "nowrap", minWidth: 0 }}
+      >
         <span>Topology</span>
-        <span className="muted">· live system map</span>
         <div className="panel-header-right">
           <div className="segmented">
             {VIEW_MODES.map((m) => (
@@ -951,7 +1090,10 @@ export function TopologyBoard() {
                 Workers · {workerCount}
               </div>
               <div className="topo-column-header" style={{ left: 348, top: 8 }}>
-                <FontAwesomeIcon icon={faLayerGroup} style={{ marginRight: 4 }} />
+                <FontAwesomeIcon
+                  icon={faLayerGroup}
+                  style={{ marginRight: 4 }}
+                />
                 Stacks · {stackCount}
               </div>
               <div className="topo-column-header" style={{ left: 708, top: 8 }}>
@@ -975,7 +1117,10 @@ export function TopologyBoard() {
           {viewMode === "stack" && (
             <>
               <div className="topo-column-header" style={{ left: 40, top: 8 }}>
-                <FontAwesomeIcon icon={faLayerGroup} style={{ marginRight: 4 }} />
+                <FontAwesomeIcon
+                  icon={faLayerGroup}
+                  style={{ marginRight: 4 }}
+                />
                 Stacks · {stackCount}
               </div>
               <div className="topo-column-header" style={{ left: 388, top: 8 }}>
@@ -992,23 +1137,46 @@ export function TopologyBoard() {
           )}
 
           {/* SVG edges */}
-          <EdgesSVG edges={edges} totalW={totalW} totalH={totalH} />
+          <EdgesSVG
+            edges={edges}
+            totalW={totalW}
+            totalH={totalH}
+            hoveredTree={hoveredTree}
+          />
 
           {/* Network group boxes (rendered behind nodes) */}
-          {networkGroups.map((g) => (
-            <NetworkGroupBox key={`net-${g.stackId}`} group={g} />
-          ))}
+          {networkGroups.map((g) => {
+            const netDimmed =
+              hoveredTree != null &&
+              !nodes.some(
+                (n) =>
+                  n.kind === "container" &&
+                  (n.meta?.stackId as number) === g.stackId &&
+                  hoveredTree.has(n.id),
+              );
+            return (
+              <NetworkGroupBox
+                key={`net-${g.stackId}`}
+                group={g}
+                dimmed={netDimmed}
+              />
+            );
+          })}
 
           {/* Nodes */}
           {nodes.map((node) => {
+            const isDimmed = hoveredTree != null && !hoveredTree.has(node.id);
             if (node.kind === "worker") {
               return (
                 <WorkerNodeEl
                   key={node.id}
                   node={node}
                   selected={selected === node.id}
+                  dimmed={isDimmed}
                   onSelect={() => setSelected(node.id)}
                   onNavigate={() => handleNavigate("worker", node.entityId)}
+                  onHoverStart={() => onNodeHover(node.id)}
+                  onHoverEnd={() => onNodeHover(null)}
                 />
               );
             }
@@ -1018,8 +1186,11 @@ export function TopologyBoard() {
                   key={node.id}
                   node={node}
                   selected={selected === node.id}
+                  dimmed={isDimmed}
                   onSelect={() => setSelected(node.id)}
                   onNavigate={() => handleNavigate("stack", node.entityId)}
+                  onHoverStart={() => onNodeHover(node.id)}
+                  onHoverEnd={() => onNodeHover(null)}
                 />
               );
             }
@@ -1027,7 +1198,10 @@ export function TopologyBoard() {
               <ContainerNodeEl
                 key={node.id}
                 node={node}
+                dimmed={isDimmed}
                 onNavigate={() => handleNavigate("container", node.entityId)}
+                onHoverStart={() => onNodeHover(node.id)}
+                onHoverEnd={() => onNodeHover(null)}
               />
             );
           })}

@@ -6,6 +6,7 @@ import { useMemo, useState, useRef, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faMagnifyingGlass,
+  faBars,
   faBell,
   faBellSlash,
   faSun,
@@ -25,9 +26,10 @@ const API_URL = process.env.NEXT_PUBLIC_LATTICE_API;
 
 interface TopbarProps {
   onOpenPalette: () => void;
+  onToggleMobileMenu?: () => void;
 }
 
-export function Topbar({ onOpenPalette }: TopbarProps) {
+export function Topbar({ onOpenPalette, onToggleMobileMenu }: TopbarProps) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
 
@@ -45,6 +47,11 @@ export function Topbar({ onOpenPalette }: TopbarProps) {
 
   return (
     <div className="topbar">
+      {/* Mobile hamburger */}
+      <button className="mobile-menu-btn" onClick={onToggleMobileMenu}>
+        <FontAwesomeIcon icon={faBars} className="h-4 w-4" />
+      </button>
+
       {/* Breadcrumb */}
       <div className="breadcrumb">
         <Link href="/" className="breadcrumb-link">
@@ -129,6 +136,15 @@ function ThemeToggle({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open]);
+
   const icons = { light: faSun, dark: faMoon, system: faDesktop } as const;
 
   return (
@@ -176,6 +192,15 @@ function UserMenu() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open]);
+
   const initials = user?.name
     ? user.name
         .split(" ")
@@ -218,7 +243,10 @@ function UserMenu() {
             className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-failed hover:bg-surface cursor-pointer"
             onClick={() => setOpen(false)}
           >
-            <FontAwesomeIcon icon={faRightFromBracket} className="h-3.5 w-3.5" />
+            <FontAwesomeIcon
+              icon={faRightFromBracket}
+              className="h-3.5 w-3.5"
+            />
             Sign Out
           </a>
         </div>

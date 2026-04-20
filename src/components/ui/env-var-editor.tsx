@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { CodeEditor } from "./code-editor";
 
 interface EnvVarEditorProps {
@@ -57,8 +57,18 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
   // Separate state for JSON mode draft (only committed on switch back)
   const [jsonDraft, setJsonDraft] = useState(value);
   const [jsonError, setJsonError] = useState("");
+  // Track in-progress rows (with possibly empty keys) separately from the
+  // serialised JSON so that blank rows aren't immediately discarded.
+  const [localRows, setLocalRows] = useState<Row[]>(() => parseToRows(value));
 
-  const rows = parseToRows(value);
+  // Sync localRows when the external value changes (e.g. after save/load)
+  const lastExternalValue = useRef(value);
+  if (value !== lastExternalValue.current) {
+    lastExternalValue.current = value;
+    setLocalRows(parseToRows(value));
+  }
+
+  const rows = localRows;
 
   // ── KV mode ──────────────────────────────────────────────────────────────
 
@@ -67,6 +77,7 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
       const updated = rows.map((r, i) =>
         i === index ? { ...r, [field]: v } : r,
       );
+      setLocalRows(updated);
       onChange(rowsToJson(updated));
     },
     [rows, onChange],
@@ -74,12 +85,15 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
 
   const addRow = useCallback(() => {
     const updated = [...rows, { key: "", value: "" }];
-    onChange(rowsToJson(updated));
-  }, [rows, onChange]);
+    setLocalRows(updated);
+    // Don't call onChange here — the empty key would be stripped.
+    // onChange will fire once the user types a key.
+  }, [rows]);
 
   const removeRow = useCallback(
     (index: number) => {
       const updated = rows.filter((_, i) => i !== index);
+      setLocalRows(updated);
       onChange(rowsToJson(updated));
     },
     [rows, onChange],
@@ -98,7 +112,9 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
       setJsonError("Invalid JSON — fix before switching back.");
       return;
     }
-    onChange(jsonDraft.trim() ? jsonDraft : "");
+    const committed = jsonDraft.trim() ? jsonDraft : "";
+    onChange(committed);
+    setLocalRows(parseToRows(committed));
     setJsonError("");
     setJsonMode(false);
   };

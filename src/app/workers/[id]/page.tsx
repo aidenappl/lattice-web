@@ -3,7 +3,15 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Worker, WorkerToken, WorkerMetrics, Stack, Container, DockerVolume, DockerNetwork } from "@/types";
+import {
+  Worker,
+  WorkerToken,
+  WorkerMetrics,
+  Stack,
+  Container,
+  DockerVolume,
+  DockerNetwork,
+} from "@/types";
 import {
   reqGetWorker,
   reqUpdateWorker,
@@ -18,15 +26,32 @@ import {
   reqStartAllContainers,
 } from "@/services/workers.service";
 import { reqGetStacks, reqGetAllContainers } from "@/services/stacks.service";
-import { reqListVolumes, reqCreateVolume, reqDeleteVolume } from "@/services/volumes.service";
-import { reqListNetworks, reqCreateNetwork, reqDeleteNetwork } from "@/services/networks.service";
+import {
+  reqListVolumes,
+  reqCreateVolume,
+  reqDeleteVolume,
+} from "@/services/volumes.service";
+import {
+  reqListNetworks,
+  reqCreateNetwork,
+  reqDeleteNetwork,
+} from "@/services/networks.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronDown } from "@fortawesome/free-solid-svg-icons";
+import {
+  faChevronDown,
+  faEllipsisVertical,
+  faArrowLeft,
+  faServer,
+  faHardDrive,
+  faNetworkWired,
+  faKey,
+  faChevronRight,
+} from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate, timeAgo, isAdmin, canEdit } from "@/lib/utils";
@@ -156,20 +181,33 @@ export default function WorkerDetailPage() {
   // Worker action state
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Actions dropdown state
+  const [actionsOpen, setActionsOpen] = useState(false);
+
+  // Volumes/Networks tab state
+  const [infraTab, setInfraTab] = useState<"volumes" | "networks">("volumes");
+
   const showConfirm = useConfirm();
   const user = useUser();
 
   const load = async () => {
     const { reqGetVersions } = await import("@/services/admin.service");
-    const [workerRes, metricsRes, tokensRes, stacksRes, containersRes, versionsRes] =
-      await Promise.all([
-        reqGetWorker(id),
-        reqGetWorkerMetrics(id),
-        reqGetWorkerTokens(id),
-        reqGetStacks(),
-        reqGetAllContainers(),
-        reqGetVersions(),
-      ]);
+    const [
+      workerRes,
+      metricsRes,
+      tokensRes,
+      stacksRes,
+      containersRes,
+      versionsRes,
+    ] = await Promise.all([
+      reqGetWorker(id),
+      reqGetWorkerMetrics(id),
+      reqGetWorkerTokens(id),
+      reqGetStacks(),
+      reqGetAllContainers(),
+      reqGetVersions(),
+    ]);
     if (versionsRes.success) setLatestRunner(versionsRes.data.runner.latest);
     if (workerRes.success) {
       setWorker(workerRes.data);
@@ -214,7 +252,14 @@ export default function WorkerDetailPage() {
         // Patch worker's last_heartbeat_at, status, and runner_version
         const rv = p.runner_version as string | undefined;
         setWorker((prev) =>
-          prev ? { ...prev, status: "online", last_heartbeat_at: now, ...(rv ? { runner_version: rv } : {}) } : prev,
+          prev
+            ? {
+                ...prev,
+                status: "online",
+                last_heartbeat_at: now,
+                ...(rv ? { runner_version: rv } : {}),
+              }
+            : prev,
         );
         // Build a live metrics snapshot from the payload
         const snapshot: WorkerMetrics = {
@@ -275,10 +320,16 @@ export default function WorkerDetailPage() {
           toast.success(`${label}: ${message || status}`);
         }
         // Refresh volumes/networks after create/remove
-        if (["create_volume", "remove_volume"].includes(action) && status === "success") {
+        if (
+          ["create_volume", "remove_volume"].includes(action) &&
+          status === "success"
+        ) {
           reqListVolumes(id);
         }
-        if (["create_network", "remove_network"].includes(action) && status === "success") {
+        if (
+          ["create_network", "remove_network"].includes(action) &&
+          status === "success"
+        ) {
           reqListNetworks(id);
         }
       }
@@ -453,43 +504,214 @@ export default function WorkerDetailPage() {
         ? (m.memory_used_mb / m.memory_total_mb) * 100
         : 0,
     );
+  const netRxHistory = metrics
+    .slice(0, 20)
+    .reverse()
+    .map((m) => m.network_rx_bytes ?? 0);
+
+  // Arc gauge helper
+  const ArcGauge = ({
+    percent,
+    color,
+    size = 88,
+  }: {
+    percent: number;
+    color: string;
+    size?: number;
+  }) => {
+    const r = (size - 10) / 2;
+    const circumference = Math.PI * r; // half circle
+    const offset =
+      circumference - (Math.min(percent, 100) / 100) * circumference;
+    return (
+      <svg width={size} height={size / 2 + 8} className="overflow-visible">
+        <path
+          d={`M 5,${size / 2} A ${r},${r} 0 0 1 ${size - 5},${size / 2}`}
+          fill="none"
+          stroke="var(--surface-active)"
+          strokeWidth={6}
+          strokeLinecap="round"
+        />
+        <path
+          d={`M 5,${size / 2} A ${r},${r} 0 0 1 ${size - 5},${size / 2}`}
+          fill="none"
+          stroke={color}
+          strokeWidth={6}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          className="transition-all duration-500"
+        />
+      </svg>
+    );
+  };
+
+  const cpuPercent = latestMetric?.cpu_percent ?? 0;
+  const memPercent =
+    latestMetric?.memory_used_mb != null && latestMetric?.memory_total_mb
+      ? (latestMetric.memory_used_mb / latestMetric.memory_total_mb) * 100
+      : 0;
+  const diskPercent =
+    latestMetric?.disk_used_mb != null && latestMetric?.disk_total_mb
+      ? (latestMetric.disk_used_mb / latestMetric.disk_total_mb) * 100
+      : 0;
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="page-title text-xl">{worker.name}</h1>
-          <StatusBadge status={worker.status} />
+    <div className="p-6 space-y-6">
+      {/* ─── Page Header ─── */}
+      <div className="page-header !p-0 !border-0 flex-col sm:flex-row gap-4">
+        <div className="flex-1 min-w-0">
+          {/* Breadcrumb */}
+          <div className="breadcrumb mb-2">
+            <Link
+              href="/workers"
+              className="breadcrumb-link flex items-center gap-1.5"
+            >
+              <FontAwesomeIcon icon={faArrowLeft} className="h-3 w-3" />
+              Workers
+            </Link>
+            <span className="breadcrumb-sep">/</span>
+            <span className="breadcrumb-current">{worker.name}</span>
+          </div>
+          {/* Title row */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="page-title text-xl">{worker.name}</h1>
+            <StatusBadge status={worker.status} />
+            {latestRunner &&
+              worker.runner_version &&
+              worker.runner_version !== latestRunner && (
+                <span className="badge badge-pending text-[10px]">
+                  v{latestRunner} available
+                </span>
+              )}
+          </div>
+          {/* Compact system info */}
+          <div className="flex items-center gap-4 mt-2 text-xs text-muted flex-wrap">
+            {worker.hostname && (
+              <span className="font-mono">{worker.hostname}</span>
+            )}
+            {worker.ip_address && (
+              <span className="font-mono">{worker.ip_address}</span>
+            )}
+            {(worker.os || worker.arch) && (
+              <span>
+                {worker.os ?? "?"}/{worker.arch ?? "?"}
+              </span>
+            )}
+            {worker.runner_version && (
+              <span className="font-mono">runner {worker.runner_version}</span>
+            )}
+          </div>
         </div>
+
+        {/* Header actions */}
         {!editing && (
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0 relative">
             <Link href={`/workers/${worker.id}/metrics`}>
-              <Button variant="secondary">View Metrics</Button>
+              <Button variant="secondary" size="sm">
+                Full Metrics
+              </Button>
             </Link>
             {canEdit(user) && (
-              <>
-                <Button variant="secondary" onClick={() => setEditing(true)}>
-                  Edit Worker
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={handleDeleteWorker}
-                  disabled={deleteLoading}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setEditing(true)}
+              >
+                Edit
+              </Button>
+            )}
+            {canEdit(user) && (
+              <div className="relative">
+                <button
+                  className="icon-btn"
+                  onClick={() => setActionsOpen(!actionsOpen)}
                 >
-                  {deleteLoading ? "Deleting..." : "Delete Worker"}
-                </Button>
-              </>
+                  <FontAwesomeIcon
+                    icon={faEllipsisVertical}
+                    className="h-4 w-4"
+                  />
+                </button>
+                {actionsOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-20"
+                      onClick={() => setActionsOpen(false)}
+                    />
+                    <div className="menu right-0 top-9">
+                      {worker.status === "online" && (
+                        <>
+                          <button
+                            className="menu-item w-full text-left"
+                            onClick={() => {
+                              setActionsOpen(false);
+                              handleWorkerAction("start-all");
+                            }}
+                            disabled={!!actionLoading}
+                          >
+                            Start All Containers
+                          </button>
+                          <button
+                            className="menu-item w-full text-left"
+                            onClick={() => {
+                              setActionsOpen(false);
+                              handleWorkerAction("stop-all");
+                            }}
+                            disabled={!!actionLoading}
+                          >
+                            Stop All Containers
+                          </button>
+                          {isAdmin(user) && (
+                            <button
+                              className="menu-item w-full text-left"
+                              onClick={() => {
+                                setActionsOpen(false);
+                                handleWorkerAction("upgrade");
+                              }}
+                              disabled={!!actionLoading}
+                            >
+                              Upgrade Runner
+                            </button>
+                          )}
+                          {isAdmin(user) && (
+                            <button
+                              className="menu-item w-full text-left text-failed"
+                              onClick={() => {
+                                setActionsOpen(false);
+                                handleWorkerAction("reboot");
+                              }}
+                              disabled={!!actionLoading}
+                            >
+                              Reboot OS
+                            </button>
+                          )}
+                          <div className="border-t border-border my-1" />
+                        </>
+                      )}
+                      <button
+                        className="menu-item w-full text-left text-failed"
+                        onClick={() => {
+                          setActionsOpen(false);
+                          handleDeleteWorker();
+                        }}
+                        disabled={deleteLoading}
+                      >
+                        {deleteLoading ? "Deleting..." : "Delete Worker"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
         )}
       </div>
 
-      {/* Edit form */}
+      {/* ─── Edit Form ─── */}
       {editing && canEdit(user) && (
-        <div className="card p-5 mb-6">
+        <div className="card p-5">
           <h2 className="text-sm font-medium text-primary mb-4">Edit Worker</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
             <Input
               id="edit-name"
               label="Name"
@@ -524,312 +746,305 @@ export default function WorkerDetailPage() {
         </div>
       )}
 
-      {/* Worker Actions */}
-      {canEdit(user) && worker.status === "online" && (
-        <div className="card p-5 mb-6">
-          <h2 className="text-sm font-medium text-primary mb-4">
-            Worker Actions
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => handleWorkerAction("start-all")}
-              disabled={!!actionLoading}
-              loading={actionLoading === "start-all"}
-            >
-              Start All Containers
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => handleWorkerAction("stop-all")}
-              disabled={!!actionLoading}
-              loading={actionLoading === "stop-all"}
-            >
-              Stop All Containers
-            </Button>
-            {isAdmin(user) && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => handleWorkerAction("upgrade")}
-                disabled={!!actionLoading}
-                loading={actionLoading === "upgrade"}
+      {/* ─── Live Metrics (primary section) ─── */}
+      {latestMetric && (
+        <div className="panel">
+          <div className="panel-header">
+            <div className="flex items-center gap-2">
+              <span>Live Metrics</span>
+              {worker.status === "online" && (
+                <span className="pulse-dot healthy" />
+              )}
+            </div>
+            <div className="panel-header-right">
+              {lastUpdated && (
+                <span className="text-xs text-dimmed">
+                  updated {timeAgo(lastUpdated.toISOString())}
+                </span>
+              )}
+              <Link
+                href={`/workers/${worker.id}/metrics`}
+                className="text-xs text-info hover:underline ml-3"
               >
-                Upgrade Runner
-              </Button>
-            )}
-            {isAdmin(user) && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => handleWorkerAction("reboot")}
-                disabled={!!actionLoading}
-                loading={actionLoading === "reboot"}
-              >
-                Reboot OS
-              </Button>
-            )}
+                View Full Metrics
+              </Link>
+            </div>
+          </div>
+
+          {/* Arc gauges row */}
+          <div className="px-5 pt-5 pb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+              {/* CPU gauge */}
+              <div className="flex flex-col items-center">
+                <ArcGauge percent={cpuPercent} color={sparkColor(cpuPercent)} />
+                <p className="text-2xl font-semibold -mt-1 text-info font-mono">
+                  {latestMetric.cpu_percent?.toFixed(1) ?? "-"}%
+                </p>
+                <p className="text-[10px] text-muted uppercase tracking-wider mt-1">
+                  CPU
+                </p>
+                {latestMetric.cpu_cores && (
+                  <p className="text-[10px] text-dimmed">
+                    {latestMetric.cpu_cores} cores
+                  </p>
+                )}
+                {cpuHistory.length >= 2 && (
+                  <div className="mt-2">
+                    <Sparkline
+                      values={cpuHistory}
+                      color={sparkColor(cpuPercent)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Memory gauge */}
+              <div className="flex flex-col items-center">
+                <ArcGauge percent={memPercent} color="#a855f7" />
+                <p className="text-2xl font-semibold -mt-1 text-violet font-mono">
+                  {memPercent.toFixed(1)}%
+                </p>
+                <p className="text-[10px] text-muted uppercase tracking-wider mt-1">
+                  Memory
+                </p>
+                <p className="text-[10px] text-dimmed">
+                  {latestMetric.memory_used_mb != null &&
+                  latestMetric.memory_total_mb != null
+                    ? `${Math.round(latestMetric.memory_used_mb)} / ${Math.round(latestMetric.memory_total_mb)} MB`
+                    : "-"}
+                </p>
+                {memHistory.length >= 2 && (
+                  <div className="mt-2">
+                    <Sparkline values={memHistory} color="#a855f7" />
+                  </div>
+                )}
+              </div>
+
+              {/* Disk gauge */}
+              <div className="flex flex-col items-center">
+                <ArcGauge
+                  percent={diskPercent}
+                  color={sparkColor(diskPercent)}
+                />
+                <p className="text-2xl font-semibold -mt-1 text-pending font-mono">
+                  {diskPercent.toFixed(1)}%
+                </p>
+                <p className="text-[10px] text-muted uppercase tracking-wider mt-1">
+                  Disk
+                </p>
+                <p className="text-[10px] text-dimmed">
+                  {latestMetric.disk_used_mb != null &&
+                  latestMetric.disk_total_mb != null
+                    ? formatDisk(
+                        latestMetric.disk_used_mb,
+                        latestMetric.disk_total_mb,
+                      )
+                    : "-"}
+                </p>
+              </div>
+
+              {/* Network gauge */}
+              <div className="flex flex-col items-center">
+                <ArcGauge percent={0} color="#22c55e" />
+                <p className="text-2xl font-semibold -mt-1 text-healthy font-mono">
+                  {latestMetric.network_rx_bytes != null
+                    ? formatBytes(latestMetric.network_rx_bytes)
+                    : "-"}
+                </p>
+                <p className="text-[10px] text-muted uppercase tracking-wider mt-1">
+                  Network RX
+                </p>
+                <p className="text-[10px] text-dimmed">
+                  {latestMetric.network_tx_bytes != null
+                    ? `TX: ${formatBytes(latestMetric.network_tx_bytes)}`
+                    : "-"}
+                </p>
+                {netRxHistory.length >= 2 && (
+                  <div className="mt-2">
+                    <Sparkline values={netRxHistory} color="#22c55e" />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Secondary stats strip */}
+          <div className="border-t border-border px-5 py-4 grid grid-cols-2 sm:grid-cols-5 gap-4">
+            <div>
+              <p className="text-[10px] text-muted uppercase tracking-wider">
+                Containers
+              </p>
+              <p className="text-sm text-healthy font-semibold mt-0.5">
+                {latestMetric.container_running_count != null
+                  ? `${latestMetric.container_running_count} / ${latestMetric.container_count ?? 0}`
+                  : `${latestMetric.container_count ?? "-"}`}
+              </p>
+              <p className="text-[10px] text-dimmed">running / total</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted uppercase tracking-wider">
+                Uptime
+              </p>
+              <p className="text-sm text-secondary font-semibold mt-0.5">
+                {latestMetric.uptime_seconds != null
+                  ? formatUptime(latestMetric.uptime_seconds)
+                  : "-"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted uppercase tracking-wider">
+                Load Avg
+              </p>
+              <p className="text-sm text-secondary font-mono mt-0.5">
+                {latestMetric.load_avg_1?.toFixed(2) ?? "-"} /{" "}
+                {latestMetric.load_avg_5?.toFixed(2) ?? "-"} /{" "}
+                {latestMetric.load_avg_15?.toFixed(2) ?? "-"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted uppercase tracking-wider">
+                Network I/O
+              </p>
+              <p className="text-sm text-secondary font-mono mt-0.5">
+                {latestMetric.network_rx_bytes != null
+                  ? formatBytes(latestMetric.network_rx_bytes)
+                  : "-"}{" "}
+                rx
+              </p>
+              <p className="text-[10px] text-secondary font-mono">
+                {latestMetric.network_tx_bytes != null
+                  ? formatBytes(latestMetric.network_tx_bytes)
+                  : "-"}{" "}
+                tx
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted uppercase tracking-wider">
+                Processes
+              </p>
+              <p className="text-sm text-secondary font-semibold mt-0.5">
+                {latestMetric.process_count ?? "-"}
+              </p>
+              {latestMetric.swap_total_mb != null &&
+                latestMetric.swap_total_mb > 0 && (
+                  <p className="text-[10px] text-dimmed">
+                    Swap: {Math.round(latestMetric.swap_used_mb ?? 0)}/
+                    {Math.round(latestMetric.swap_total_mb)} MB
+                  </p>
+                )}
+            </div>
           </div>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Info + Metrics */}
+        {/* ─── Left column: Info + Stacks ─── */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="card p-5">
-            <h2 className="text-sm font-medium text-primary mb-4">Worker Info</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-muted uppercase tracking-wider">
-                  Hostname
-                </p>
-                {worker.hostname ? (
-                  <a
-                    href={`http://${worker.hostname}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-info hover:underline mt-1 font-mono block break-all"
-                  >
-                    {worker.hostname}
-                  </a>
-                ) : (
-                  <p className="text-sm text-secondary mt-1">Not set</p>
-                )}
-              </div>
-              <div>
-                <p className="text-xs text-muted uppercase tracking-wider">
-                  IP Address
-                </p>
-                <p className="text-sm text-secondary mt-1 font-mono">
-                  {worker.ip_address ?? "Unknown"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted uppercase tracking-wider">
-                  OS / Arch
-                </p>
-                <p className="text-sm text-secondary mt-1">
-                  {worker.os ?? "Unknown"} / {worker.arch ?? "Unknown"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted uppercase tracking-wider">
-                  Docker Version
-                </p>
-                <p className="text-sm text-secondary mt-1 font-mono">
-                  {worker.docker_version ?? "Unknown"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted uppercase tracking-wider">
-                  Runner Version
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-sm text-secondary font-mono">
-                    {worker.runner_version ?? "Unknown"}
-                  </p>
-                  {latestRunner && worker.runner_version && worker.runner_version !== latestRunner && (
-                    <span className="rounded-md bg-[#eab308]/10 border border-[#eab308]/30 px-2 py-0.5 text-[10px] font-medium text-pending">
-                      {latestRunner} available
-                    </span>
-                  )}
+          {/* Worker Info (compact definition list) */}
+          <div className="panel">
+            <div className="panel-header">
+              <FontAwesomeIcon
+                icon={faServer}
+                className="h-3.5 w-3.5 text-muted"
+              />
+              <span>Worker Info</span>
+            </div>
+            <div className="p-4">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                <div className="flex justify-between sm:block">
+                  <dt className="text-[10px] text-muted uppercase tracking-wider font-mono">
+                    Hostname
+                  </dt>
+                  <dd className="text-secondary mt-0.5">
+                    {worker.hostname ? (
+                      <a
+                        href={`http://${worker.hostname}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-info hover:underline font-mono break-all"
+                      >
+                        {worker.hostname}
+                      </a>
+                    ) : (
+                      <span>Not set</span>
+                    )}
+                  </dd>
                 </div>
-              </div>
-              <div>
-                <p className="text-xs text-muted uppercase tracking-wider">
-                  Last Heartbeat
-                </p>
-                <p className="text-sm text-secondary mt-1">
-                  {worker.last_heartbeat_at
-                    ? timeAgo(worker.last_heartbeat_at)
-                    : "Never"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted uppercase tracking-wider">
-                  Labels
-                </p>
-                <p className="text-sm text-secondary mt-1">
-                  {worker.labels ?? "None"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted uppercase tracking-wider">
-                  Created
-                </p>
-                <p className="text-sm text-secondary mt-1">
-                  {formatDate(worker.inserted_at)}
-                </p>
-              </div>
+                <div className="flex justify-between sm:block">
+                  <dt className="text-[10px] text-muted uppercase tracking-wider font-mono">
+                    IP Address
+                  </dt>
+                  <dd className="text-secondary font-mono mt-0.5">
+                    {worker.ip_address ?? "Unknown"}
+                  </dd>
+                </div>
+                <div className="flex justify-between sm:block">
+                  <dt className="text-[10px] text-muted uppercase tracking-wider font-mono">
+                    OS / Arch
+                  </dt>
+                  <dd className="text-secondary mt-0.5">
+                    {worker.os ?? "Unknown"} / {worker.arch ?? "Unknown"}
+                  </dd>
+                </div>
+                <div className="flex justify-between sm:block">
+                  <dt className="text-[10px] text-muted uppercase tracking-wider font-mono">
+                    Docker
+                  </dt>
+                  <dd className="text-secondary font-mono mt-0.5">
+                    {worker.docker_version ?? "Unknown"}
+                  </dd>
+                </div>
+                <div className="flex justify-between sm:block">
+                  <dt className="text-[10px] text-muted uppercase tracking-wider font-mono">
+                    Runner
+                  </dt>
+                  <dd className="text-secondary font-mono mt-0.5">
+                    {worker.runner_version ?? "Unknown"}
+                  </dd>
+                </div>
+                <div className="flex justify-between sm:block">
+                  <dt className="text-[10px] text-muted uppercase tracking-wider font-mono">
+                    Last Heartbeat
+                  </dt>
+                  <dd className="text-secondary mt-0.5">
+                    {worker.last_heartbeat_at
+                      ? timeAgo(worker.last_heartbeat_at)
+                      : "Never"}
+                  </dd>
+                </div>
+                <div className="flex justify-between sm:block">
+                  <dt className="text-[10px] text-muted uppercase tracking-wider font-mono">
+                    Labels
+                  </dt>
+                  <dd className="text-secondary mt-0.5">
+                    {worker.labels ?? "None"}
+                  </dd>
+                </div>
+                <div className="flex justify-between sm:block">
+                  <dt className="text-[10px] text-muted uppercase tracking-wider font-mono">
+                    Created
+                  </dt>
+                  <dd className="text-secondary mt-0.5">
+                    {formatDate(worker.inserted_at)}
+                  </dd>
+                </div>
+              </dl>
             </div>
           </div>
 
-          {/* Metrics */}
-          {latestMetric && (
-            <div className="card p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-medium text-primary">
-                    Live Metrics
-                  </h2>
-                  {worker.status === "online" && (
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-healthy opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-healthy" />
-                    </span>
-                  )}
-                </div>
-                {lastUpdated && (
-                  <span className="text-xs text-dimmed">
-                    updated {timeAgo(lastUpdated.toISOString())}
-                  </span>
-                )}
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-                <MetricCard
-                  label="CPU"
-                  value={`${latestMetric.cpu_percent?.toFixed(1) ?? "-"}%`}
-                  sub={
-                    latestMetric.cpu_cores
-                      ? `${latestMetric.cpu_cores} cores`
-                      : undefined
-                  }
-                  color="text-info"
-                  percent={latestMetric.cpu_percent ?? undefined}
-                />
-                {cpuHistory.length >= 2 && (
-                  <div className="flex items-end">
-                    <Sparkline
-                      values={cpuHistory}
-                      color={sparkColor(latestMetric.cpu_percent ?? 0)}
-                    />
-                  </div>
-                )}
-                <MetricCard
-                  label="Memory"
-                  value={
-                    latestMetric.memory_used_mb != null &&
-                    latestMetric.memory_total_mb != null
-                      ? `${Math.round(latestMetric.memory_used_mb)} / ${Math.round(latestMetric.memory_total_mb)} MB`
-                      : "-"
-                  }
-                  color="text-violet"
-                  percent={
-                    latestMetric.memory_used_mb != null &&
-                    latestMetric.memory_total_mb
-                      ? (latestMetric.memory_used_mb /
-                          latestMetric.memory_total_mb) *
-                        100
-                      : undefined
-                  }
-                />
-                {memHistory.length >= 2 && (
-                  <div className="flex items-end">
-                    <Sparkline values={memHistory} color="#a855f7" />
-                  </div>
-                )}
-                <MetricCard
-                  label="Disk"
-                  value={
-                    latestMetric.disk_used_mb != null &&
-                    latestMetric.disk_total_mb != null
-                      ? formatDisk(
-                          latestMetric.disk_used_mb,
-                          latestMetric.disk_total_mb,
-                        )
-                      : "-"
-                  }
-                  color="text-pending"
-                  percent={
-                    latestMetric.disk_used_mb != null &&
-                    latestMetric.disk_total_mb
-                      ? (latestMetric.disk_used_mb /
-                          latestMetric.disk_total_mb) *
-                        100
-                      : undefined
-                  }
-                />
-                <MetricCard
-                  label="Containers"
-                  value={
-                    latestMetric.container_running_count != null
-                      ? `${latestMetric.container_running_count} / ${latestMetric.container_count ?? 0}`
-                      : `${latestMetric.container_count ?? "-"}`
-                  }
-                  sub="running / total"
-                  color="text-healthy"
-                />
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div>
-                  <p className="text-xs text-muted uppercase tracking-wider">
-                    Load Average
-                  </p>
-                  <p className="text-sm text-secondary mt-1 font-mono">
-                    {latestMetric.load_avg_1?.toFixed(2) ?? "-"} /{" "}
-                    {latestMetric.load_avg_5?.toFixed(2) ?? "-"} /{" "}
-                    {latestMetric.load_avg_15?.toFixed(2) ?? "-"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted uppercase tracking-wider">
-                    Swap
-                  </p>
-                  <p className="text-sm text-secondary mt-1">
-                    {latestMetric.swap_total_mb != null &&
-                    latestMetric.swap_total_mb > 0
-                      ? `${Math.round(latestMetric.swap_used_mb ?? 0)} / ${Math.round(latestMetric.swap_total_mb)} MB`
-                      : "None"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted uppercase tracking-wider">
-                    Network
-                  </p>
-                  <p className="text-sm text-secondary mt-1 font-mono">
-                    {latestMetric.network_rx_bytes != null
-                      ? formatBytes(latestMetric.network_rx_bytes)
-                      : "-"}{" "}
-                    rx
-                  </p>
-                  <p className="text-sm text-secondary font-mono">
-                    {latestMetric.network_tx_bytes != null
-                      ? formatBytes(latestMetric.network_tx_bytes)
-                      : "-"}{" "}
-                    tx
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted uppercase tracking-wider">
-                    System
-                  </p>
-                  <p className="text-sm text-secondary mt-1">
-                    {latestMetric.uptime_seconds != null
-                      ? formatUptime(latestMetric.uptime_seconds)
-                      : "-"}{" "}
-                    uptime
-                  </p>
-                  <p className="text-sm text-secondary">
-                    {latestMetric.process_count ?? "-"} processes
-                  </p>
-                </div>
-              </div>
+          {/* Stacks & Containers (tree view) */}
+          <div className="panel">
+            <div className="panel-header">
+              <FontAwesomeIcon
+                icon={faServer}
+                className="h-3.5 w-3.5 text-muted"
+              />
+              <span>Stacks &amp; Containers</span>
+              <span className="badge badge-neutral ml-2">{stacks.length}</span>
             </div>
-          )}
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Associated Stacks */}
-          <div className="card p-5">
-            <h2 className="text-sm font-medium text-primary mb-4">
-              Associated Stacks
-            </h2>
-            <div className="space-y-2">
+            <div className="p-4 space-y-1">
               {stacks.length === 0 ? (
-                <p className="text-xs text-muted py-4 text-center">
+                <p className="text-xs text-muted py-6 text-center">
                   No stacks assigned to this worker
                 </p>
               ) : (
@@ -849,26 +1064,27 @@ export default function WorkerDetailPage() {
                             return next;
                           })
                         }
-                        className="w-full flex items-center justify-between rounded-lg bg-surface-elevated px-3 py-2 hover:bg-surface-active transition-colors text-left cursor-pointer"
+                        className="w-full flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-surface-elevated transition-colors text-left cursor-pointer"
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <FontAwesomeIcon
                             icon={faChevronDown}
-                            className={`h-3 w-3 text-muted transition-transform ${isExpanded ? "" : "-rotate-90"}`}
+                            className={`h-2.5 w-2.5 text-dimmed transition-transform ${isExpanded ? "" : "-rotate-90"}`}
                           />
-                          <div className="min-w-0">
-                            <p className="text-sm text-primary break-all">{stack.name}</p>
-                            <p className="text-xs text-muted">
-                              {stack.deployment_strategy} &middot;{" "}
-                              {stackContainers.length} container
-                              {stackContainers.length !== 1 ? "s" : ""}
-                            </p>
-                          </div>
+                          <StatusBadge status={stack.status} />
+                          <span className="text-sm text-primary font-medium truncate">
+                            {stack.name}
+                          </span>
+                          <span className="badge badge-neutral text-[10px]">
+                            {stackContainers.length}
+                          </span>
                         </div>
-                        <StatusBadge status={stack.status} />
+                        <span className="text-[10px] text-dimmed">
+                          {stack.deployment_strategy}
+                        </span>
                       </button>
                       {isExpanded && (
-                        <div className="ml-5 mt-1 mb-1 space-y-1 border-l border-border-subtle pl-3">
+                        <div className="ml-7 mt-0.5 mb-2 space-y-0.5 border-l border-border pl-3">
                           {stackContainers.length === 0 ? (
                             <p className="text-xs text-dimmed py-1">
                               No containers
@@ -878,25 +1094,29 @@ export default function WorkerDetailPage() {
                               <Link
                                 key={c.id}
                                 href={`/containers/${c.id}`}
-                                className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-surface-elevated transition-colors"
+                                className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-surface-elevated transition-colors group"
                               >
                                 <div className="flex items-center gap-2 min-w-0">
-                                  <span className="text-xs text-primary break-all">
+                                  <StatusBadge status={c.status} />
+                                  <span className="text-xs text-primary truncate group-hover:text-info transition-colors">
                                     {c.name}
                                   </span>
-                                  <span className="text-[10px] text-muted font-mono break-all">
+                                  <span className="text-[10px] text-dimmed font-mono truncate">
                                     {c.image}:{c.tag}
                                   </span>
                                 </div>
-                                <StatusBadge status={c.status} />
+                                <FontAwesomeIcon
+                                  icon={faChevronRight}
+                                  className="h-2.5 w-2.5 text-dimmed opacity-0 group-hover:opacity-100 transition-opacity"
+                                />
                               </Link>
                             ))
                           )}
                           <Link
                             href={`/stacks/${stack.id}`}
-                            className="block text-xs text-info hover:underline px-2 py-1"
+                            className="block text-xs text-info hover:underline px-2 py-1 mt-1"
                           >
-                            View stack &rarr;
+                            View stack details
                           </Link>
                         </div>
                       )}
@@ -906,65 +1126,244 @@ export default function WorkerDetailPage() {
               )}
             </div>
           </div>
+        </div>
 
-          {/* Docker Volumes */}
+        {/* ─── Sidebar ─── */}
+        <div className="space-y-6">
+          {/* Volumes & Networks (tabbed) */}
           {worker.status === "online" && (
-            <div className="card p-5">
-              <h2 className="text-sm font-medium text-primary mb-4">
-                Volumes
-              </h2>
+            <div className="panel">
+              <div className="tabs-bar !px-4 !gap-0">
+                <button
+                  className={`tab-item ${infraTab === "volumes" ? "active" : ""}`}
+                  onClick={() => setInfraTab("volumes")}
+                >
+                  <FontAwesomeIcon icon={faHardDrive} className="h-3 w-3" />
+                  Volumes
+                  <span className="count">{volumes.length}</span>
+                </button>
+                <button
+                  className={`tab-item ${infraTab === "networks" ? "active" : ""}`}
+                  onClick={() => setInfraTab("networks")}
+                >
+                  <FontAwesomeIcon icon={faNetworkWired} className="h-3 w-3" />
+                  Networks
+                  <span className="count">{networks.length}</span>
+                </button>
+              </div>
+              <div className="p-4">
+                {infraTab === "volumes" && (
+                  <>
+                    {canEdit(user) && (
+                      <div className="flex gap-2 mb-3">
+                        <Input
+                          placeholder="Volume name"
+                          value={newVolumeName}
+                          onChange={(e) => setNewVolumeName(e.target.value)}
+                          className="flex-1"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            if (!newVolumeName.trim()) return;
+                            await reqCreateVolume(id, {
+                              name: newVolumeName.trim(),
+                            });
+                            setNewVolumeName("");
+                          }}
+                          disabled={!newVolumeName.trim()}
+                        >
+                          Create
+                        </Button>
+                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      {volumes.length === 0 ? (
+                        <p className="text-xs text-muted py-4 text-center">
+                          No volumes
+                        </p>
+                      ) : (
+                        volumes.map((vol) => (
+                          <div
+                            key={vol.name}
+                            className="flex items-center justify-between rounded-lg bg-surface-elevated px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-xs text-primary break-all">
+                                {vol.name}
+                              </p>
+                              <p className="text-[10px] text-dimmed">
+                                {vol.driver} / {vol.scope}
+                              </p>
+                            </div>
+                            {canEdit(user) && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={async () => {
+                                  const ok = await showConfirm({
+                                    title: "Delete volume",
+                                    message: `Delete volume "${vol.name}"? Any data stored in this volume will be lost.`,
+                                    confirmLabel: "Delete",
+                                    variant: "danger",
+                                  });
+                                  if (!ok) return;
+                                  await reqDeleteVolume(id, vol.name, true);
+                                }}
+                              >
+                                Delete
+                              </Button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+                {infraTab === "networks" && (
+                  <>
+                    {canEdit(user) && (
+                      <div className="flex gap-2 mb-3">
+                        <Input
+                          placeholder="Network name"
+                          value={newNetworkName}
+                          onChange={(e) => setNewNetworkName(e.target.value)}
+                          className="flex-1"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            if (!newNetworkName.trim()) return;
+                            await reqCreateNetwork(id, {
+                              name: newNetworkName.trim(),
+                            });
+                            setNewNetworkName("");
+                          }}
+                          disabled={!newNetworkName.trim()}
+                        >
+                          Create
+                        </Button>
+                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      {networks.length === 0 ? (
+                        <p className="text-xs text-muted py-4 text-center">
+                          No networks
+                        </p>
+                      ) : (
+                        networks.map((net) => {
+                          const containerCount = net.containers
+                            ? Object.keys(net.containers).length
+                            : 0;
+                          return (
+                            <div
+                              key={net.id}
+                              className="flex items-center justify-between rounded-lg bg-surface-elevated px-3 py-2"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-xs text-primary break-all">
+                                  {net.name}
+                                </p>
+                                <p className="text-[10px] text-dimmed">
+                                  {net.driver} / {net.scope}
+                                  {containerCount > 0 &&
+                                    ` \u00b7 ${containerCount} container${containerCount !== 1 ? "s" : ""}`}
+                                  {net.internal && " \u00b7 internal"}
+                                </p>
+                              </div>
+                              {canEdit(user) && (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={async () => {
+                                    const ok = await showConfirm({
+                                      title: "Delete network",
+                                      message: `Delete network "${net.name}"? Containers connected to this network will be disconnected.`,
+                                      confirmLabel: "Delete",
+                                      variant: "danger",
+                                    });
+                                    if (!ok) return;
+                                    await reqDeleteNetwork(id, net.name);
+                                  }}
+                                >
+                                  Delete
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Worker Tokens */}
+          <div className="panel">
+            <div className="panel-header">
+              <FontAwesomeIcon
+                icon={faKey}
+                className="h-3.5 w-3.5 text-muted"
+              />
+              <span>Tokens</span>
+              <span className="badge badge-neutral ml-2">{tokens.length}</span>
+            </div>
+            <div className="p-4">
               {canEdit(user) && (
-                <div className="flex gap-2 mb-4">
+                <div className="flex gap-2 mb-3">
                   <Input
-                    placeholder="Volume name"
-                    value={newVolumeName}
-                    onChange={(e) => setNewVolumeName(e.target.value)}
+                    placeholder="Token name"
+                    value={newTokenName}
+                    onChange={(e) => setNewTokenName(e.target.value)}
                     className="flex-1"
                   />
                   <Button
-                    size="md"
-                    onClick={async () => {
-                      if (!newVolumeName.trim()) return;
-                      await reqCreateVolume(id, { name: newVolumeName.trim() });
-                      setNewVolumeName("");
-                    }}
-                    disabled={!newVolumeName.trim()}
+                    size="sm"
+                    onClick={handleCreateToken}
+                    disabled={!newTokenName.trim()}
                   >
                     Create
                   </Button>
                 </div>
               )}
-              <div className="space-y-2">
-                {volumes.length === 0 ? (
+
+              {createdToken && (
+                <div className="mb-3 rounded-lg border border-[#22c55e]/30 bg-healthy/5 p-3">
+                  <p className="text-[10px] text-healthy mb-1 font-medium uppercase tracking-wider">
+                    Copy now - shown only once
+                  </p>
+                  <p className="text-xs text-primary font-mono break-all select-all">
+                    {createdToken}
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                {tokens.length === 0 ? (
                   <p className="text-xs text-muted py-4 text-center">
-                    No volumes found
+                    No tokens
                   </p>
                 ) : (
-                  volumes.map((vol) => (
+                  tokens.map((token) => (
                     <div
-                      key={vol.name}
+                      key={token.id}
                       className="flex items-center justify-between rounded-lg bg-surface-elevated px-3 py-2"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm text-primary break-all">{vol.name}</p>
-                        <p className="text-xs text-muted">
-                          {vol.driver} &middot; {vol.scope}
+                        <p className="text-xs text-primary">{token.name}</p>
+                        <p className="text-[10px] text-dimmed">
+                          {token.last_used_at
+                            ? `Used ${timeAgo(token.last_used_at)}`
+                            : "Never used"}
                         </p>
                       </div>
                       {canEdit(user) && (
                         <Button
                           variant="destructive"
                           size="sm"
-                          onClick={async () => {
-                            const ok = await showConfirm({
-                              title: "Delete volume",
-                              message: `Delete volume "${vol.name}"? Any data stored in this volume will be lost.`,
-                              confirmLabel: "Delete",
-                              variant: "danger",
-                            });
-                            if (!ok) return;
-                            await reqDeleteVolume(id, vol.name, true);
-                          }}
+                          onClick={() => handleDeleteToken(token.id)}
                         >
                           Delete
                         </Button>
@@ -973,151 +1372,6 @@ export default function WorkerDetailPage() {
                   ))
                 )}
               </div>
-            </div>
-          )}
-
-          {/* Docker Networks */}
-          {worker.status === "online" && (
-            <div className="card p-5">
-              <h2 className="text-sm font-medium text-primary mb-4">
-                Networks
-              </h2>
-              {canEdit(user) && (
-                <div className="flex gap-2 mb-4">
-                  <Input
-                    placeholder="Network name"
-                    value={newNetworkName}
-                    onChange={(e) => setNewNetworkName(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button
-                    size="md"
-                    onClick={async () => {
-                      if (!newNetworkName.trim()) return;
-                      await reqCreateNetwork(id, { name: newNetworkName.trim() });
-                      setNewNetworkName("");
-                    }}
-                    disabled={!newNetworkName.trim()}
-                  >
-                    Create
-                  </Button>
-                </div>
-              )}
-              <div className="space-y-2">
-                {networks.length === 0 ? (
-                  <p className="text-xs text-muted py-4 text-center">
-                    No networks found
-                  </p>
-                ) : (
-                  networks.map((net) => {
-                    const containerCount = net.containers ? Object.keys(net.containers).length : 0;
-                    return (
-                      <div
-                        key={net.id}
-                        className="flex items-center justify-between rounded-lg bg-surface-elevated px-3 py-2"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-sm text-primary break-all">{net.name}</p>
-                          <p className="text-xs text-muted">
-                            {net.driver} &middot; {net.scope}
-                            {containerCount > 0 && ` \u00b7 ${containerCount} container${containerCount !== 1 ? "s" : ""}`}
-                            {net.internal && " \u00b7 internal"}
-                          </p>
-                        </div>
-                        {canEdit(user) && (
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={async () => {
-                              const ok = await showConfirm({
-                                title: "Delete network",
-                                message: `Delete network "${net.name}"? Containers connected to this network will be disconnected.`,
-                                confirmLabel: "Delete",
-                                variant: "danger",
-                              });
-                              if (!ok) return;
-                              await reqDeleteNetwork(id, net.name);
-                            }}
-                          >
-                            Delete
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Worker Tokens */}
-          <div className="card p-5">
-            <h2 className="text-sm font-medium text-primary mb-4">
-              Worker Tokens
-            </h2>
-
-            {/* Create Token */}
-            {canEdit(user) && (
-              <div className="flex gap-2 mb-4">
-                <Input
-                  placeholder="Token name"
-                  value={newTokenName}
-                  onChange={(e) => setNewTokenName(e.target.value)}
-                  className="flex-1"
-                />
-                <Button
-                  size="md"
-                  onClick={handleCreateToken}
-                  disabled={!newTokenName.trim()}
-                >
-                  Create
-                </Button>
-              </div>
-            )}
-
-            {createdToken && (
-              <div className="mb-4 rounded-lg border border-[#22c55e]/30 bg-healthy/5 p-3">
-                <p className="text-xs text-healthy mb-1 font-medium">
-                  Token created — copy it now, it won&apos;t be shown again:
-                </p>
-                <p className="text-xs text-primary font-mono break-all select-all">
-                  {createdToken}
-                </p>
-              </div>
-            )}
-
-            {/* Token List */}
-            <div className="space-y-2">
-              {tokens.length === 0 ? (
-                <p className="text-xs text-muted py-4 text-center">
-                  No tokens yet
-                </p>
-              ) : (
-                tokens.map((token) => (
-                  <div
-                    key={token.id}
-                    className="flex items-center justify-between rounded-lg bg-surface-elevated px-3 py-2"
-                  >
-                    <div>
-                      <p className="text-sm text-primary">{token.name}</p>
-                      <p className="text-xs text-muted">
-                        {token.last_used_at
-                          ? `Used ${timeAgo(token.last_used_at)}`
-                          : "Never used"}
-                      </p>
-                    </div>
-                    {canEdit(user) && (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDeleteToken(token.id)}
-                      >
-                        Delete
-                      </Button>
-                    )}
-                  </div>
-                ))
-              )}
             </div>
           </div>
         </div>

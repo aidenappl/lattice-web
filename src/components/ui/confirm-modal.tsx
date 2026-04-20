@@ -5,6 +5,7 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   ReactNode,
 } from "react";
 import { Button } from "./button";
@@ -41,6 +42,19 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     setState(null);
   };
 
+  // Close on Escape
+  useEffect(() => {
+    if (!state) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        handle(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  });
+
   const buttonVariant =
     state?.variant === "danger"
       ? "destructive"
@@ -60,7 +74,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             className="bg-surface border border-border-strong rounded-xl p-6 w-full max-w-sm mx-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-semibold text-primary">{state.title}</h3>
+            <h3 className="text-sm font-semibold text-primary">
+              {state.title}
+            </h3>
             {state.message && (
               <p className="text-xs text-secondary mt-2 mb-5 leading-relaxed">
                 {state.message}

@@ -1,10 +1,20 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faXmark } from "@fortawesome/free-solid-svg-icons";
+import {
+  faArrowLeft,
+  faEllipsisVertical,
+  faPlay,
+  faStop,
+  faRotateRight,
+  faCubes,
+  faTrash,
+  faCircleCheck,
+  faCircleXmark,
+} from "@fortawesome/free-solid-svg-icons";
 import toast from "react-hot-toast";
 import {
   Stack,
@@ -101,12 +111,21 @@ export default function StackDetailPage() {
   const logLimitRef = useRef<LogLimit>(250);
 
   // Stack env vars
-  const [showEnvVars, setShowEnvVars] = useState(false);
   const [stackEnvVars, setStackEnvVars] = useState("");
   const [savingEnvVars, setSavingEnvVars] = useState(false);
 
+  const parsedEnvVars = useMemo<Record<string, string>>(() => {
+    try {
+      const obj = stackEnvVars ? JSON.parse(stackEnvVars) : {};
+      return typeof obj === "object" && !Array.isArray(obj) && obj !== null
+        ? obj
+        : {};
+    } catch {
+      return {};
+    }
+  }, [stackEnvVars]);
+
   // Compose editor
-  const [showCompose, setShowCompose] = useState(false);
   const [composeYaml, setComposeYaml] = useState("");
   const [savingCompose, setSavingCompose] = useState(false);
   const [syncingCompose, setSyncingCompose] = useState(false);
@@ -129,6 +148,13 @@ export default function StackDetailPage() {
   const [newContainerImage, setNewContainerImage] = useState("");
   const [newContainerTag, setNewContainerTag] = useState("latest");
   const [creatingContainer, setCreatingContainer] = useState(false);
+
+  // Tab state
+  type StackTab = "containers" | "compose" | "env" | "logs";
+  const [activeTab, setActiveTab] = useState<StackTab>("containers");
+
+  // Container action menu
+  const [openActionMenu, setOpenActionMenu] = useState<number | null>(null);
 
   // Deploy button state
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
@@ -652,7 +678,6 @@ export default function StackDetailPage() {
       setStack(res.data);
       setHasPendingChanges(true);
       await refreshContainers();
-      setShowCompose(false);
       const deploy = await showConfirm({
         title: "Compose saved",
         message:
@@ -707,8 +732,21 @@ export default function StackDetailPage() {
     : true; // no worker assigned → don't block
   const staleReason = stackWorker ? workerStaleReason(stackWorker) : null;
 
+  const runningCount = containers.filter((c) => c.status === "running").length;
+  const stoppedCount = containers.filter(
+    (c) => c.status === "stopped" || c.status === "error",
+  ).length;
+
+  const containerStatusIcon = (status: string) => {
+    if (status === "running") return <span className="status-dot healthy" />;
+    if (status === "stopped" || status === "error")
+      return <span className="status-dot failed" />;
+    if (status === "paused") return <span className="status-dot pending" />;
+    return <span className="status-dot off" />;
+  };
+
   return (
-    <div className="p-6">
+    <div className="stack-page">
       {/* Worker offline banner */}
       {!workerOnline && (
         <WorkerOfflineBanner
@@ -717,250 +755,591 @@ export default function StackDetailPage() {
         />
       )}
 
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="page-title text-xl">{stack.name}</h1>
-            <StatusBadge status={stack.status} />
-          </div>
-          {stack.description && (
-            <p className="text-sm text-secondary mt-1">{stack.description}</p>
-          )}
+      {/* ─── Header ─────────────────────────────────────────────── */}
+      <div className="stack-header">
+        <div className="stack-header-top">
+          <Link href="/stacks" className="stack-back-link">
+            <FontAwesomeIcon icon={faArrowLeft} className="h-3 w-3" />
+            <span>Stacks</span>
+          </Link>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setShowCompose(!showCompose);
-              if (showEnvVars) setShowEnvVars(false);
-            }}
-          >
-            Compose
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setShowEnvVars(!showEnvVars);
-              if (showCompose) setShowCompose(false);
-            }}
-          >
-            Env Vars
-          </Button>
-          {canEdit(user) && (() => {
-            const isDeploying = deploying || stack.status === "deploying";
-            const isFailed = stack.status === "failed";
-            const needsDeploy = hasPendingChanges || isFailed;
-            const showForce = !needsDeploy && !isDeploying;
-            return (
-              <div className="relative">
-                <Button
-                  onClick={handleDeploy}
-                  disabled={isDeploying || !workerOnline}
-                  title={
-                    !workerOnline
-                      ? "Worker is offline — cannot deploy"
-                      : undefined
-                  }
-                  onMouseEnter={() => showForce && setForceDeployHovered(true)}
-                  onMouseLeave={() => setForceDeployHovered(false)}
-                  className={
-                    showForce
-                      ? "opacity-40 hover:opacity-60 transition-opacity"
-                      : ""
-                  }
-                >
-                  {isDeploying
-                    ? "Deploying..."
-                    : forceDeployHovered
-                      ? "Force Re-deploy"
-                      : isFailed
-                        ? "Redeploy"
-                        : needsDeploy
-                          ? "Deploy"
-                          : "Re-deploy"}
-                </Button>
+        <div className="stack-header-main">
+          <div className="stack-header-left">
+            <div className="flex items-center gap-3">
+              <div className="stack-icon">
+                <FontAwesomeIcon icon={faCubes} className="h-5 w-5 text-info" />
               </div>
-            );
-          })()}
-          {canEdit(user) && (
-            <Button
-              variant="secondary"
-              onClick={handleDeleteStack}
-              disabled={deleting}
-              className="text-red-400 hover:text-red-300 border-red-900/50 hover:border-red-800"
-            >
-              {deleting ? "Deleting..." : "Delete"}
-            </Button>
-          )}
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <h1 className="text-lg font-semibold text-primary">
+                    {stack.name}
+                  </h1>
+                  <StatusBadge status={stack.status} />
+                </div>
+                {stack.description && (
+                  <p className="text-xs text-muted mt-0.5">
+                    {stack.description}
+                  </p>
+                )}
+              </div>
+            </div>
+            {/* Meta chips */}
+            <div className="stack-meta-chips">
+              {stack.worker_id ? (
+                <WorkerBadge
+                  id={stack.worker_id}
+                  name={workerName(stack.worker_id)}
+                />
+              ) : (
+                <span className="stack-chip text-pending">Unassigned</span>
+              )}
+              <span className="stack-chip">{stack.deployment_strategy}</span>
+              {stack.auto_deploy && (
+                <span className="stack-chip text-healthy">Auto-deploy</span>
+              )}
+              <span className="stack-chip">
+                {containers.length} container
+                {containers.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+          </div>
+          <div className="stack-header-actions">
+            {canEdit(user) &&
+              (() => {
+                const isDeploying = deploying || stack.status === "deploying";
+                const isFailed = stack.status === "failed";
+                const needsDeploy = hasPendingChanges || isFailed;
+                const showForce = !needsDeploy && !isDeploying;
+                return (
+                  <Button
+                    onClick={handleDeploy}
+                    disabled={isDeploying || !workerOnline}
+                    title={
+                      !workerOnline
+                        ? "Worker is offline — cannot deploy"
+                        : undefined
+                    }
+                    onMouseEnter={() =>
+                      showForce && setForceDeployHovered(true)
+                    }
+                    onMouseLeave={() => setForceDeployHovered(false)}
+                    className={
+                      showForce
+                        ? "opacity-50 hover:opacity-80 transition-opacity"
+                        : ""
+                    }
+                  >
+                    {isDeploying
+                      ? "Deploying..."
+                      : forceDeployHovered
+                        ? "Force Re-deploy"
+                        : isFailed
+                          ? "Redeploy"
+                          : needsDeploy
+                            ? "Deploy"
+                            : "Re-deploy"}
+                  </Button>
+                );
+              })()}
+            {canEdit(user) && (
+              <Button variant="ghost" size="sm" onClick={openEditStack}>
+                Edit
+              </Button>
+            )}
+            {canEdit(user) && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDeleteStack}
+                disabled={deleting}
+              >
+                {deleting ? "..." : "Delete"}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Stack Info + Containers */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Stack Info */}
-          <div className="card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-medium text-primary">Stack Info</h2>
-              {!editingStack && canEdit(user) && (
-                <Button variant="ghost" size="sm" onClick={openEditStack}>
-                  Edit
-                </Button>
+      {/* ─── Edit Stack Modal (inline) ──────────────────────────── */}
+      {editingStack && (
+        <div className="card p-5 mb-5">
+          <h2 className="text-sm font-medium text-primary mb-4">Edit Stack</h2>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                id="edit-stack-name"
+                label="Name"
+                value={editStackName}
+                onChange={(e) => setEditStackName(e.target.value)}
+                required
+              />
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-secondary uppercase tracking-wider">
+                  Worker
+                </label>
+                <select
+                  value={editStackWorkerId}
+                  onChange={(e) => setEditStackWorkerId(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none"
+                >
+                  <option value="">Unassigned</option>
+                  {workers.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({w.hostname})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-secondary uppercase tracking-wider">
+                Description
+              </label>
+              <textarea
+                rows={2}
+                value={editStackDescription}
+                onChange={(e) => setEditStackDescription(e.target.value)}
+                placeholder="Optional description..."
+                className="w-full rounded-lg border border-border-strong bg-surface-elevated px-3 py-2 text-sm text-primary placeholder:text-muted focus:border-border-emphasis focus:outline-none resize-none"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-secondary uppercase tracking-wider">
+                  Deployment Strategy
+                </label>
+                <select
+                  value={editStackStrategy}
+                  onChange={(e) => setEditStackStrategy(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none"
+                >
+                  <option value="rolling">Rolling</option>
+                  <option value="blue-green">Blue-Green</option>
+                  <option value="canary">Canary</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-secondary uppercase tracking-wider">
+                  Auto Deploy
+                </label>
+                <div className="flex items-center h-9 gap-3">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={editStackAutoDeploy}
+                    onClick={() => setEditStackAutoDeploy(!editStackAutoDeploy)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${editStackAutoDeploy ? "bg-info" : "bg-border-strong"}`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${editStackAutoDeploy ? "translate-x-4" : "translate-x-0"}`}
+                    />
+                  </button>
+                  <span className="text-sm text-secondary">
+                    {editStackAutoDeploy ? "Enabled" : "Disabled"}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleSaveStack}
+                disabled={savingStack || !editStackName.trim()}
+              >
+                {savingStack ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleCancelEditStack}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Stats Row ──────────────────────────────────────────── */}
+      <div className="stack-stats-row">
+        <div className="stack-stat">
+          <div className="stack-stat-value text-healthy">{runningCount}</div>
+          <div className="stack-stat-label">Running</div>
+        </div>
+        <div className="stack-stat">
+          <div className="stack-stat-value text-failed">{stoppedCount}</div>
+          <div className="stack-stat-label">Stopped</div>
+        </div>
+        <div className="stack-stat">
+          <div className="stack-stat-value text-info">{deployments.length}</div>
+          <div className="stack-stat-label">Deployments</div>
+        </div>
+        <div className="stack-stat">
+          <div className="stack-stat-value text-secondary">
+            {timeAgo(stack.inserted_at)}
+          </div>
+          <div className="stack-stat-label">Created</div>
+        </div>
+      </div>
+
+      {/* ─── Tab Navigation ─────────────────────────────────────── */}
+      <div className="stack-tabs">
+        {(["containers", "compose", "env", "logs"] as StackTab[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`stack-tab ${activeTab === tab ? "active" : ""}`}
+          >
+            {tab === "containers"
+              ? `Containers (${containers.length})`
+              : tab === "compose"
+                ? "Compose"
+                : tab === "env"
+                  ? "Environment"
+                  : "Logs"}
+          </button>
+        ))}
+      </div>
+
+      {/* ─── Main Content Grid ──────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2">
+          {/* ─── Containers Tab ─────────────────────────── */}
+          {activeTab === "containers" && (
+            <div className="space-y-4">
+              {/* Add container form */}
+              {showCreateContainer && canEdit(user) && (
+                <form onSubmit={handleCreateContainer} className="card p-4">
+                  <h3 className="text-xs font-medium text-secondary uppercase tracking-wider mb-3">
+                    New Container
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                    <Input
+                      id="new-container-name"
+                      label="Name"
+                      placeholder="my-service"
+                      value={newContainerName}
+                      onChange={(e) => setNewContainerName(e.target.value)}
+                      required
+                    />
+                    <Input
+                      id="new-container-image"
+                      label="Image"
+                      placeholder="nginx"
+                      value={newContainerImage}
+                      onChange={(e) => setNewContainerImage(e.target.value)}
+                      required
+                    />
+                    <Input
+                      id="new-container-tag"
+                      label="Tag"
+                      placeholder="latest"
+                      value={newContainerTag}
+                      onChange={(e) => setNewContainerTag(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={
+                        creatingContainer ||
+                        !newContainerName.trim() ||
+                        !newContainerImage.trim()
+                      }
+                    >
+                      {creatingContainer ? "Creating..." : "Create"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowCreateContainer(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              )}
+
+              {/* Container cards */}
+              {containers.length === 0 ? (
+                <div className="card p-8 text-center">
+                  <p className="text-sm text-muted mb-3">
+                    No containers in this stack
+                  </p>
+                  {canEdit(user) && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setShowCreateContainer(true)}
+                    >
+                      Add Container
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="stack-container-grid">
+                  {containers.map((container) => (
+                    <div key={container.id} className="stack-container-card">
+                      <div className="stack-container-card-header">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {containerStatusIcon(container.status)}
+                          <Link
+                            href={`/containers/${container.id}`}
+                            className="text-sm font-medium text-primary hover:text-info transition-colors truncate"
+                          >
+                            {container.name}
+                          </Link>
+                        </div>
+                        {canEdit(user) && (
+                          <div className="relative">
+                            <button
+                              onClick={() =>
+                                setOpenActionMenu(
+                                  openActionMenu === container.id
+                                    ? null
+                                    : container.id,
+                                )
+                              }
+                              className="p-1.5 rounded text-muted hover:text-primary hover:bg-surface-elevated transition-colors"
+                            >
+                              <FontAwesomeIcon
+                                icon={faEllipsisVertical}
+                                className="h-3.5 w-3.5"
+                              />
+                            </button>
+                            {openActionMenu === container.id && (
+                              <div
+                                className="stack-action-menu"
+                                onMouseLeave={() => setOpenActionMenu(null)}
+                              >
+                                {(container.status === "stopped" ||
+                                  container.status === "error") && (
+                                  <button
+                                    onClick={() => {
+                                      handleContainerAction(
+                                        container.id,
+                                        "start",
+                                      );
+                                      setOpenActionMenu(null);
+                                    }}
+                                    disabled={
+                                      !workerOnline ||
+                                      !!actionLoading[`${container.id}-start`]
+                                    }
+                                    className="stack-action-item text-healthy"
+                                  >
+                                    <FontAwesomeIcon
+                                      icon={faPlay}
+                                      className="h-3 w-3"
+                                    />
+                                    <span>
+                                      {actionLoading[`${container.id}-start`]
+                                        ? "Starting..."
+                                        : "Start"}
+                                    </span>
+                                  </button>
+                                )}
+                                {container.status === "paused" && (
+                                  <button
+                                    onClick={() => {
+                                      handleContainerAction(
+                                        container.id,
+                                        "unpause",
+                                      );
+                                      setOpenActionMenu(null);
+                                    }}
+                                    disabled={
+                                      !workerOnline ||
+                                      !!actionLoading[`${container.id}-unpause`]
+                                    }
+                                    className="stack-action-item text-healthy"
+                                  >
+                                    <FontAwesomeIcon
+                                      icon={faPlay}
+                                      className="h-3 w-3"
+                                    />
+                                    <span>
+                                      {actionLoading[`${container.id}-unpause`]
+                                        ? "Resuming..."
+                                        : "Resume"}
+                                    </span>
+                                  </button>
+                                )}
+                                {container.status === "running" && (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        handleContainerAction(
+                                          container.id,
+                                          "restart",
+                                        );
+                                        setOpenActionMenu(null);
+                                      }}
+                                      disabled={
+                                        !workerOnline ||
+                                        !!actionLoading[
+                                          `${container.id}-restart`
+                                        ]
+                                      }
+                                      className="stack-action-item text-info"
+                                    >
+                                      <FontAwesomeIcon
+                                        icon={faRotateRight}
+                                        className="h-3 w-3"
+                                      />
+                                      <span>
+                                        {actionLoading[
+                                          `${container.id}-restart`
+                                        ]
+                                          ? "..."
+                                          : "Restart"}
+                                      </span>
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        handleContainerAction(
+                                          container.id,
+                                          "stop",
+                                        );
+                                        setOpenActionMenu(null);
+                                      }}
+                                      disabled={
+                                        !workerOnline ||
+                                        !!actionLoading[`${container.id}-stop`]
+                                      }
+                                      className="stack-action-item text-pending"
+                                    >
+                                      <FontAwesomeIcon
+                                        icon={faStop}
+                                        className="h-3 w-3"
+                                      />
+                                      <span>
+                                        {actionLoading[`${container.id}-stop`]
+                                          ? "..."
+                                          : "Stop"}
+                                      </span>
+                                    </button>
+                                  </>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    handleContainerAction(
+                                      container.id,
+                                      "recreate",
+                                    );
+                                    setOpenActionMenu(null);
+                                  }}
+                                  disabled={
+                                    !workerOnline ||
+                                    !!actionLoading[`${container.id}-recreate`]
+                                  }
+                                  className="stack-action-item text-violet"
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faRotateRight}
+                                    className="h-3 w-3"
+                                  />
+                                  <span>
+                                    {actionLoading[`${container.id}-recreate`]
+                                      ? "..."
+                                      : "Recreate"}
+                                  </span>
+                                </button>
+                                <div className="stack-action-divider" />
+                                <button
+                                  onClick={() => {
+                                    handleDeleteContainer(container.id);
+                                    setOpenActionMenu(null);
+                                  }}
+                                  className="stack-action-item text-failed"
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faTrash}
+                                    className="h-3 w-3"
+                                  />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="stack-container-card-body">
+                        <span className="text-xs font-mono text-muted truncate">
+                          {container.image}:{container.tag}
+                        </span>
+                        <StatusBadge status={container.status} />
+                      </div>
+                    </div>
+                  ))}
+                  {canEdit(user) && !showCreateContainer && (
+                    <button
+                      onClick={() => setShowCreateContainer(true)}
+                      className="stack-container-card stack-container-card-add"
+                    >
+                      <span className="text-2xl text-muted">+</span>
+                      <span className="text-xs text-muted">Add Container</span>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
+          )}
 
-            {editingStack ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    id="edit-stack-name"
-                    label="Name"
-                    value={editStackName}
-                    onChange={(e) => setEditStackName(e.target.value)}
-                    required
-                  />
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-secondary uppercase tracking-wider">
-                      Worker
-                    </label>
-                    <select
-                      value={editStackWorkerId}
-                      onChange={(e) => setEditStackWorkerId(e.target.value)}
-                      className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none"
-                    >
-                      <option value="">Unassigned</option>
-                      {workers.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.name} ({w.hostname})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+          {/* ─── Compose Tab ────────────────────────────── */}
+          {activeTab === "compose" && (
+            <div className="card p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-medium text-primary">
+                  Docker Compose
+                </h2>
+              </div>
+              <p className="text-xs text-muted mb-3">
+                Edit the compose YAML and save to replace all containers with
+                the updated definition.
+              </p>
+              <CodeEditor
+                rows={22}
+                value={composeYaml}
+                onChange={setComposeYaml}
+                language="yaml"
+                envVars={parsedEnvVars}
+                placeholder={`version: "3"\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"`}
+              />
+              {composeError && (
+                <div className="mt-2">
+                  <Alert variant="error" onDismiss={() => setComposeError("")}>
+                    {composeError}
+                  </Alert>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-secondary uppercase tracking-wider">
-                    Description
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={editStackDescription}
-                    onChange={(e) => setEditStackDescription(e.target.value)}
-                    placeholder="Optional description..."
-                    className="w-full rounded-lg border border-border-strong bg-surface-elevated px-3 py-2 text-sm text-primary placeholder:text-muted focus:border-border-emphasis focus:outline-none resize-none"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-secondary uppercase tracking-wider">
-                      Deployment Strategy
-                    </label>
-                    <select
-                      value={editStackStrategy}
-                      onChange={(e) => setEditStackStrategy(e.target.value)}
-                      className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none"
-                    >
-                      <option value="rolling">Rolling</option>
-                      <option value="blue-green">Blue-Green</option>
-                      <option value="canary">Canary</option>
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-secondary uppercase tracking-wider">
-                      Auto Deploy
-                    </label>
-                    <div className="flex items-center h-9 gap-3">
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={editStackAutoDeploy}
-                        onClick={() =>
-                          setEditStackAutoDeploy(!editStackAutoDeploy)
-                        }
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                          editStackAutoDeploy
-                            ? "bg-info"
-                            : "bg-border-strong"
-                        }`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                            editStackAutoDeploy
-                              ? "translate-x-4"
-                              : "translate-x-0"
-                          }`}
-                        />
-                      </button>
-                      <span className="text-sm text-secondary">
-                        {editStackAutoDeploy ? "Enabled" : "Disabled"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-2">
+              )}
+              {canEdit(user) && (
+                <div className="mt-3 flex justify-between items-center">
                   <Button
                     size="sm"
-                    onClick={handleSaveStack}
-                    disabled={savingStack || !editStackName.trim()}
+                    variant="secondary"
+                    onClick={handleSyncCompose}
+                    disabled={
+                      syncingCompose || savingCompose || !composeYaml.trim()
+                    }
+                    title="Re-read the stored compose YAML and patch existing containers without recreating them"
                   >
-                    {savingStack ? "Saving..." : "Save Changes"}
+                    {syncingCompose ? "Syncing..." : "Sync Config"}
                   </Button>
                   <Button
-                    variant="ghost"
                     size="sm"
-                    onClick={handleCancelEditStack}
+                    onClick={handleSaveCompose}
+                    disabled={
+                      savingCompose || syncingCompose || !composeYaml.trim()
+                    }
                   >
-                    Cancel
+                    {savingCompose ? "Saving..." : "Save & Sync Containers"}
                   </Button>
                 </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-muted uppercase tracking-wider">
-                    Worker
-                  </p>
-                  <p className="text-sm text-secondary mt-1">
-                    {stack.worker_id ? (
-                      <WorkerBadge
-                        id={stack.worker_id}
-                        name={workerName(stack.worker_id)}
-                      />
-                    ) : (
-                      <span className="text-pending">Unassigned</span>
-                    )}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted uppercase tracking-wider">
-                    Strategy
-                  </p>
-                  <p className="text-sm text-secondary mt-1">
-                    {stack.deployment_strategy}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted uppercase tracking-wider">
-                    Auto Deploy
-                  </p>
-                  <p className="text-sm text-secondary mt-1">
-                    {stack.auto_deploy ? "Enabled" : "Disabled"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted uppercase tracking-wider">
-                    Created
-                  </p>
-                  <p className="text-sm text-secondary mt-1">
-                    {formatDate(stack.inserted_at)}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
-          {/* Stack Environment Variables */}
-          {showEnvVars && (
+          {/* ─── Environment Tab ────────────────────────── */}
+          {activeTab === "env" && (
             <div className="card p-5">
               <h2 className="text-sm font-medium text-primary mb-4">
                 Stack Environment Variables
@@ -980,384 +1359,78 @@ export default function StackDetailPage() {
             </div>
           )}
 
-          {/* Compose Editor */}
-          {showCompose && (
-            <div className="card p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-medium text-primary">
-                  Docker Compose
-                </h2>
-                <button
-                  onClick={() => setShowCompose(false)}
-                  className="text-muted hover:text-primary transition-colors"
-                  aria-label="Close compose editor"
-                >
-                  <FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />
-                </button>
+          {/* ─── Logs Tab ───────────────────────────────── */}
+          {activeTab === "logs" && (
+            <div className="panel">
+              <div className="panel-header">
+                <span>Container Logs</span>
+                <div className="panel-header-right">
+                  <select
+                    value={streamFilter}
+                    onChange={(e) => setStreamFilter(e.target.value)}
+                    className="bg-surface-elevated border border-border-strong text-foreground px-2 py-1 rounded-md text-xs cursor-pointer"
+                  >
+                    <option value="all">All streams</option>
+                    <option value="stdout">stdout</option>
+                    <option value="stderr">stderr</option>
+                  </select>
+                  <select
+                    value={selectedContainer ?? ""}
+                    onChange={(e) =>
+                      setSelectedContainer(
+                        e.target.value ? Number(e.target.value) : null,
+                      )
+                    }
+                    className="bg-surface-elevated border border-border-strong text-foreground px-2 py-1 rounded-md text-xs cursor-pointer"
+                  >
+                    <option value="">Select container...</option>
+                    {containers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedContainer && (
+                    <button
+                      onClick={() => loadLogs(selectedContainer, streamFilter)}
+                      className="text-xs text-info hover:text-info transition-colors cursor-pointer"
+                    >
+                      Refresh
+                    </button>
+                  )}
+                </div>
               </div>
-              <p className="text-xs text-muted mb-3">
-                Edit the compose YAML and save to replace all containers with
-                the updated definition.
-              </p>
-              <CodeEditor
-                rows={20}
-                value={composeYaml}
-                onChange={setComposeYaml}
-                language="yaml"
-                placeholder={`version: "3"\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"`}
-              />
-              {composeError && (
-                <div className="mt-2">
-                  <Alert variant="error" onDismiss={() => setComposeError("")}>
-                    {composeError}
-                  </Alert>
+              {!selectedContainer ? (
+                <div className="px-5 py-8 text-center text-sm text-muted">
+                  Select a container to view logs
                 </div>
-              )}
-              {canEdit(user) && (
-                <div className="mt-3 flex justify-between items-center">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={handleSyncCompose}
-                    disabled={
-                      syncingCompose || savingCompose || !composeYaml.trim()
-                    }
-                    title="Re-read the stored compose YAML and patch existing containers (health check, env, ports, etc.) without recreating them"
-                  >
-                    {syncingCompose ? "Syncing…" : "Sync Config"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveCompose}
-                    disabled={
-                      savingCompose || syncingCompose || !composeYaml.trim()
-                    }
-                  >
-                    {savingCompose ? "Saving..." : "Save & Sync Containers"}
-                  </Button>
+              ) : logsLoading ? (
+                <div className="px-5 py-8 text-center text-sm text-muted">
+                  Loading logs...
                 </div>
+              ) : (
+                <LogViewer
+                  logs={logs}
+                  logLimit={logLimit}
+                  onLimitChange={setLogLimit}
+                  onDownloadVisible={handleDownloadVisible}
+                  onDownloadLastRun={handleDownloadLastRun}
+                  onDownloadAll={handleDownloadAll}
+                  loading={logsLoading}
+                />
               )}
             </div>
           )}
-
-          {/* Containers */}
-          <div className="panel">
-            <div className="px-5 py-4 border-b border-border-subtle flex items-center justify-between">
-              <h2 className="text-sm font-medium text-primary">Containers</h2>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-muted">
-                  {containers.length} container
-                  {containers.length !== 1 ? "s" : ""}
-                </span>
-                {canEdit(user) && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => setShowCreateContainer(!showCreateContainer)}
-                  >
-                    {showCreateContainer ? "Cancel" : "Add Container"}
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {showCreateContainer && canEdit(user) && (
-              <form
-                onSubmit={handleCreateContainer}
-                className="px-5 py-4 border-b border-border-subtle bg-background-alt"
-              >
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-                  <Input
-                    id="new-container-name"
-                    label="Name"
-                    placeholder="my-service"
-                    value={newContainerName}
-                    onChange={(e) => setNewContainerName(e.target.value)}
-                    required
-                  />
-                  <Input
-                    id="new-container-image"
-                    label="Image"
-                    placeholder="nginx"
-                    value={newContainerImage}
-                    onChange={(e) => setNewContainerImage(e.target.value)}
-                    required
-                  />
-                  <Input
-                    id="new-container-tag"
-                    label="Tag"
-                    placeholder="latest"
-                    value={newContainerTag}
-                    onChange={(e) => setNewContainerTag(e.target.value)}
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={
-                    creatingContainer ||
-                    !newContainerName.trim() ||
-                    !newContainerImage.trim()
-                  }
-                >
-                  {creatingContainer ? "Creating..." : "Create Container"}
-                </Button>
-              </form>
-            )}
-
-            {containers.length === 0 ? (
-              <div className="px-5 py-8 text-center text-sm text-muted">
-                No containers in this stack
-              </div>
-            ) : (
-              containers.length > 0 && (
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border-subtle">
-                      <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                        Name
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                        Image
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                        Status
-                      </th>
-                      {canEdit(user) && (
-                        <th className="px-4 py-3 text-right text-xs font-medium text-secondary uppercase tracking-wider">
-                          Actions
-                        </th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {containers.map((container) => (
-                      <tr
-                        key={container.id}
-                        className="border-b border-border-subtle last:border-0"
-                      >
-                        <td className="px-4 py-3 text-sm font-medium">
-                          <Link
-                            href={`/containers/${container.id}`}
-                            className="text-primary hover:text-info transition-colors"
-                          >
-                            {container.name}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-secondary font-mono">
-                          {container.image}:{container.tag}
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusBadge status={container.status} />
-                        </td>
-                        {canEdit(user) && (
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-1">
-                              {(container.status === "stopped" ||
-                                container.status === "error") && (
-                                <button
-                                  onClick={() =>
-                                    handleContainerAction(container.id, "start")
-                                  }
-                                  disabled={
-                                    !workerOnline ||
-                                    !!actionLoading[`${container.id}-start`]
-                                  }
-                                  title={
-                                    !workerOnline
-                                      ? "Worker offline"
-                                      : "Start container"
-                                  }
-                                  className="px-2 py-1 text-xs text-healthy hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
-                                >
-                                  {actionLoading[`${container.id}-start`]
-                                    ? "..."
-                                    : "Start"}
-                                </button>
-                              )}
-                              {container.status === "paused" && (
-                                <button
-                                  onClick={() =>
-                                    handleContainerAction(
-                                      container.id,
-                                      "unpause",
-                                    )
-                                  }
-                                  disabled={
-                                    !workerOnline ||
-                                    !!actionLoading[`${container.id}-unpause`]
-                                  }
-                                  title={
-                                    !workerOnline
-                                      ? "Worker offline"
-                                      : "Resume container"
-                                  }
-                                  className="px-2 py-1 text-xs text-healthy hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
-                                >
-                                  {actionLoading[`${container.id}-unpause`]
-                                    ? "..."
-                                    : "Resume"}
-                                </button>
-                              )}
-                              {container.status === "running" && (
-                                <button
-                                  onClick={() =>
-                                    handleContainerAction(container.id, "restart")
-                                  }
-                                  disabled={
-                                    !workerOnline ||
-                                    !!actionLoading[`${container.id}-restart`]
-                                  }
-                                  title={
-                                    !workerOnline
-                                      ? "Worker offline"
-                                      : "Restart container"
-                                  }
-                                  className="px-2 py-1 text-xs text-info hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
-                                >
-                                  {actionLoading[`${container.id}-restart`]
-                                    ? "..."
-                                    : "Restart"}
-                                </button>
-                              )}
-                              {container.status === "running" && (
-                                <button
-                                  onClick={() =>
-                                    handleContainerAction(container.id, "stop")
-                                  }
-                                  disabled={
-                                    !workerOnline ||
-                                    !!actionLoading[`${container.id}-stop`]
-                                  }
-                                  title={
-                                    !workerOnline
-                                      ? "Worker offline"
-                                      : "Stop container"
-                                  }
-                                  className="px-2 py-1 text-xs text-pending hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
-                                >
-                                  {actionLoading[`${container.id}-stop`]
-                                    ? "..."
-                                    : "Stop"}
-                                </button>
-                              )}
-                              <button
-                                onClick={() =>
-                                  handleContainerAction(container.id, "recreate")
-                                }
-                                disabled={
-                                  !workerOnline ||
-                                  !!actionLoading[`${container.id}-recreate`]
-                                }
-                                title={
-                                  !workerOnline
-                                    ? "Worker offline"
-                                    : "Remove and recreate container from config"
-                                }
-                                className="px-2 py-1 text-xs text-violet hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
-                              >
-                                {actionLoading[`${container.id}-recreate`]
-                                  ? "..."
-                                  : "Recreate"}
-                              </button>
-                              <a
-                                href={`/containers/${container.id}`}
-                                title="Edit container config"
-                                className="px-2 py-1 text-xs text-secondary hover:bg-surface-elevated hover:text-primary rounded transition-colors"
-                              >
-                                Edit
-                              </a>
-                              <button
-                                onClick={() =>
-                                  handleDeleteContainer(container.id)
-                                }
-                                title="Delete container"
-                                className="px-2 py-1 text-xs text-failed hover:bg-surface-elevated rounded transition-colors"
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )
-            )}
-          </div>
-
-          {/* Container Logs */}
-          <div className="panel">
-            <div className="px-5 py-4 border-b border-border-subtle flex items-center justify-between">
-              <h2 className="text-sm font-medium text-primary">
-                Container Logs
-              </h2>
-              <div className="flex items-center gap-2">
-                <select
-                  value={streamFilter}
-                  onChange={(e) => setStreamFilter(e.target.value)}
-                  className="bg-surface-elevated border border-border-strong text-foreground px-2 py-1 rounded-md text-xs cursor-pointer"
-                >
-                  <option value="all">All streams</option>
-                  <option value="stdout">stdout</option>
-                  <option value="stderr">stderr</option>
-                </select>
-                <select
-                  value={selectedContainer ?? ""}
-                  onChange={(e) =>
-                    setSelectedContainer(
-                      e.target.value ? Number(e.target.value) : null,
-                    )
-                  }
-                  className="bg-surface-elevated border border-border-strong text-foreground px-2 py-1 rounded-md text-xs cursor-pointer"
-                >
-                  <option value="">Select container...</option>
-                  {containers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                {selectedContainer && (
-                  <button
-                    onClick={() => loadLogs(selectedContainer, streamFilter)}
-                    className="text-xs text-info hover:text-info transition-colors cursor-pointer"
-                  >
-                    Refresh
-                  </button>
-                )}
-              </div>
-            </div>
-            {!selectedContainer ? (
-              <div className="px-5 py-8 text-center text-sm text-muted">
-                Select a container to view logs
-              </div>
-            ) : logsLoading ? (
-              <div className="px-5 py-8 text-center text-sm text-muted">
-                Loading logs...
-              </div>
-            ) : (
-              <LogViewer
-                logs={logs}
-                logLimit={logLimit}
-                onLimitChange={setLogLimit}
-                onDownloadVisible={handleDownloadVisible}
-                onDownloadLastRun={handleDownloadLastRun}
-                onDownloadAll={handleDownloadAll}
-                loading={logsLoading}
-              />
-            )}
-          </div>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          <div className="card p-5">
-            <h2 className="text-sm font-medium text-primary mb-4">
-              Deployment History
-            </h2>
-            <div className="space-y-2">
+        {/* ─── Sidebar: Deployments ─────────────────────────────── */}
+        <div className="space-y-5">
+          <div className="panel">
+            <div className="panel-header">
+              <span>Deployment History</span>
+              <span className="muted">{deployments.length}</span>
+            </div>
+            <div className="p-3 space-y-1.5">
               {deployments.length === 0 ? (
                 <p className="text-xs text-muted text-center py-4">
                   No deployments yet
@@ -1367,21 +1440,30 @@ export default function StackDetailPage() {
                   <button
                     key={d.id}
                     onClick={() => loadDeploymentLogs(d.id)}
-                    className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-left transition-colors ${
-                      selectedDeployment === d.id
-                        ? "bg-[#1e1e1e] border border-border-strong"
-                        : "bg-surface-elevated hover:bg-surface-active border border-transparent"
-                    }`}
+                    className={`stack-deploy-item ${selectedDeployment === d.id ? "active" : ""}`}
                   >
-                    <div>
-                      <StatusBadge status={d.status} />
-                      <p className="text-xs text-muted mt-1">
-                        {d.strategy} #{d.id}
-                      </p>
+                    <div className="flex items-center gap-2.5">
+                      <FontAwesomeIcon
+                        icon={
+                          d.status === "deployed"
+                            ? faCircleCheck
+                            : d.status === "failed"
+                              ? faCircleXmark
+                              : faRotateRight
+                        }
+                        className={`h-3.5 w-3.5 ${d.status === "deployed" ? "text-healthy" : d.status === "failed" ? "text-failed" : "text-pending"}`}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-primary">
+                          {d.strategy}{" "}
+                          <span className="text-muted">#{d.id}</span>
+                        </p>
+                        <p className="text-[11px] text-muted">
+                          {timeAgo(d.inserted_at)}
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-xs text-muted">
-                      {timeAgo(d.inserted_at)}
-                    </p>
+                    <StatusBadge status={d.status} />
                   </button>
                 ))
               )}
@@ -1390,51 +1472,49 @@ export default function StackDetailPage() {
 
           {/* Deployment Logs */}
           {selectedDeployment && (
-            <div className="card p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-medium text-primary">
-                  Deployment #{selectedDeployment} Logs
-                </h2>
-                <button
-                  onClick={() => loadDeploymentLogs(selectedDeployment)}
-                  className="text-xs text-muted hover:text-secondary transition-colors"
-                >
-                  Refresh
-                </button>
-              </div>
-              {deploymentLogsLoading ? (
-                <p className="text-xs text-muted text-center py-4">
-                  Loading logs...
-                </p>
-              ) : deploymentLogs.length === 0 ? (
-                <p className="text-xs text-muted text-center py-4">
-                  No logs yet
-                </p>
-              ) : (
-                <div className="space-y-1 max-h-[500px] overflow-y-auto font-mono text-xs">
-                  {deploymentLogs.map((log) => (
-                    <div
-                      key={log.id}
-                      className={`flex gap-2 px-2 py-1 rounded ${
-                        log.level === "error"
-                          ? "bg-red-950/30 text-red-400"
-                          : "text-secondary"
-                      }`}
-                    >
-                      <span className="text-dimmed shrink-0 tabular-nums">
-                        {new Date(log.recorded_at).toLocaleTimeString()}
-                      </span>
-                      {log.stage && (
-                        <span className="text-muted shrink-0">
-                          [{log.stage}]
-                        </span>
-                      )}
-                      <span className="break-all">{log.message}</span>
-                    </div>
-                  ))}
-                  <div ref={deploymentLogsEndRef} />
+            <div className="panel">
+              <div className="panel-header">
+                <span>Deploy #{selectedDeployment}</span>
+                <div className="panel-header-right">
+                  <button
+                    onClick={() => loadDeploymentLogs(selectedDeployment)}
+                    className="text-xs text-muted hover:text-secondary transition-colors"
+                  >
+                    Refresh
+                  </button>
                 </div>
-              )}
+              </div>
+              <div className="p-3">
+                {deploymentLogsLoading ? (
+                  <p className="text-xs text-muted text-center py-4">
+                    Loading logs...
+                  </p>
+                ) : deploymentLogs.length === 0 ? (
+                  <p className="text-xs text-muted text-center py-4">
+                    No logs yet
+                  </p>
+                ) : (
+                  <div className="space-y-0.5 max-h-[500px] overflow-y-auto font-mono text-xs">
+                    {deploymentLogs.map((log) => (
+                      <div
+                        key={log.id}
+                        className={`flex gap-2 px-2 py-1 rounded ${log.level === "error" ? "bg-red-950/30 text-red-400" : "text-secondary"}`}
+                      >
+                        <span className="text-dimmed shrink-0 tabular-nums">
+                          {new Date(log.recorded_at).toLocaleTimeString()}
+                        </span>
+                        {log.stage && (
+                          <span className="text-muted shrink-0">
+                            [{log.stage}]
+                          </span>
+                        )}
+                        <span className="break-all">{log.message}</span>
+                      </div>
+                    ))}
+                    <div ref={deploymentLogsEndRef} />
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

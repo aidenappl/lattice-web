@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback, KeyboardEvent, useMemo, UIEvent } from "react";
+import { useRef, useCallback, KeyboardEvent, useMemo, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 const PAIRS: Record<string, string> = {
@@ -16,20 +16,29 @@ const CLOSE_CHARS = new Set(Object.values(PAIRS));
 
 const TAB = "  ";
 
-// ─── JSON syntax highlighting ────────────────────────────────────────────────
+// ─── Shared typography for pixel-perfect overlay alignment ───────────────────
 
-function highlightJSON(text: string): string {
-  if (!text) return "";
-  // Escape HTML first
-  const escaped = text
+const SHARED_STYLES =
+  "px-3 py-2 text-sm font-mono leading-5 whitespace-pre-wrap break-words";
+
+// ─── Syntax highlighting ─────────────────────────────────────────────────────
+
+function escapeHtml(text: string): string {
+  return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+function highlightJSON(text: string): string {
+  if (!text) return "";
+  const escaped = escapeHtml(text);
 
   return (
     escaped
-      // Strings (keys and values) — must come first
+      // Keys
       .replace(/("(?:[^"\\]|\\.)*")\s*:/g, '<span class="json-key">$1</span>:')
+      // String values after colon
       .replace(
         /:\s*("(?:[^"\\]|\\.)*")/g,
         ': <span class="json-string">$1</span>',
@@ -51,10 +60,7 @@ function highlightJSON(text: string): string {
 
 function highlightYAML(text: string): string {
   if (!text) return "";
-  const escaped = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  const escaped = escapeHtml(text);
 
   return escaped
     .split("\n")
@@ -63,13 +69,49 @@ function highlightYAML(text: string): string {
       if (/^\s*#/.test(line)) {
         return `<span class="yaml-comment">${line}</span>`;
       }
-      // Key: value
-      return line.replace(
-        /^(\s*)([\w.-]+)(:)/,
-        '$1<span class="yaml-key">$2</span><span class="yaml-colon">$3</span>',
-      );
+
+      // Split line into key portion and value portion at the first colon
+      const keyMatch = line.match(/^(\s*)([\w.-]+)(:)(.*)/);
+      if (!keyMatch) {
+        // No key — could be a list item or plain value
+        return highlightYAMLValue(line);
+      }
+
+      const [, indent, key, colon, rest] = keyMatch;
+      const keyHtml = `${indent}<span class="yaml-key">${key}</span><span class="yaml-colon">${colon}</span>`;
+      // Highlight the value portion (after the colon) — safe since no HTML tags in it yet
+      return keyHtml + highlightYAMLValue(rest);
     })
     .join("\n");
+}
+
+function highlightYAMLValue(text: string): string {
+  // Double-quoted strings (on escaped HTML, quotes become &quot;)
+  let result = text.replace(
+    /&quot;((?:[^&]|&(?!quot;))*)&quot;/g,
+    '<span class="yaml-string">&quot;$1&quot;</span>',
+  );
+  // Regular double-quoted strings (in case escapeHtml didn't convert them)
+  result = result.replace(
+    /"([^"\\]|\\.)*"/g,
+    '<span class="yaml-string">$&</span>',
+  );
+  // Single-quoted strings
+  result = result.replace(
+    /'([^'\\]|\\.)*'/g,
+    '<span class="yaml-string">$&</span>',
+  );
+  // Booleans & null
+  result = result.replace(
+    /\b(true|false|yes|no|null|~)\b/gi,
+    '<span class="yaml-bool">$1</span>',
+  );
+  // Numbers (standalone)
+  result = result.replace(
+    /(?<=\s|^)(-?\d+(?:\.\d+)?)(?=\s|$)/g,
+    '<span class="yaml-number">$1</span>',
+  );
+  return result;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -96,22 +138,23 @@ export function CodeEditor({
   const ref = useRef<HTMLTextAreaElement>(null);
   const preRef = useRef<HTMLPreElement>(null);
 
-  const handleScroll = useCallback((e: UIEvent<HTMLTextAreaElement>) => {
-    if (preRef.current) {
-      preRef.current.scrollTop = e.currentTarget.scrollTop;
-      preRef.current.scrollLeft = e.currentTarget.scrollLeft;
+  const syncScroll = useCallback(() => {
+    if (preRef.current && ref.current) {
+      preRef.current.scrollTop = ref.current.scrollTop;
+      preRef.current.scrollLeft = ref.current.scrollLeft;
     }
   }, []);
+
+  // Re-sync scroll whenever value changes (content reflow can shift positions)
+  useEffect(() => {
+    syncScroll();
+  }, [value, syncScroll]);
 
   const highlighted = useMemo(() => {
     let html: string;
     if (language === "json") html = highlightJSON(value);
     else if (language === "yaml") html = highlightYAML(value);
-    else
-      html = value
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
+    else html = escapeHtml(value);
 
     if (envVars !== undefined) {
       html = html.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, key) => {
@@ -124,35 +167,56 @@ export function CodeEditor({
     return html;
   }, [value, language, envVars]);
 
+  // Insert text via execCommand to preserve the browser's native undo stack.
+  // Falls back to direct value manipulation if execCommand is unavailable.
+  const nativeInsert = useCallback(
+    (ta: HTMLTextAreaElement, text: string) => {
+      ta.focus();
+      // execCommand('insertText') pushes onto the undo stack
+      if (!document.execCommand("insertText", false, text)) {
+        // Fallback: direct set (loses undo)
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const next = ta.value.slice(0, start) + text + ta.value.slice(end);
+        onChange(next);
+        requestAnimationFrame(() => {
+          ta.selectionStart = start + text.length;
+          ta.selectionEnd = start + text.length;
+        });
+      } else {
+        // execCommand already updated the DOM; fire onChange to sync React state
+        onChange(ta.value);
+      }
+    },
+    [onChange],
+  );
+
   const insert = useCallback(
     (ta: HTMLTextAreaElement, before: string, after: string = "") => {
       const start = ta.selectionStart;
       const end = ta.selectionEnd;
-      const val = ta.value;
 
       if (start !== end && after) {
-        // Surround selection
-        const selected = val.slice(start, end);
-        const next =
-          val.slice(0, start) + before + selected + after + val.slice(end);
-        onChange(next);
+        const selected = ta.value.slice(start, end);
+        const replacement = before + selected + after;
+        // Select the range to replace, then insert
+        ta.setSelectionRange(start, end);
+        nativeInsert(ta, replacement);
         requestAnimationFrame(() => {
           ta.selectionStart = start + before.length;
           ta.selectionEnd = end + before.length;
-          ta.focus();
         });
       } else {
-        // Insert pair at cursor
-        const next = val.slice(0, start) + before + after + val.slice(end);
-        onChange(next);
+        const replacement = before + after;
+        ta.setSelectionRange(start, end);
+        nativeInsert(ta, replacement);
         requestAnimationFrame(() => {
           ta.selectionStart = start + before.length;
           ta.selectionEnd = start + before.length;
-          ta.focus();
         });
       }
     },
-    [onChange],
+    [nativeInsert],
   );
 
   const handleKeyDown = useCallback(
@@ -167,27 +231,22 @@ export function CodeEditor({
       if (e.key === "Tab") {
         e.preventDefault();
         if (e.shiftKey) {
-          // Dedent current line
           const lineStart = val.lastIndexOf("\n", start - 1) + 1;
           const linePrefix = val.slice(lineStart, lineStart + TAB.length);
           if (linePrefix === TAB) {
-            const next =
-              val.slice(0, lineStart) + val.slice(lineStart + TAB.length);
-            onChange(next);
+            ta.setSelectionRange(lineStart, lineStart + TAB.length);
+            nativeInsert(ta, "");
             requestAnimationFrame(() => {
               ta.selectionStart = Math.max(lineStart, start - TAB.length);
               ta.selectionEnd = Math.max(lineStart, end - TAB.length);
-              ta.focus();
             });
           }
         } else {
-          // Indent
-          const next = val.slice(0, start) + TAB + val.slice(end);
-          onChange(next);
+          ta.setSelectionRange(start, end);
+          nativeInsert(ta, TAB);
           requestAnimationFrame(() => {
             ta.selectionStart = start + TAB.length;
             ta.selectionEnd = start + TAB.length;
-            ta.focus();
           });
         }
         return;
@@ -208,18 +267,15 @@ export function CodeEditor({
           charBefore in PAIRS &&
           charAfter === PAIRS[charBefore]
         ) {
-          // Cursor between pair e.g. {|} → expand to 3 lines
           const deeper = indent + TAB;
           insertion = "\n" + deeper + "\n" + indent;
-          const next = val.slice(0, start) + insertion + val.slice(end);
-          onChange(next);
+          ta.setSelectionRange(start, end);
+          nativeInsert(ta, insertion);
           requestAnimationFrame(() => {
             ta.selectionStart = start + 1 + deeper.length;
             ta.selectionEnd = start + 1 + deeper.length;
-            ta.focus();
           });
         } else {
-          // Auto-indent: match current line indent, add extra after { [ :
           const extra =
             charBefore === "{" ||
             charBefore === "[" ||
@@ -227,12 +283,11 @@ export function CodeEditor({
               ? TAB
               : "";
           insertion = "\n" + indent + extra;
-          const next = val.slice(0, start) + insertion + val.slice(end);
-          onChange(next);
+          ta.setSelectionRange(start, end);
+          nativeInsert(ta, insertion);
           requestAnimationFrame(() => {
             ta.selectionStart = start + insertion.length;
             ta.selectionEnd = start + insertion.length;
-            ta.focus();
           });
         }
         return;
@@ -248,12 +303,11 @@ export function CodeEditor({
           charAfter === PAIRS[charBefore]
         ) {
           e.preventDefault();
-          const next = val.slice(0, start - 1) + val.slice(start + 1);
-          onChange(next);
+          ta.setSelectionRange(start - 1, start + 1);
+          nativeInsert(ta, "");
           requestAnimationFrame(() => {
             ta.selectionStart = start - 1;
             ta.selectionEnd = start - 1;
-            ta.focus();
           });
           return;
         }
@@ -264,7 +318,6 @@ export function CodeEditor({
         const close = PAIRS[e.key];
         const isQuote = e.key === '"' || e.key === "'" || e.key === "`";
 
-        // Skip over closing char if already there
         if (isQuote && !hasSelection && val[start] === e.key) {
           e.preventDefault();
           requestAnimationFrame(() => {
@@ -293,7 +346,7 @@ export function CodeEditor({
         return;
       }
     },
-    [onChange, insert, language],
+    [nativeInsert, insert, language],
   );
 
   return (
@@ -307,7 +360,8 @@ export function CodeEditor({
       <pre
         ref={preRef}
         aria-hidden
-        className="absolute inset-0 px-3 py-2 text-sm font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none m-0 [&_.json-key]:text-[#7aa2f7] [&_.json-string]:text-[#9ece6a] [&_.json-number]:text-[#ff9e64] [&_.json-bool]:text-[#ff9e64] [&_.yaml-key]:text-[#7aa2f7] [&_.yaml-colon]:text-muted [&_.yaml-comment]:text-muted [&_.env-var-defined]:text-healthy [&_.env-var-defined]:font-semibold [&_.env-var-missing]:text-failed [&_.env-var-missing]:font-semibold"
+        className={`absolute inset-0 ${SHARED_STYLES} overflow-hidden pointer-events-none m-0 [&_.json-key]:text-[#7aa2f7] [&_.json-string]:text-[#9ece6a] [&_.json-number]:text-[#ff9e64] [&_.json-bool]:text-[#ff9e64] [&_.yaml-key]:text-[#7aa2f7] [&_.yaml-colon]:text-muted [&_.yaml-comment]:text-muted [&_.yaml-string]:text-[#9ece6a] [&_.yaml-bool]:text-[#ff9e64] [&_.yaml-number]:text-[#ff9e64] [&_.env-var-defined]:text-healthy [&_.env-var-defined]:font-semibold [&_.env-var-missing]:text-failed [&_.env-var-missing]:font-semibold`}
+        style={{ tabSize: 2 }}
         dangerouslySetInnerHTML={{ __html: highlighted + "\n" }}
       />
       {/* Transparent textarea on top for editing */}
@@ -317,10 +371,11 @@ export function CodeEditor({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        onScroll={handleScroll}
+        onScroll={syncScroll}
         placeholder={placeholder}
         spellCheck={false}
-        className="relative w-full bg-transparent px-3 py-2 text-sm text-transparent caret-white placeholder:text-muted focus:outline-none font-mono resize-none selection:bg-[#264f78] selection:text-transparent"
+        style={{ tabSize: 2 }}
+        className={`relative w-full bg-transparent ${SHARED_STYLES} text-transparent caret-white placeholder:text-muted focus:outline-none resize-none selection:bg-[#264f78] selection:text-[#e4e4e7]`}
       />
     </div>
   );
