@@ -226,36 +226,34 @@ export default function ContainersPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-primary">Containers</h1>
-          <p className="text-sm text-secondary mt-1">
+      {/* Page header */}
+      <div className="page-header">
+        <div className="flex-1">
+          <div className="page-title">Containers</div>
+          <div className="page-subtitle">
             {containers.length} container{containers.length !== 1 ? "s" : ""}{" "}
             across all stacks
-          </p>
+          </div>
         </div>
-        <button
-          onClick={load}
-          className="inline-flex items-center justify-center font-medium rounded-lg transition-colors cursor-pointer focus:outline-none border border-border-strong bg-surface text-primary hover:bg-surface-active h-8 px-3.5 text-sm gap-1.5"
-        >
+        <button onClick={load} className="btn btn-secondary">
           <FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />
           Refresh
         </button>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="filters-bar">
         <input
           type="text"
-          placeholder="Search by name or image…"
+          placeholder="Search by name or image..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="h-8 rounded-lg border border-border-strong bg-surface px-3 text-sm text-primary placeholder-[#555555] focus:border-[#3b82f6] focus:outline-none w-56"
+          className="form-input w-56 !h-8 !text-sm"
         />
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="h-8 rounded-lg border border-border-strong bg-surface px-3 text-sm text-primary focus:border-[#3b82f6] focus:outline-none cursor-pointer"
+          className="form-select !h-8 !w-auto !text-sm cursor-pointer"
         >
           <option value="all">All statuses</option>
           <option value="running">Running</option>
@@ -268,7 +266,7 @@ export default function ContainersPage() {
           <select
             value={filterStack}
             onChange={(e) => setFilterStack(e.target.value)}
-            className="h-8 rounded-lg border border-border-strong bg-surface px-3 text-sm text-primary focus:border-[#3b82f6] focus:outline-none cursor-pointer"
+            className="form-select !h-8 !w-auto !text-sm cursor-pointer"
           >
             <option value="all">All stacks</option>
             {stacks.map((s) => (
@@ -282,7 +280,7 @@ export default function ContainersPage() {
           <select
             value={filterWorker}
             onChange={(e) => setFilterWorker(e.target.value)}
-            className="h-8 rounded-lg border border-border-strong bg-surface px-3 text-sm text-primary focus:border-[#3b82f6] focus:outline-none cursor-pointer"
+            className="form-select !h-8 !w-auto !text-sm cursor-pointer"
           >
             <option value="all">All workers</option>
             {workers.map((w) => (
@@ -294,45 +292,28 @@ export default function ContainersPage() {
         )}
       </div>
 
+      <div className="p-6">
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-border-subtle bg-surface p-12 text-center">
+        <div className="card p-12 text-center">
           <p className="text-sm text-muted">No containers found</p>
         </div>
       ) : (
-        <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
-          <table className="w-full">
+        <div className="panel">
+          <table className="data-table">
             <thead>
-              <tr className="border-b border-border-subtle">
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden sm:table-cell">
-                  Health
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden md:table-cell">
-                  Stack
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden lg:table-cell">
-                  Worker
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden lg:table-cell">
-                  Image
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden xl:table-cell">
-                  Ports
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden xl:table-cell">
-                  Updated
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase tracking-wider">
-                  Actions
-                </th>
+              <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th className="hidden sm:table-cell">Health</th>
+                <th className="hidden md:table-cell">Stack</th>
+                <th className="hidden lg:table-cell">Worker</th>
+                <th className="hidden lg:table-cell">Image</th>
+                <th className="hidden xl:table-cell">Ports</th>
+                <th className="hidden xl:table-cell">Updated</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#141414]">
+            <tbody>
               {filtered.map((c) => {
                 const stack = stackMap[c.stack_id];
                 const worker = stack?.worker_id
@@ -350,7 +331,7 @@ export default function ContainersPage() {
                     <td className="px-4 py-3">
                       <Link
                         href={`/containers/${c.id}`}
-                        className="text-sm font-medium text-primary hover:text-[#3b82f6] transition-colors"
+                        className="text-sm font-medium text-primary hover:text-info transition-colors"
                       >
                         {c.name}
                       </Link>
@@ -403,7 +384,7 @@ export default function ContainersPage() {
                     </td>
                     <td className="px-4 py-3 hidden xl:table-cell">
                       <span
-                        className={`text-xs ${!workerOnline ? "text-[#7c3a00]" : "text-muted"}`}
+                        className={`text-xs ${!workerOnline ? "text-pending" : "text-muted"}`}
                       >
                         {timeAgo(c.updated_at)}
                       </span>
@@ -416,7 +397,7 @@ export default function ContainersPage() {
                             onClick={() => runAction(c.id, "start")}
                             disabled={!!busy || !workerOnline}
                             title={!workerOnline ? "Worker offline" : "Start container"}
-                            className="h-7 w-7 rounded flex items-center justify-center text-[#22c55e] hover:bg-[#22c55e]/10 disabled:opacity-40 transition-colors cursor-pointer"
+                            className="h-7 w-7 rounded flex items-center justify-center text-healthy hover:bg-healthy/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "start" ? (
                               <FontAwesomeIcon
@@ -437,7 +418,7 @@ export default function ContainersPage() {
                             onClick={() => runAction(c.id, "unpause")}
                             disabled={!!busy || !workerOnline}
                             title={!workerOnline ? "Worker offline" : "Resume container"}
-                            className="h-7 w-7 rounded flex items-center justify-center text-[#22c55e] hover:bg-[#22c55e]/10 disabled:opacity-40 transition-colors cursor-pointer"
+                            className="h-7 w-7 rounded flex items-center justify-center text-healthy hover:bg-healthy/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "unpause" ? (
                               <FontAwesomeIcon
@@ -458,7 +439,7 @@ export default function ContainersPage() {
                             onClick={() => confirmAndRun(c.id, "stop")}
                             disabled={!!busy || !workerOnline}
                             title={!workerOnline ? "Worker offline" : "Stop container"}
-                            className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-[#ef4444] hover:bg-[#ef4444]/10 disabled:opacity-40 transition-colors cursor-pointer"
+                            className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-failed hover:bg-failed/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "stop" ? (
                               <FontAwesomeIcon
@@ -479,7 +460,7 @@ export default function ContainersPage() {
                             onClick={() => confirmAndRun(c.id, "restart")}
                             disabled={!!busy || !workerOnline}
                             title={!workerOnline ? "Worker offline" : "Restart container"}
-                            className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-[#3b82f6] hover:bg-[#3b82f6]/10 disabled:opacity-40 transition-colors cursor-pointer"
+                            className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-info hover:bg-info/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "restart" ? (
                               <FontAwesomeIcon
@@ -499,7 +480,7 @@ export default function ContainersPage() {
                           onClick={() => confirmAndRun(c.id, "recreate")}
                           disabled={!!busy || !workerOnline}
                           title={!workerOnline ? "Worker offline" : "Remove and recreate container from config"}
-                          className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-[#a855f7] hover:bg-[#a855f7]/10 disabled:opacity-40 transition-colors cursor-pointer"
+                          className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-violet hover:bg-violet/10 disabled:opacity-40 transition-colors cursor-pointer"
                         >
                           {busy === "recreate" ? (
                             <FontAwesomeIcon
@@ -533,6 +514,7 @@ export default function ContainersPage() {
           </table>
         </div>
       )}
+      </div>
     </div>
   );
 }

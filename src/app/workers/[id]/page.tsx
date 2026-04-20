@@ -56,9 +56,9 @@ function formatUptime(seconds: number): string {
 }
 
 function barColor(pct: number): string {
-  if (pct > 90) return "bg-[#ef4444]";
+  if (pct > 90) return "bg-failed";
   if (pct > 70) return "bg-[#eab308]";
-  return "bg-[#3b82f6]";
+  return "bg-info";
 }
 
 function sparkColor(pct: number): string {
@@ -455,11 +455,11 @@ export default function WorkerDetailPage() {
     );
 
   return (
-    <div>
+    <div className="p-6">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-primary">{worker.name}</h1>
+          <h1 className="page-title text-xl">{worker.name}</h1>
           <StatusBadge status={worker.status} />
         </div>
         {!editing && (
@@ -487,7 +487,7 @@ export default function WorkerDetailPage() {
 
       {/* Edit form */}
       {editing && canEdit(user) && (
-        <div className="rounded-xl border border-border-subtle bg-surface p-5 mb-6">
+        <div className="card p-5 mb-6">
           <h2 className="text-sm font-medium text-primary mb-4">Edit Worker</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <Input
@@ -526,7 +526,7 @@ export default function WorkerDetailPage() {
 
       {/* Worker Actions */}
       {canEdit(user) && worker.status === "online" && (
-        <div className="rounded-xl border border-border-subtle bg-surface p-5 mb-6">
+        <div className="card p-5 mb-6">
           <h2 className="text-sm font-medium text-primary mb-4">
             Worker Actions
           </h2>
@@ -578,7 +578,7 @@ export default function WorkerDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Info + Metrics */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-xl border border-border-subtle bg-surface p-5">
+          <div className="card p-5">
             <h2 className="text-sm font-medium text-primary mb-4">Worker Info</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -590,7 +590,7 @@ export default function WorkerDetailPage() {
                     href={`http://${worker.hostname}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-[#3b82f6] hover:underline mt-1 font-mono block break-all"
+                    className="text-sm text-info hover:underline mt-1 font-mono block break-all"
                   >
                     {worker.hostname}
                   </a>
@@ -631,7 +631,7 @@ export default function WorkerDetailPage() {
                     {worker.runner_version ?? "Unknown"}
                   </p>
                   {latestRunner && worker.runner_version && worker.runner_version !== latestRunner && (
-                    <span className="rounded-md bg-[#eab308]/10 border border-[#eab308]/30 px-2 py-0.5 text-[10px] font-medium text-[#eab308]">
+                    <span className="rounded-md bg-[#eab308]/10 border border-[#eab308]/30 px-2 py-0.5 text-[10px] font-medium text-pending">
                       {latestRunner} available
                     </span>
                   )}
@@ -668,7 +668,7 @@ export default function WorkerDetailPage() {
 
           {/* Metrics */}
           {latestMetric && (
-            <div className="rounded-xl border border-border-subtle bg-surface p-5">
+            <div className="card p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <h2 className="text-sm font-medium text-primary">
@@ -676,8 +676,8 @@ export default function WorkerDetailPage() {
                   </h2>
                   {worker.status === "online" && (
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#22c55e] opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#22c55e]" />
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-healthy opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-healthy" />
                     </span>
                   )}
                 </div>
@@ -696,7 +696,7 @@ export default function WorkerDetailPage() {
                       ? `${latestMetric.cpu_cores} cores`
                       : undefined
                   }
-                  color="text-[#3b82f6]"
+                  color="text-info"
                   percent={latestMetric.cpu_percent ?? undefined}
                 />
                 {cpuHistory.length >= 2 && (
@@ -715,7 +715,7 @@ export default function WorkerDetailPage() {
                       ? `${Math.round(latestMetric.memory_used_mb)} / ${Math.round(latestMetric.memory_total_mb)} MB`
                       : "-"
                   }
-                  color="text-[#a855f7]"
+                  color="text-violet"
                   percent={
                     latestMetric.memory_used_mb != null &&
                     latestMetric.memory_total_mb
@@ -741,7 +741,7 @@ export default function WorkerDetailPage() {
                         )
                       : "-"
                   }
-                  color="text-[#eab308]"
+                  color="text-pending"
                   percent={
                     latestMetric.disk_used_mb != null &&
                     latestMetric.disk_total_mb
@@ -759,7 +759,7 @@ export default function WorkerDetailPage() {
                       : `${latestMetric.container_count ?? "-"}`
                   }
                   sub="running / total"
-                  color="text-[#22c55e]"
+                  color="text-healthy"
                 />
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -823,7 +823,7 @@ export default function WorkerDetailPage() {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Associated Stacks */}
-          <div className="rounded-xl border border-border-subtle bg-surface p-5">
+          <div className="card p-5">
             <h2 className="text-sm font-medium text-primary mb-4">
               Associated Stacks
             </h2>
@@ -894,7 +894,7 @@ export default function WorkerDetailPage() {
                           )}
                           <Link
                             href={`/stacks/${stack.id}`}
-                            className="block text-xs text-[#3b82f6] hover:underline px-2 py-1"
+                            className="block text-xs text-info hover:underline px-2 py-1"
                           >
                             View stack &rarr;
                           </Link>
@@ -909,7 +909,7 @@ export default function WorkerDetailPage() {
 
           {/* Docker Volumes */}
           {worker.status === "online" && (
-            <div className="rounded-xl border border-border-subtle bg-surface p-5">
+            <div className="card p-5">
               <h2 className="text-sm font-medium text-primary mb-4">
                 Volumes
               </h2>
@@ -978,7 +978,7 @@ export default function WorkerDetailPage() {
 
           {/* Docker Networks */}
           {worker.status === "online" && (
-            <div className="rounded-xl border border-border-subtle bg-surface p-5">
+            <div className="card p-5">
               <h2 className="text-sm font-medium text-primary mb-4">
                 Networks
               </h2>
@@ -1051,7 +1051,7 @@ export default function WorkerDetailPage() {
           )}
 
           {/* Worker Tokens */}
-          <div className="rounded-xl border border-border-subtle bg-surface p-5">
+          <div className="card p-5">
             <h2 className="text-sm font-medium text-primary mb-4">
               Worker Tokens
             </h2>
@@ -1076,8 +1076,8 @@ export default function WorkerDetailPage() {
             )}
 
             {createdToken && (
-              <div className="mb-4 rounded-lg border border-[#22c55e]/30 bg-[#22c55e]/5 p-3">
-                <p className="text-xs text-[#22c55e] mb-1 font-medium">
+              <div className="mb-4 rounded-lg border border-[#22c55e]/30 bg-healthy/5 p-3">
+                <p className="text-xs text-healthy mb-1 font-medium">
                   Token created — copy it now, it won&apos;t be shown again:
                 </p>
                 <p className="text-xs text-primary font-mono break-all select-all">

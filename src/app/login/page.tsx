@@ -34,14 +34,13 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md">
-        <div className="rounded-xl border border-border-subtle bg-surface p-8 shadow-2xl">
+    <div className="login-page">
+      <div className="login-card">
           {/* Logo */}
           <div className="flex items-center justify-center gap-3.5 mb-8">
             <Logo size="md" />
             <div className="flex flex-col leading-none">
-              <span className="text-xl font-semibold text-primary tracking-tight">
+              <span className="page-title text-xl tracking-tight">
                 Lattice
               </span>
               <span className="text-xs text-muted font-medium">
@@ -93,11 +92,10 @@ export default function LoginPage() {
           {/* OAuth */}
           <a
             href={`${API_URL}/forta/login`}
-            className="flex h-10 w-full items-center justify-center rounded-lg border border-border-strong bg-surface-elevated px-4 text-sm font-medium text-primary transition-colors hover:bg-surface-active hover:border-border-strong"
+            className="btn btn-secondary w-full justify-center !h-10"
           >
             Sign in with Forta
           </a>
-        </div>
       </div>
     </div>
   );

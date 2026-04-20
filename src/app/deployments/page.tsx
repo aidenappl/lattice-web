@@ -55,18 +55,19 @@ export default function DeploymentsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-primary">Deployments</h1>
-          <p className="text-sm text-secondary mt-1">
+      {/* Page header */}
+      <div className="page-header">
+        <div className="flex-1">
+          <div className="page-title">Deployments</div>
+          <div className="page-subtitle">
             Track deployment history and status
-          </p>
+          </div>
         </div>
         <div className="flex gap-2">
           <select
             value={stackFilter}
             onChange={(e) => setStackFilter(e.target.value)}
-            className="h-9 rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
+            className="form-select !h-9 !w-auto !text-sm cursor-pointer"
           >
             <option value="all">All Stacks</option>
             {stacks.map((s) => (
@@ -78,7 +79,7 @@ export default function DeploymentsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-9 rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
+            className="form-select !h-9 !w-auto !text-sm cursor-pointer"
           >
             {statusOptions.map((s) => (
               <option key={s} value={s}>
@@ -91,28 +92,17 @@ export default function DeploymentsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
-        <table className="w-full">
+      <div className="p-6">
+      <div className="panel">
+        <table className="data-table">
           <thead>
-            <tr className="border-b border-border-subtle">
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                ID
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Stack
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Strategy
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Started
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Completed
-              </th>
+            <tr>
+              <th>ID</th>
+              <th>Stack</th>
+              <th>Status</th>
+              <th>Strategy</th>
+              <th>Started</th>
+              <th>Completed</th>
             </tr>
           </thead>
           <tbody>
@@ -127,36 +117,31 @@ export default function DeploymentsPage() {
               </tr>
             ) : (
               filtered.map((d) => (
-                <tr
-                  key={d.id}
-                  className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors"
-                >
-                  <td className="px-4 py-3">
+                <tr key={d.id}>
+                  <td>
                     <Link
                       href={`/deployments/${d.id}`}
-                      className="text-sm font-medium text-primary hover:text-[#3b82f6] transition-colors"
+                      className="font-medium text-primary hover:text-info transition-colors"
                     >
                       #{d.id}
                     </Link>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <Link
                       href={`/stacks/${d.stack_id}`}
-                      className="text-sm text-[#3b82f6] hover:underline"
+                      className="text-info hover:underline"
                     >
                       {stackMap.get(d.stack_id) ?? `Stack #${d.stack_id}`}
                     </Link>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <StatusBadge status={d.status} />
                   </td>
-                  <td className="px-4 py-3 text-sm text-secondary">
-                    {d.strategy}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-muted">
+                  <td className="text-secondary">{d.strategy}</td>
+                  <td className="text-muted">
                     {d.started_at ? formatDate(d.started_at) : "-"}
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted">
+                  <td className="text-muted">
                     {d.completed_at ? formatDate(d.completed_at) : "-"}
                   </td>
                 </tr>
@@ -164,6 +149,7 @@ export default function DeploymentsPage() {
             )}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   );

@@ -22,7 +22,7 @@ function SystemNodeComponent({ data }: { data: SystemNodeData }) {
       </div>
       <div className="grid grid-cols-2 gap-x-5 gap-y-1.5 text-[11px]">
         <span className="text-muted">Workers</span>
-        <span className="text-right font-medium text-[#22c55e]">
+        <span className="text-right font-medium text-healthy">
           {data.onlineWorkers}/{data.totalWorkers}
         </span>
         <span className="text-muted">Stacks</span>

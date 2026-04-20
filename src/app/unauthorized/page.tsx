@@ -14,7 +14,7 @@ export default function UnauthorizedPage() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
-        <div className="rounded-xl border border-border-subtle bg-surface p-8 shadow-2xl">
+        <div className="card p-8 shadow-2xl">
           {/* Logo */}
           <div className="flex items-center justify-center gap-3.5 mb-8">
             <Logo size="md" />
@@ -26,16 +26,16 @@ export default function UnauthorizedPage() {
 
           {/* Lock Icon */}
           <div className="flex justify-center mb-5">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#ef4444]/10 ring-1 ring-[#ef4444]/20">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-failed/10 ring-1 ring-[#ef4444]/20">
               <FontAwesomeIcon
                 icon={faLock}
-                className="h-7 w-7 text-[#ef4444]"
+                className="h-7 w-7 text-failed"
                 aria-hidden="true"
               />
             </div>
           </div>
 
-          <h1 className="text-center text-xl font-semibold text-primary mb-2">
+          <h1 className="text-center page-title text-xl mb-2">
             Unauthorized
           </h1>
 
@@ -47,7 +47,7 @@ export default function UnauthorizedPage() {
           <div className="flex flex-col gap-3">
             <Link
               href="/login"
-              className="flex h-10 items-center justify-center rounded-lg bg-[#3b82f6] px-4 text-sm font-medium text-primary transition-colors hover:bg-[#2563eb] cursor-pointer"
+              className="flex h-10 items-center justify-center rounded-lg bg-info px-4 text-sm font-medium text-primary transition-colors hover:bg-[#2563eb] cursor-pointer"
             >
               Back to Sign In
             </Link>

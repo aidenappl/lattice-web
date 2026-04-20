@@ -13,9 +13,9 @@ export function Badge({
 }: BadgeProps) {
   const variants = {
     default: "text-secondary",
-    success: "text-[#22c55e]",
-    warning: "text-[#eab308]",
-    error: "text-[#ef4444]",
+    success: "text-healthy",
+    warning: "text-pending",
+    error: "text-failed",
   };
 
   return (

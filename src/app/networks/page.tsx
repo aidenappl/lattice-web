@@ -111,36 +111,32 @@ export default function NetworksPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-primary">Networks</h1>
-          <p className="text-sm text-secondary mt-1">
+      {/* Page header */}
+      <div className="page-header">
+        <div className="flex-1">
+          <div className="page-title">Networks</div>
+          <div className="page-subtitle">
             {totalPorts} port{totalPorts !== 1 ? "s" : ""} mapped across{" "}
             {workers.length} worker{workers.length !== 1 ? "s" : ""}
-          </p>
+          </div>
         </div>
-        <button
-          onClick={load}
-          className="inline-flex items-center justify-center font-medium rounded-lg transition-colors cursor-pointer focus:outline-none border border-border-strong bg-surface text-primary hover:bg-surface-active h-8 px-3.5 text-sm gap-1.5"
-        >
+        <button onClick={load} className="btn btn-secondary">
           <FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />
           Refresh
         </button>
       </div>
 
+      <div className="p-6">
       {workerGroups.length === 0 ? (
-        <div className="rounded-xl border border-border-subtle bg-surface p-12 text-center">
+        <div className="card p-12 text-center">
           <p className="text-sm text-muted">No workers found</p>
         </div>
       ) : (
         <div className="space-y-6">
           {workerGroups.map((group) => (
-            <div
-              key={group.worker.id}
-              className="rounded-xl border border-border-subtle bg-surface overflow-hidden"
-            >
+            <div key={group.worker.id} className="panel">
               {/* Worker header */}
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-border-subtle bg-background-alt">
+              <div className="panel-header">
                 <div className="flex items-center gap-3">
                   <WorkerBadge
                     id={group.worker.id}
@@ -169,7 +165,7 @@ export default function NetworksPage() {
               ) : (
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-[#141414]">
+                    <tr className="border-b border-border-subtle">
                       <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
                         Host Port
                       </th>
@@ -191,7 +187,7 @@ export default function NetworksPage() {
                       <th className="px-5 py-2.5" />
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#141414]">
+                  <tbody className="divide-y divide-border-subtle">
                     {group.ports.map((p, i) => {
                       // Check for port conflicts within this worker
                       const conflicting =
@@ -208,7 +204,7 @@ export default function NetworksPage() {
                         >
                           <td className="px-5 py-2.5">
                             <span
-                              className={`text-sm font-mono font-medium ${conflicting ? "text-[#ef4444]" : "text-primary"}`}
+                              className={`text-sm font-mono font-medium ${conflicting ? "text-failed" : "text-primary"}`}
                               title={
                                 conflicting
                                   ? "Port conflict — multiple containers using this port"
@@ -217,7 +213,7 @@ export default function NetworksPage() {
                             >
                               :{p.hostPort}
                               {conflicting && (
-                                <span className="ml-1.5 text-[10px] text-[#ef4444] font-sans font-normal uppercase">
+                                <span className="ml-1.5 text-[10px] text-failed font-sans font-normal uppercase">
                                   conflict
                                 </span>
                               )}
@@ -280,6 +276,7 @@ export default function NetworksPage() {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }

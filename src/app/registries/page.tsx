@@ -215,12 +215,13 @@ export default function RegistriesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-primary">Registries</h1>
-          <p className="text-sm text-secondary mt-1">
+      {/* Page header */}
+      <div className="page-header">
+        <div className="flex-1">
+          <div className="page-title">Registries</div>
+          <div className="page-subtitle">
             Manage container registries
-          </p>
+          </div>
         </div>
         {canEdit(user) && (
           <Button
@@ -234,11 +235,12 @@ export default function RegistriesPage() {
         )}
       </div>
 
+      <div className="p-6">
       {/* Create Form */}
       {canEdit(user) && showForm && (
         <form
           onSubmit={handleCreate}
-          className="rounded-xl border border-border-subtle bg-surface p-6 mb-6 space-y-4"
+          className="card p-6 mb-6 space-y-4"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
@@ -315,7 +317,7 @@ export default function RegistriesPage() {
               {testStatus === "testing" ? "Testing..." : "Test Connection"}
             </Button>
             {testStatus === "success" && (
-              <span className="text-sm text-[#4ade80]">
+              <span className="text-sm text-healthy">
                 Connected successfully
               </span>
             )}
@@ -334,7 +336,7 @@ export default function RegistriesPage() {
       )}
 
       {/* Registries List */}
-      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+      <div className="panel">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border-subtle">
@@ -383,7 +385,7 @@ export default function RegistriesPage() {
                     </td>
                     <td className="px-4 py-3 text-sm text-secondary">
                       {reg.username ? (
-                        <span className="text-[#4ade80]">{reg.username}</span>
+                        <span className="text-healthy">{reg.username}</span>
                       ) : (
                         <span className="text-muted">none</span>
                       )}
@@ -509,7 +511,7 @@ export default function RegistriesPage() {
 
       {/* Browse panel */}
       {browseId !== null && (
-        <div className="mt-4 rounded-xl border border-border-subtle bg-surface p-6">
+        <div className="mt-4 card p-6">
           <h2 className="text-sm font-semibold text-primary mb-4">
             Browse: {registries.find((r) => r.id === browseId)?.name}
           </h2>
@@ -572,6 +574,7 @@ export default function RegistriesPage() {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

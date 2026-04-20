@@ -708,7 +708,7 @@ export default function StackDetailPage() {
   const staleReason = stackWorker ? workerStaleReason(stackWorker) : null;
 
   return (
-    <div>
+    <div className="p-6">
       {/* Worker offline banner */}
       {!workerOnline && (
         <WorkerOfflineBanner
@@ -721,7 +721,7 @@ export default function StackDetailPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-primary">{stack.name}</h1>
+            <h1 className="page-title text-xl">{stack.name}</h1>
             <StatusBadge status={stack.status} />
           </div>
           {stack.description && (
@@ -800,7 +800,7 @@ export default function StackDetailPage() {
         {/* Stack Info + Containers */}
         <div className="lg:col-span-2 space-y-6">
           {/* Stack Info */}
-          <div className="rounded-xl border border-border-subtle bg-surface p-5">
+          <div className="card p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-medium text-primary">Stack Info</h2>
               {!editingStack && canEdit(user) && (
@@ -879,7 +879,7 @@ export default function StackDetailPage() {
                         }
                         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
                           editStackAutoDeploy
-                            ? "bg-[#3b82f6]"
+                            ? "bg-info"
                             : "bg-border-strong"
                         }`}
                       >
@@ -927,7 +927,7 @@ export default function StackDetailPage() {
                         name={workerName(stack.worker_id)}
                       />
                     ) : (
-                      <span className="text-[#f59e0b]">Unassigned</span>
+                      <span className="text-pending">Unassigned</span>
                     )}
                   </p>
                 </div>
@@ -961,7 +961,7 @@ export default function StackDetailPage() {
 
           {/* Stack Environment Variables */}
           {showEnvVars && (
-            <div className="rounded-xl border border-border-subtle bg-surface p-5">
+            <div className="card p-5">
               <h2 className="text-sm font-medium text-primary mb-4">
                 Stack Environment Variables
               </h2>
@@ -982,7 +982,7 @@ export default function StackDetailPage() {
 
           {/* Compose Editor */}
           {showCompose && (
-            <div className="rounded-xl border border-border-subtle bg-surface p-5">
+            <div className="card p-5">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-medium text-primary">
                   Docker Compose
@@ -1041,7 +1041,7 @@ export default function StackDetailPage() {
           )}
 
           {/* Containers */}
-          <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+          <div className="panel">
             <div className="px-5 py-4 border-b border-border-subtle flex items-center justify-between">
               <h2 className="text-sm font-medium text-primary">Containers</h2>
               <div className="flex items-center gap-3">
@@ -1139,7 +1139,7 @@ export default function StackDetailPage() {
                         <td className="px-4 py-3 text-sm font-medium">
                           <Link
                             href={`/containers/${container.id}`}
-                            className="text-primary hover:text-[#3b82f6] transition-colors"
+                            className="text-primary hover:text-info transition-colors"
                           >
                             {container.name}
                           </Link>
@@ -1168,7 +1168,7 @@ export default function StackDetailPage() {
                                       ? "Worker offline"
                                       : "Start container"
                                   }
-                                  className="px-2 py-1 text-xs text-[#22c55e] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
+                                  className="px-2 py-1 text-xs text-healthy hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
                                 >
                                   {actionLoading[`${container.id}-start`]
                                     ? "..."
@@ -1192,7 +1192,7 @@ export default function StackDetailPage() {
                                       ? "Worker offline"
                                       : "Resume container"
                                   }
-                                  className="px-2 py-1 text-xs text-[#22c55e] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
+                                  className="px-2 py-1 text-xs text-healthy hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
                                 >
                                   {actionLoading[`${container.id}-unpause`]
                                     ? "..."
@@ -1213,7 +1213,7 @@ export default function StackDetailPage() {
                                       ? "Worker offline"
                                       : "Restart container"
                                   }
-                                  className="px-2 py-1 text-xs text-[#3b82f6] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
+                                  className="px-2 py-1 text-xs text-info hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
                                 >
                                   {actionLoading[`${container.id}-restart`]
                                     ? "..."
@@ -1234,7 +1234,7 @@ export default function StackDetailPage() {
                                       ? "Worker offline"
                                       : "Stop container"
                                   }
-                                  className="px-2 py-1 text-xs text-[#f59e0b] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
+                                  className="px-2 py-1 text-xs text-pending hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
                                 >
                                   {actionLoading[`${container.id}-stop`]
                                     ? "..."
@@ -1254,7 +1254,7 @@ export default function StackDetailPage() {
                                     ? "Worker offline"
                                     : "Remove and recreate container from config"
                                 }
-                                className="px-2 py-1 text-xs text-[#8b5cf6] hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
+                                className="px-2 py-1 text-xs text-violet hover:bg-surface-elevated rounded transition-colors disabled:opacity-40"
                               >
                                 {actionLoading[`${container.id}-recreate`]
                                   ? "..."
@@ -1272,7 +1272,7 @@ export default function StackDetailPage() {
                                   handleDeleteContainer(container.id)
                                 }
                                 title="Delete container"
-                                className="px-2 py-1 text-xs text-[#ef4444] hover:bg-surface-elevated rounded transition-colors"
+                                className="px-2 py-1 text-xs text-failed hover:bg-surface-elevated rounded transition-colors"
                               >
                                 Delete
                               </button>
@@ -1288,7 +1288,7 @@ export default function StackDetailPage() {
           </div>
 
           {/* Container Logs */}
-          <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+          <div className="panel">
             <div className="px-5 py-4 border-b border-border-subtle flex items-center justify-between">
               <h2 className="text-sm font-medium text-primary">
                 Container Logs
@@ -1322,7 +1322,7 @@ export default function StackDetailPage() {
                 {selectedContainer && (
                   <button
                     onClick={() => loadLogs(selectedContainer, streamFilter)}
-                    className="text-xs text-[#3b82f6] hover:text-[#60a5fa] transition-colors cursor-pointer"
+                    className="text-xs text-info hover:text-info transition-colors cursor-pointer"
                   >
                     Refresh
                   </button>
@@ -1353,7 +1353,7 @@ export default function StackDetailPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          <div className="rounded-xl border border-border-subtle bg-surface p-5">
+          <div className="card p-5">
             <h2 className="text-sm font-medium text-primary mb-4">
               Deployment History
             </h2>
@@ -1390,7 +1390,7 @@ export default function StackDetailPage() {
 
           {/* Deployment Logs */}
           {selectedDeployment && (
-            <div className="rounded-xl border border-border-subtle bg-surface p-5">
+            <div className="card p-5">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-medium text-primary">
                   Deployment #{selectedDeployment} Logs
@@ -1425,7 +1425,7 @@ export default function StackDetailPage() {
                         {new Date(log.recorded_at).toLocaleTimeString()}
                       </span>
                       {log.stage && (
-                        <span className="text-[#666666] shrink-0">
+                        <span className="text-muted shrink-0">
                           [{log.stage}]
                         </span>
                       )}

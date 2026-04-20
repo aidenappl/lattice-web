@@ -18,7 +18,7 @@ import { timeAgo } from "@/lib/utils";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import WorkerBadge from "@/components/ui/worker-badge";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowUp } from "@fortawesome/free-solid-svg-icons";
+import { faArrowUp, faPlus } from "@fortawesome/free-solid-svg-icons";
 import toast from "react-hot-toast";
 
 export default function WorkersPage() {
@@ -65,7 +65,9 @@ export default function WorkersPage() {
                 ...w,
                 status: "online",
                 last_heartbeat_at: new Date().toISOString(),
-                ...(payload?.runner_version ? { runner_version: payload.runner_version } : {}),
+                ...(payload?.runner_version
+                  ? { runner_version: payload.runner_version }
+                  : {}),
               }
             : w,
         ),
@@ -99,7 +101,6 @@ export default function WorkersPage() {
     if (!name.trim() || !hostname.trim()) return;
     setSubmitting(true);
 
-    // Create the worker
     const workerRes = await reqCreateWorker({
       name: name.trim(),
       hostname: hostname.trim(),
@@ -109,7 +110,6 @@ export default function WorkersPage() {
       return;
     }
 
-    // Immediately generate a token
     const tokenRes = await reqCreateWorkerToken(workerRes.data.id, "default");
     setWorkers((prev) => [workerRes.data, ...prev]);
     setCreatedWorker(workerRes.data);
@@ -129,12 +129,13 @@ export default function WorkersPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-primary">Workers</h1>
-          <p className="text-sm text-secondary mt-1">
+      {/* Page header */}
+      <div className="page-header">
+        <div className="flex-1">
+          <div className="page-title">Workers</div>
+          <div className="page-subtitle">
             Manage your infrastructure workers
-          </p>
+          </div>
         </div>
         <Button
           onClick={() => {
@@ -142,201 +143,196 @@ export default function WorkersPage() {
             dismissCreated();
           }}
         >
+          <FontAwesomeIcon icon={faPlus} className="h-3 w-3" />
           {showForm ? "Cancel" : "Add Worker"}
         </Button>
       </div>
 
-      {/* Create form */}
-      {showForm && (
-        <form
-          onSubmit={handleCreate}
-          className="rounded-xl border border-border-subtle bg-surface p-6 mb-6 space-y-4"
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              id="worker-name"
-              label="Name"
-              placeholder="production-1"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-            <Input
-              id="worker-hostname"
-              label="Hostname"
-              placeholder="10.0.0.1 or worker-1.appleby.cloud"
-              value={hostname}
-              onChange={(e) => setHostname(e.target.value)}
-              required
-            />
-          </div>
-          <Button
-            type="submit"
-            disabled={submitting || !name.trim() || !hostname.trim()}
+      <div className="p-6">
+        {/* Create form */}
+        {showForm && (
+          <form
+            onSubmit={handleCreate}
+            className="card p-6 mb-6 space-y-4"
           >
-            {submitting ? "Creating..." : "Create Worker"}
-          </Button>
-        </form>
-      )}
-
-      {/* Post-create token reveal */}
-      {createdWorker && createdToken && (
-        <div className="rounded-xl border border-[#22c55e]/30 bg-[#22c55e]/5 p-6 mb-6">
-          <div className="flex items-start justify-between mb-3">
-            <div>
-              <h3 className="text-sm font-semibold text-[#22c55e]">
-                Worker &quot;{createdWorker.name}&quot; created
-              </h3>
-              <p className="text-xs text-secondary mt-1">
-                Copy the token below and configure it on your runner. It will
-                not be shown again.
-              </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                id="worker-name"
+                label="Name"
+                placeholder="production-1"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+              <Input
+                id="worker-hostname"
+                label="Hostname"
+                placeholder="10.0.0.1 or worker-1.appleby.cloud"
+                value={hostname}
+                onChange={(e) => setHostname(e.target.value)}
+                required
+              />
             </div>
-            <Button variant="ghost" size="sm" onClick={dismissCreated}>
-              Dismiss
+            <Button
+              type="submit"
+              disabled={submitting || !name.trim() || !hostname.trim()}
+            >
+              {submitting ? "Creating..." : "Create Worker"}
             </Button>
-          </div>
-          <div className="rounded-lg bg-background border border-border-subtle p-4 space-y-3">
-            <div>
-              <p className="text-xs text-muted uppercase tracking-wider mb-1">
-                Quick Install (run on the worker VM)
-              </p>
-              <pre className="text-xs text-primary font-mono whitespace-pre-wrap select-all bg-surface rounded-lg p-3 mt-1">
-                {`curl -fsSL ${process.env.NEXT_PUBLIC_LATTICE_API}/install/runner | WORKER_TOKEN=${createdToken} WORKER_NAME=${createdWorker.name} bash`}
-              </pre>
+          </form>
+        )}
+
+        {/* Post-create token reveal */}
+        {createdWorker && createdToken && (
+          <div className="rounded-lg border border-healthy/30 bg-healthy/5 p-6 mb-6">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-healthy">
+                  Worker &quot;{createdWorker.name}&quot; created
+                </h3>
+                <p className="text-xs text-secondary mt-1">
+                  Copy the token below and configure it on your runner. It will
+                  not be shown again.
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={dismissCreated}>
+                Dismiss
+              </Button>
             </div>
-            <div className="border-t border-border-subtle pt-3">
-              <p className="text-xs text-muted uppercase tracking-wider mb-1">
-                Or configure manually
-              </p>
-              <pre className="text-xs text-secondary font-mono whitespace-pre-wrap select-all">
-                {`ORCHESTRATOR_URL=${(process.env.NEXT_PUBLIC_LATTICE_API ?? "").replace(/^http/, "ws")}/ws/worker
+            <div className="rounded-lg bg-background border border-border p-4 space-y-3">
+              <div>
+                <p className="form-label">Quick Install (run on the worker VM)</p>
+                <pre className="text-xs text-primary font-mono whitespace-pre-wrap select-all bg-surface rounded-lg p-3 mt-1">
+                  {`curl -fsSL ${process.env.NEXT_PUBLIC_LATTICE_API}/install/runner | WORKER_TOKEN=${createdToken} WORKER_NAME=${createdWorker.name} bash`}
+                </pre>
+              </div>
+              <div className="border-t border-border-subtle pt-3">
+                <p className="form-label">Or configure manually</p>
+                <pre className="text-xs text-secondary font-mono whitespace-pre-wrap select-all">
+                  {`ORCHESTRATOR_URL=${(process.env.NEXT_PUBLIC_LATTICE_API ?? "").replace(/^http/, "ws")}/ws/worker
 WORKER_TOKEN=${createdToken}
 WORKER_NAME=${createdWorker.name}`}
-              </pre>
-            </div>
-            <div className="border-t border-border-subtle pt-3">
-              <p className="text-xs text-muted uppercase tracking-wider mb-1">
-                Worker Token
-              </p>
-              <p className="text-xs text-primary font-mono break-all select-all">
-                {createdToken}
-              </p>
-              <p className="text-xs text-muted mt-1">
-                This token will not be shown again.
-              </p>
+                </pre>
+              </div>
+              <div className="border-t border-border-subtle pt-3">
+                <p className="form-label">Worker Token</p>
+                <p className="text-xs text-primary font-mono break-all select-all">
+                  {createdToken}
+                </p>
+                <p className="text-xs text-muted mt-1">
+                  This token will not be shown again.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Workers table */}
-      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border-subtle">
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Hostname
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                OS / Arch
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Docker
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Runner
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Last Heartbeat
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {workers.length === 0 ? (
+        {/* Workers table */}
+        <div className="panel">
+          <table className="data-table">
+            <thead>
               <tr>
-                <td
-                  colSpan={7}
-                  className="px-4 py-12 text-center text-sm text-muted"
-                >
-                  No workers found
-                </td>
+                <th>Name</th>
+                <th>Hostname</th>
+                <th>Status</th>
+                <th>OS / Arch</th>
+                <th>Docker</th>
+                <th>Runner</th>
+                <th>Last Heartbeat</th>
               </tr>
-            ) : (
-              workers.map((worker) => (
-                <tr
-                  key={worker.id}
-                  className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors"
-                >
-                  <td className="px-4 py-3">
-                    <WorkerBadge id={worker.id} name={worker.name} />
-                  </td>
-                  <td className="px-4 py-3 text-sm text-secondary font-mono">
-                    <Link
-                      href={`http://${worker.hostname}:9100`}
-                      target="_blank"
-                      className="text-sm font-medium text-primary hover:text-[#3b82f6] transition-colors"
-                    >
-                      {worker.hostname}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={worker.status} />
-                  </td>
-                  <td className="px-4 py-3 text-sm text-secondary">
-                    {worker.os ?? "-"} / {worker.arch ?? "-"}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-secondary font-mono">
-                    {worker.docker_version ?? "-"}
-                  </td>
-                  <td className="px-4 py-3">
-                    {worker.runner_version ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-secondary font-mono">
-                          {worker.runner_version}
-                        </span>
-                        {latestRunner && worker.runner_version !== latestRunner && (
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              setUpgradingWorker(worker.id);
-                              const res = await reqUpgradeRunner(worker.id);
-                              if (res.success) {
-                                toast.success(`Upgrade command sent to ${worker.name}`);
-                              } else {
-                                toast.error("error_message" in res ? res.error_message : "Upgrade failed");
-                              }
-                              setUpgradingWorker(null);
-                            }}
-                            disabled={upgradingWorker === worker.id || worker.status !== "online"}
-                            title={`Upgrade to ${latestRunner}`}
-                            className="flex items-center gap-1 rounded-md bg-[#eab308]/10 border border-[#eab308]/30 px-2 py-0.5 text-[10px] font-medium text-[#eab308] hover:bg-[#eab308]/20 transition-colors cursor-pointer disabled:opacity-50"
-                          >
-                            <FontAwesomeIcon icon={faArrowUp} className="h-2.5 w-2.5" />
-                            {upgradingWorker === worker.id ? "..." : latestRunner}
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted">-</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-muted">
-                    {worker.last_heartbeat_at
-                      ? timeAgo(worker.last_heartbeat_at)
-                      : "Never"}
+            </thead>
+            <tbody>
+              {workers.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="text-center text-sm text-muted !py-12"
+                  >
+                    No workers found
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                workers.map((worker) => (
+                  <tr key={worker.id}>
+                    <td>
+                      <WorkerBadge id={worker.id} name={worker.name} />
+                    </td>
+                    <td className="mono">
+                      <Link
+                        href={`http://${worker.hostname}:9100`}
+                        target="_blank"
+                        className="text-primary hover:text-info transition-colors"
+                      >
+                        {worker.hostname}
+                      </Link>
+                    </td>
+                    <td>
+                      <StatusBadge status={worker.status} />
+                    </td>
+                    <td className="text-secondary">
+                      {worker.os ?? "-"} / {worker.arch ?? "-"}
+                    </td>
+                    <td className="mono text-secondary">
+                      {worker.docker_version ?? "-"}
+                    </td>
+                    <td>
+                      {worker.runner_version ? (
+                        <div className="flex items-center gap-2">
+                          <span className="mono text-secondary">
+                            {worker.runner_version}
+                          </span>
+                          {latestRunner &&
+                            worker.runner_version !== latestRunner && (
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  setUpgradingWorker(worker.id);
+                                  const res = await reqUpgradeRunner(worker.id);
+                                  if (res.success) {
+                                    toast.success(
+                                      `Upgrade command sent to ${worker.name}`,
+                                    );
+                                  } else {
+                                    toast.error(
+                                      "error_message" in res
+                                        ? res.error_message
+                                        : "Upgrade failed",
+                                    );
+                                  }
+                                  setUpgradingWorker(null);
+                                }}
+                                disabled={
+                                  upgradingWorker === worker.id ||
+                                  worker.status !== "online"
+                                }
+                                title={`Upgrade to ${latestRunner}`}
+                                className="badge badge-pending cursor-pointer hover:opacity-80 disabled:opacity-50"
+                              >
+                                <FontAwesomeIcon
+                                  icon={faArrowUp}
+                                  className="h-2.5 w-2.5"
+                                />
+                                {upgradingWorker === worker.id
+                                  ? "..."
+                                  : latestRunner}
+                              </button>
+                            )}
+                        </div>
+                      ) : (
+                        <span className="text-muted">-</span>
+                      )}
+                    </td>
+                    <td className="text-muted">
+                      {worker.last_heartbeat_at
+                        ? timeAgo(worker.last_heartbeat_at)
+                        : "Never"}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

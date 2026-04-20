@@ -35,7 +35,7 @@ function ContainerNodeComponent({ data }: { data: ContainerNodeData }) {
       />
       <div className="flex items-center gap-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#3b82f6]/10">
-          <FontAwesomeIcon icon={faCube} className="h-4 w-4 text-[#3b82f6]" />
+          <FontAwesomeIcon icon={faCube} className="h-4 w-4 text-info" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">

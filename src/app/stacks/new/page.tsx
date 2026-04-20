@@ -245,9 +245,9 @@ export default function NewStackPage() {
   };
 
   return (
-    <div>
+    <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-primary">Create Stack</h1>
+        <h1 className="page-title text-xl">Create Stack</h1>
         <p className="text-sm text-secondary mt-1">
           Import a Docker Compose file to create a new stack
         </p>
@@ -255,7 +255,7 @@ export default function NewStackPage() {
 
       <form onSubmit={handleSubmit} className="max-w-3xl space-y-6">
         {/* Stack info */}
-        <div className="rounded-xl border border-border-subtle bg-surface p-6">
+        <div className="card p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               id="name"
@@ -327,7 +327,7 @@ export default function NewStackPage() {
         </div>
 
         {/* Compose YAML editor */}
-        <div className="rounded-xl border border-border-subtle bg-surface p-6">
+        <div className="card p-6">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-sm font-semibold text-primary">
@@ -380,8 +380,8 @@ export default function NewStackPage() {
             }`}
           >
             {dragOver && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-[#3b82f6]/10 border-2 border-dashed border-[#3b82f6]">
-                <p className="text-sm text-[#3b82f6] font-medium">
+              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-info/10 border-2 border-dashed border-[#3b82f6]">
+                <p className="text-sm text-info font-medium">
                   Drop file here
                 </p>
               </div>
@@ -403,7 +403,7 @@ export default function NewStackPage() {
         </div>
 
         {/* Environment Variables */}
-        <div className="rounded-xl border border-border-subtle bg-surface p-6">
+        <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-sm font-semibold text-primary">
@@ -418,14 +418,14 @@ export default function NewStackPage() {
             {referencedKeys.length > 0 && (
               <div className="flex items-center gap-3">
                 {definedCount > 0 && (
-                  <span className="flex items-center gap-1 text-xs text-[#22c55e]">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e] shrink-0" />
+                  <span className="flex items-center gap-1 text-xs text-healthy">
+                    <span className="h-1.5 w-1.5 rounded-full bg-healthy shrink-0" />
                     {definedCount} defined
                   </span>
                 )}
                 {missingCount > 0 && (
-                  <span className="flex items-center gap-1 text-xs text-[#ef4444]">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#ef4444] shrink-0" />
+                  <span className="flex items-center gap-1 text-xs text-failed">
+                    <span className="h-1.5 w-1.5 rounded-full bg-failed shrink-0" />
                     {missingCount} missing
                   </span>
                 )}
@@ -448,8 +448,8 @@ export default function NewStackPage() {
                     trimmedKey !== "" && row.value.trim() !== "";
                   const keyColorClass = isReferenced
                     ? isDefined
-                      ? "text-[#22c55e]"
-                      : "text-[#ef4444]"
+                      ? "text-healthy"
+                      : "text-failed"
                     : "text-primary";
 
                   return (
@@ -480,7 +480,7 @@ export default function NewStackPage() {
                       <button
                         type="button"
                         onClick={() => removeEnvRow(row.id)}
-                        className="px-3 py-2 text-muted hover:text-[#ef4444] transition-colors"
+                        className="px-3 py-2 text-muted hover:text-failed transition-colors"
                         aria-label="Remove variable"
                       >
                         <FontAwesomeIcon

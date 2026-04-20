@@ -159,12 +159,12 @@ export default function DeploymentDetailPage() {
   const isRolledBack = deployment.status === "rolled_back";
 
   return (
-    <div>
+    <div className="p-6">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-primary">
+            <h1 className="page-title text-xl">
               Deployment #{deployment.id}
             </h1>
             <StatusBadge status={deployment.status} />
@@ -172,7 +172,7 @@ export default function DeploymentDetailPage() {
           <p className="text-sm text-secondary mt-1">
             <Link
               href={`/stacks/${deployment.stack_id}`}
-              className="text-[#3b82f6] hover:underline"
+              className="text-info hover:underline"
             >
               {stackName ?? `Stack #${deployment.stack_id}`}
             </Link>{" "}
@@ -200,7 +200,7 @@ export default function DeploymentDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Timeline */}
-        <div className="rounded-xl border border-border-subtle bg-surface p-5">
+        <div className="card p-5">
           <h2 className="text-sm font-medium text-primary mb-6">
             Status Timeline
           </h2>
@@ -214,9 +214,9 @@ export default function DeploymentDetailPage() {
                     className={cn(
                       "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium",
                       isCompleted && !isFailed && !isRolledBack
-                        ? "bg-[#22c55e]/20 text-[#22c55e] ring-1 ring-[#22c55e]/30"
+                        ? "bg-healthy/20 text-healthy ring-1 ring-[#22c55e]/30"
                         : isCurrent
-                          ? "bg-[#3b82f6]/20 text-[#3b82f6] ring-1 ring-[#3b82f6]/30"
+                          ? "bg-info/20 text-info ring-1 ring-[#3b82f6]/30"
                           : "bg-surface-active text-muted",
                     )}
                   >
@@ -237,7 +237,7 @@ export default function DeploymentDetailPage() {
             })}
             {(isFailed || isRolledBack) && (
               <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ef4444]/20 text-destructive-soft ring-1 ring-red-500/30 text-xs font-medium">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-failed/20 text-destructive-soft ring-1 ring-red-500/30 text-xs font-medium">
                   !
                 </div>
                 <p className="text-sm font-medium text-destructive-soft capitalize">
@@ -249,7 +249,7 @@ export default function DeploymentDetailPage() {
         </div>
 
         {/* Details */}
-        <div className="rounded-xl border border-border-subtle bg-surface p-5">
+        <div className="card p-5">
           <h2 className="text-sm font-medium text-primary mb-4">Details</h2>
           <div className="space-y-4">
             <div>
@@ -317,13 +317,13 @@ export default function DeploymentDetailPage() {
       </div>
 
       {/* Deployment Logs */}
-      <div className="mt-6 rounded-xl border border-border-subtle bg-surface p-5">
+      <div className="mt-6 card p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium text-primary">Deployment Logs</h2>
           {deployment.status === "deploying" && (
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3b82f6] opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#3b82f6]" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-info opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-info" />
             </span>
           )}
         </div>
@@ -356,7 +356,7 @@ export default function DeploymentDetailPage() {
                     {new Date(log.recorded_at).toLocaleTimeString()}
                   </span>
                   {log.stage && (
-                    <span className="text-[#3b82f6] shrink-0">
+                    <span className="text-info shrink-0">
                       [{log.stage}]
                     </span>
                   )}
@@ -365,7 +365,7 @@ export default function DeploymentDetailPage() {
                       log.level === "error"
                         ? "text-destructive-soft"
                         : log.level === "warn"
-                          ? "text-[#eab308]"
+                          ? "text-pending"
                           : "text-subtle",
                     )}
                   >

@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter_Tight, JetBrains_Mono } from "next/font/google";
 import { cookies } from "next/headers";
 import "./globals.css";
 import StoreProvider from "@/store/StoreProvider";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const interTight = Inter_Tight({
+  variable: "--font-inter-tight",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
 });
 
@@ -45,11 +45,12 @@ export default async function RootLayout({
 }>) {
   const cookieStore = await cookies();
   const appearance = cookieStore.get("forta-appearance")?.value;
-  const isDark = appearance === "dark" || (!appearance && true); // default to dark
+  // Default to dark. "system" defaults dark server-side; client ThemeProvider resolves it.
+  const isDark = appearance !== "light";
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} antialiased${isDark ? " dark" : ""}`}
+      className={`${interTight.variable} ${jetbrainsMono.variable} antialiased${isDark ? " dark" : ""}`}
       suppressHydrationWarning
     >
       <body>

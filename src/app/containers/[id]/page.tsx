@@ -504,7 +504,7 @@ export default function ContainerDetailPage() {
   if (loading) return <PageLoader />;
   if (!container) {
     return (
-      <div className="rounded-xl border border-border-subtle bg-surface p-12 text-center">
+      <div className="card p-12 text-center">
         <p className="text-sm text-muted">Container not found</p>
       </div>
     );
@@ -526,7 +526,7 @@ export default function ContainerDetailPage() {
   const controlsDisabled = !workerOnline || !!actionLoading;
 
   return (
-    <div>
+    <div className="p-6">
       {/* Worker offline banner */}
       {!workerOnline && (
         <WorkerOfflineBanner workerName={worker?.name} reason={staleReason} />
@@ -548,7 +548,7 @@ export default function ContainerDetailPage() {
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-primary">
+            <h1 className="page-title text-xl">
               {container.name}
             </h1>
             <StatusBadge status={container.status} />
@@ -579,14 +579,14 @@ export default function ContainerDetailPage() {
 
       {/* Action buttons */}
       {canEdit(user) && (
-        <div className="flex flex-wrap gap-2 mb-6 p-4 rounded-xl border border-border-subtle bg-surface">
+        <div className="flex flex-wrap gap-2 mb-6 p-4 card">
           {/* Start */}
           <ActionButton
             label="Start"
             icon={<FontAwesomeIcon icon={faPlay} className="h-3.5 w-3.5" />}
             disabled={!isStopped || controlsDisabled}
             loading={actionLoading === "start"}
-            color="text-[#22c55e] hover:bg-[#22c55e]/10"
+            color="text-healthy hover:bg-healthy/10"
             onClick={() =>
               runAction("start", () => reqStartContainer(container.id))
             }
@@ -615,7 +615,7 @@ export default function ContainerDetailPage() {
             icon={<FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />}
             disabled={!isRunning || controlsDisabled}
             loading={actionLoading === "kill"}
-            color="text-[#ef4444] hover:bg-[#ef4444]/10"
+            color="text-failed hover:bg-failed/10"
             onClick={async () => {
               const ok = await showConfirm({
                 title: "Kill container",
@@ -632,7 +632,7 @@ export default function ContainerDetailPage() {
             icon={<FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />}
             disabled={!isRunning || controlsDisabled}
             loading={actionLoading === "restart"}
-            color="text-[#3b82f6] hover:bg-[#3b82f6]/10"
+            color="text-info hover:bg-info/10"
             onClick={async () => {
               const ok = await showConfirm({
                 title: "Restart container",
@@ -661,7 +661,7 @@ export default function ContainerDetailPage() {
             icon={<FontAwesomeIcon icon={faPlay} className="h-3.5 w-3.5" />}
             disabled={!isPaused || controlsDisabled}
             loading={actionLoading === "unpause"}
-            color="text-[#22c55e] hover:bg-[#22c55e]/10"
+            color="text-healthy hover:bg-healthy/10"
             onClick={() =>
               runAction("unpause", () => reqUnpauseContainer(container.id))
             }
@@ -675,7 +675,7 @@ export default function ContainerDetailPage() {
             }
             disabled={controlsDisabled}
             loading={actionLoading === "recreate"}
-            color="text-[#a855f7] hover:bg-[#a855f7]/10"
+            color="text-violet hover:bg-[#a855f7]/10"
             onClick={async () => {
               const ok = await showConfirm({
                 title: "Recreate container",
@@ -694,7 +694,7 @@ export default function ContainerDetailPage() {
             icon={<FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />}
             disabled={controlsDisabled}
             loading={actionLoading === "remove"}
-            color="text-[#ef4444] hover:bg-[#ef4444]/10"
+            color="text-failed hover:bg-failed/10"
             onClick={async () => {
               const ok = await showConfirm({
                 title: "Remove container",
@@ -931,7 +931,7 @@ export default function ContainerDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         {/* Status card */}
-        <div className="lg:col-span-2 rounded-xl border border-border-subtle bg-surface p-5">
+        <div className="lg:col-span-2 card p-5">
           <h2 className="text-xs font-medium text-muted uppercase tracking-wider mb-4">
             Container Status
           </h2>
@@ -964,7 +964,7 @@ export default function ContainerDetailPage() {
                 value={
                   <Link
                     href={`/stacks/${stack.id}`}
-                    className="text-[#3b82f6] hover:underline"
+                    className="text-info hover:underline"
                   >
                     {stack.name}
                   </Link>
@@ -987,7 +987,7 @@ export default function ContainerDetailPage() {
         </div>
 
         {/* Health card */}
-        <div className="rounded-xl border border-border-subtle bg-surface p-5">
+        <div className="card p-5">
           <h2 className="text-xs font-medium text-muted uppercase tracking-wider mb-4">
             Health
           </h2>
@@ -1021,7 +1021,7 @@ export default function ContainerDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+      <div className="panel">
         <div className="flex border-b border-border-subtle">
           {(["logs", "details", "health"] as Tab[]).map((t) => (
             <button
@@ -1174,7 +1174,7 @@ export default function ContainerDetailPage() {
               ) : (
                 <div className="rounded-lg border border-border-subtle overflow-hidden">
                   <table className="w-full">
-                    <tbody className="divide-y divide-[#141414]">
+                    <tbody className="divide-y divide-border-subtle">
                       {Object.entries(envVars).map(([k, v]) => (
                         <tr key={k}>
                           <td className="px-3 py-2 text-xs font-mono text-secondary w-1/3 align-top">
@@ -1221,7 +1221,7 @@ export default function ContainerDetailPage() {
                   </h3>
                   <div className="rounded-lg border border-border-subtle overflow-hidden">
                     <table className="w-full">
-                      <tbody className="divide-y divide-[#141414]">
+                      <tbody className="divide-y divide-border-subtle">
                         {healthConfig.interval && (
                           <tr>
                             <td className="px-3 py-2 text-xs font-mono text-secondary w-1/3">

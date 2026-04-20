@@ -12,22 +12,22 @@ const variants: Record<
 > = {
   error: {
     container: "border-[#ef4444]/20 bg-[#ef4444]/5",
-    icon: "text-[#ef4444]",
+    icon: "text-failed",
     dot: "bg-[#ef4444]",
   },
   warning: {
     container: "border-[#f59e0b]/20 bg-[#f59e0b]/5",
-    icon: "text-[#f59e0b]",
+    icon: "text-pending",
     dot: "bg-[#f59e0b]",
   },
   info: {
     container: "border-[#3b82f6]/20 bg-[#3b82f6]/5",
-    icon: "text-[#3b82f6]",
+    icon: "text-info",
     dot: "bg-[#3b82f6]",
   },
   success: {
     container: "border-[#22c55e]/20 bg-[#22c55e]/5",
-    icon: "text-[#22c55e]",
+    icon: "text-healthy",
     dot: "bg-[#22c55e]",
   },
 };

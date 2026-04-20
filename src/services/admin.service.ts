@@ -1,12 +1,36 @@
-import { User, VersionInfo } from "@/types";
+import { User, VersionInfo, Deployment } from "@/types";
 import { fetchApi } from "./api.service";
+
+export type WorkerMetricsSummary = {
+    worker_id: number;
+    worker_name: string;
+    cpu: number | null;
+    memory: number | null;
+    disk_used: number | null;
+    disk_total: number | null;
+    net_rx: number | null;
+    net_tx: number | null;
+    containers: number | null;
+    running: number | null;
+    status: string;
+};
 
 export type OverviewData = {
     total_workers: number;
     online_workers: number;
     total_stacks: number;
     active_stacks: number;
+    deploying_stacks: number;
+    failed_stacks: number;
+    total_containers: number;
+    running_containers: number;
+    recent_deployments: Deployment[] | null;
     recent_deployment_count: number;
+    fleet_cpu_avg: number;
+    fleet_memory_avg: number;
+    fleet_container_count: number;
+    fleet_running_count: number;
+    worker_metrics: WorkerMetricsSummary[] | null;
 };
 
 export type AuditLogEntry = {

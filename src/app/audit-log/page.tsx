@@ -8,13 +8,13 @@ import { PageLoader } from "@/components/ui/loading";
 import { formatDate } from "@/lib/utils";
 
 const actionColors: Record<string, string> = {
-  create: "text-[#22c55e]",
-  update: "text-[#3b82f6]",
-  delete: "text-[#ef4444]",
-  deploy: "text-[#a855f7]",
-  login: "text-[#eab308]",
-  approve: "text-[#22c55e]",
-  rollback: "text-[#f59e0b]",
+  create: "text-healthy",
+  update: "text-info",
+  delete: "text-failed",
+  deploy: "text-violet",
+  login: "text-pending",
+  approve: "text-healthy",
+  rollback: "text-pending",
 };
 
 function actionColor(action: string): string {
@@ -65,18 +65,19 @@ export default function AuditLogPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-primary">Audit Log</h1>
-          <p className="text-sm text-secondary mt-1">
+      {/* Page header */}
+      <div className="page-header">
+        <div className="flex-1">
+          <div className="page-title">Audit Log</div>
+          <div className="page-subtitle">
             Track all actions performed in the system
-          </p>
+          </div>
         </div>
         <div className="flex gap-2">
           <select
             value={resourceFilter}
             onChange={(e) => setResourceFilter(e.target.value)}
-            className="h-9 rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
+            className="form-select !h-9 !w-auto !text-sm cursor-pointer"
           >
             <option value="all">All Resources</option>
             {resourceTypes.map((r) => (
@@ -88,7 +89,7 @@ export default function AuditLogPage() {
           <select
             value={actionFilter}
             onChange={(e) => setActionFilter(e.target.value)}
-            className="h-9 rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
+            className="form-select !h-9 !w-auto !text-sm cursor-pointer"
           >
             <option value="all">All Actions</option>
             {actions.map((a) => (
@@ -100,81 +101,67 @@ export default function AuditLogPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border-subtle">
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Time
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                User
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Action
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Resource
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Details
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                IP
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
+      <div className="p-6">
+        <div className="panel">
+          <table className="data-table">
+            <thead>
               <tr>
-                <td
-                  colSpan={6}
-                  className="px-4 py-12 text-center text-sm text-muted"
-                >
-                  No audit log entries found
-                </td>
+                <th>Time</th>
+                <th>User</th>
+                <th>Action</th>
+                <th>Resource</th>
+                <th>Details</th>
+                <th>IP</th>
               </tr>
-            ) : (
-              filtered.map((entry) => (
-                <tr
-                  key={entry.id}
-                  className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors"
-                >
-                  <td className="px-4 py-3 text-sm text-muted whitespace-nowrap">
-                    {formatDate(entry.inserted_at)}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-secondary">
-                    {entry.user_id
-                      ? (userMap.get(entry.user_id) ?? `User #${entry.user_id}`)
-                      : "System"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`text-sm font-medium ${actionColor(entry.action)}`}
-                    >
-                      {entry.action}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-secondary">
-                    {entry.resource_type}
-                    {entry.resource_id != null && (
-                      <span className="text-muted">
-                        {" "}
-                        #{entry.resource_id}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-muted max-w-xs truncate">
-                    {entry.details ?? "-"}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-muted font-mono">
-                    {entry.ip_address ?? "-"}
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="text-center text-sm text-muted !py-12"
+                  >
+                    No audit log entries found
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                filtered.map((entry) => (
+                  <tr key={entry.id}>
+                    <td className="text-muted whitespace-nowrap">
+                      {formatDate(entry.inserted_at)}
+                    </td>
+                    <td className="text-secondary">
+                      {entry.user_id
+                        ? (userMap.get(entry.user_id) ??
+                          `User #${entry.user_id}`)
+                        : "System"}
+                    </td>
+                    <td>
+                      <span
+                        className={`font-medium ${actionColor(entry.action)}`}
+                      >
+                        {entry.action}
+                      </span>
+                    </td>
+                    <td className="text-secondary">
+                      {entry.resource_type}
+                      {entry.resource_id != null && (
+                        <span className="text-muted">
+                          {" "}
+                          #{entry.resource_id}
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-muted max-w-xs truncate">
+                      {entry.details ?? "-"}
+                    </td>
+                    <td className="text-muted mono">{entry.ip_address ?? "-"}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

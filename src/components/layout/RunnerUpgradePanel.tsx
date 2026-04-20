@@ -218,7 +218,7 @@ export function RunnerUpgradePanel({
                   r.outdated && (
                     <span className="h-1.5 w-1.5 rounded-full bg-[#eab308]/60" />
                   )}
-                {isBusy && <Spinner className="h-3.5 w-3.5 text-[#3b82f6]" />}
+                {isBusy && <Spinner className="h-3.5 w-3.5 text-info" />}
                 {r.upgrade_status === "success" && (
                   <FontAwesomeIcon
                     icon={faCheck}
@@ -245,7 +245,7 @@ export function RunnerUpgradePanel({
                       : r.upgrade_status === "failed"
                         ? "text-red-400"
                         : isBusy
-                          ? "text-[#3b82f6]"
+                          ? "text-info"
                           : "text-muted"
                   }`}
                 >
@@ -257,7 +257,7 @@ export function RunnerUpgradePanel({
               {canUpgrade && (
                 <button
                   onClick={() => handleUpgradeOne(r.worker_id)}
-                  className="shrink-0 rounded-md bg-[#eab308]/10 border border-[#eab308]/30 px-2.5 py-1 text-xs font-medium text-[#eab308] hover:bg-[#eab308]/20 transition-colors cursor-pointer"
+                  className="shrink-0 rounded-md bg-[#eab308]/10 border border-[#eab308]/30 px-2.5 py-1 text-xs font-medium text-pending hover:bg-[#eab308]/20 transition-colors cursor-pointer"
                 >
                   Upgrade
                 </button>

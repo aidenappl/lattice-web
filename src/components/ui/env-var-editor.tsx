@@ -136,7 +136,7 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
               <button
                 type="button"
                 onClick={switchToKv}
-                className="text-xs text-[#3b82f6] hover:text-[#60a5fa] transition-colors"
+                className="text-xs text-info hover:text-info transition-colors"
               >
                 ← List view
               </button>
@@ -145,7 +145,7 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
             <button
               type="button"
               onClick={switchToJson}
-              className="text-xs text-[#3b82f6] hover:text-[#60a5fa] transition-colors"
+              className="text-xs text-info hover:text-info transition-colors"
             >
               JSON mode
             </button>
@@ -166,7 +166,7 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
             placeholder='{"NODE_ENV": "production", "LOG_LEVEL": "info"}'
           />
           {jsonError && (
-            <p className="text-xs text-[#ef4444] mt-1.5">{jsonError}</p>
+            <p className="text-xs text-failed mt-1.5">{jsonError}</p>
           )}
         </div>
       ) : (
@@ -203,7 +203,7 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
                 <button
                   type="button"
                   onClick={() => removeRow(i)}
-                  className="px-3 text-dimmed hover:text-[#ef4444] transition-colors text-base leading-none"
+                  className="px-3 text-dimmed hover:text-failed transition-colors text-base leading-none"
                   aria-label="Remove"
                 >
                   ×

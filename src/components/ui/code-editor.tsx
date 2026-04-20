@@ -307,7 +307,7 @@ export function CodeEditor({
       <pre
         ref={preRef}
         aria-hidden
-        className="absolute inset-0 px-3 py-2 text-sm font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none m-0 [&_.json-key]:text-[#7aa2f7] [&_.json-string]:text-[#9ece6a] [&_.json-number]:text-[#ff9e64] [&_.json-bool]:text-[#ff9e64] [&_.yaml-key]:text-[#7aa2f7] [&_.yaml-colon]:text-muted [&_.yaml-comment]:text-muted [&_.env-var-defined]:text-[#22c55e] [&_.env-var-defined]:font-semibold [&_.env-var-missing]:text-[#ef4444] [&_.env-var-missing]:font-semibold"
+        className="absolute inset-0 px-3 py-2 text-sm font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none m-0 [&_.json-key]:text-[#7aa2f7] [&_.json-string]:text-[#9ece6a] [&_.json-number]:text-[#ff9e64] [&_.json-bool]:text-[#ff9e64] [&_.yaml-key]:text-[#7aa2f7] [&_.yaml-colon]:text-muted [&_.yaml-comment]:text-muted [&_.env-var-defined]:text-healthy [&_.env-var-defined]:font-semibold [&_.env-var-missing]:text-failed [&_.env-var-missing]:font-semibold"
         dangerouslySetInnerHTML={{ __html: highlighted + "\n" }}
       />
       {/* Transparent textarea on top for editing */}

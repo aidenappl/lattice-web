@@ -32,7 +32,7 @@ function StackNodeComponent({ data }: { data: StackNodeData }) {
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#a855f7]/10">
           <FontAwesomeIcon
             icon={faLayerGroup}
-            className="h-4 w-4 text-[#a855f7]"
+            className="h-4 w-4 text-violet"
           />
         </div>
         <div className="flex-1 min-w-0">

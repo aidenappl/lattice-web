@@ -70,23 +70,22 @@ export default function StacksPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-primary">Stacks</h1>
-          <p className="text-sm text-secondary mt-1">
+      {/* Page header */}
+      <div className="page-header">
+        <div className="flex-1">
+          <div className="page-title">Stacks</div>
+          <div className="page-subtitle">
             Manage your container stacks
-          </p>
+          </div>
         </div>
-        <Link
-          href="/stacks/new"
-          className="inline-flex items-center justify-center font-medium rounded-lg transition-colors cursor-pointer focus:outline-none bg-white text-black hover:bg-zinc-100 h-8 px-3.5 text-sm"
-        >
+        <Link href="/stacks/new" className="btn btn-primary">
           New Stack
         </Link>
       </div>
 
+      <div className="p-6">
       {stacks.length === 0 ? (
-        <div className="rounded-xl border border-border-subtle bg-surface p-12 text-center">
+        <div className="card p-12 text-center">
           <p className="text-sm text-muted">No stacks found</p>
         </div>
       ) : (
@@ -110,11 +109,11 @@ export default function StacksPage() {
               <Link
                 key={stack.id}
                 href={`/stacks/${stack.id}`}
-                className="rounded-xl border border-border-subtle bg-surface p-5 hover:border-border-strong hover:bg-surface-elevated transition-colors group"
+                className="card p-5 hover:border-border-strong transition-colors group"
               >
                 {/* Header */}
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-primary group-hover:text-accent transition-colors">
+                  <h3 className="text-sm font-semibold text-primary group-hover:text-brand transition-colors">
                     {stack.name}
                   </h3>
                   <StatusBadge status={stack.status} />
@@ -136,12 +135,12 @@ export default function StacksPage() {
                       >
                         <FontAwesomeIcon
                           icon={faCube}
-                          className="h-2.5 w-2.5 text-[#3b82f6]"
+                          className="h-2.5 w-2.5 text-info"
                         />
                         <span className="truncate max-w-[140px]">{c.name}</span>
                         <FontAwesomeIcon
                           icon={faCircle}
-                          className={`h-1.5 w-1.5 ${c.status === "running" ? "text-[#22c55e]" : c.status === "error" ? "text-[#ef4444]" : "text-[#888888]"}`}
+                          className={`h-1.5 w-1.5 ${c.status === "running" ? "text-healthy" : c.status === "error" ? "text-failed" : "text-muted"}`}
                         />
                       </span>
                     ))}
@@ -158,7 +157,7 @@ export default function StacksPage() {
                   <span className="flex items-center gap-1.5">
                     <FontAwesomeIcon
                       icon={faCube}
-                      className="h-3 w-3 text-[#3b82f6]"
+                      className="h-3 w-3 text-info"
                     />
                     {running}/{stackContainers.length} running
                   </span>
@@ -167,7 +166,7 @@ export default function StacksPage() {
                     <span className="flex items-center gap-1.5">
                       <FontAwesomeIcon
                         icon={faHeart}
-                        className={`h-3 w-3 ${unhealthy > 0 ? "text-[#ef4444]" : "text-[#22c55e]"}`}
+                        className={`h-3 w-3 ${unhealthy > 0 ? "text-failed" : "text-healthy"}`}
                       />
                       {unhealthy > 0
                         ? `${unhealthy} unhealthy`
@@ -182,7 +181,7 @@ export default function StacksPage() {
                   </span>
 
                   {stack.auto_deploy && (
-                    <span className="text-[#3b82f6]">auto-deploy</span>
+                    <span className="text-info">auto-deploy</span>
                   )}
                 </div>
 
@@ -197,6 +196,7 @@ export default function StacksPage() {
           })}
         </div>
       )}
+      </div>
     </div>
   );
 }

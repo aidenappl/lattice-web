@@ -148,7 +148,7 @@ function VersionCheckSection({ adminUser }: { adminUser: boolean }) {
   const lastChecked = info?.last_checked ? new Date(info.last_checked) : null;
 
   return (
-    <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+    <div className="panel">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
         <div>
           <h2 className="text-sm font-semibold text-primary">Version Check</h2>
@@ -392,12 +392,17 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-primary">Settings</h1>
-        <p className="text-sm text-secondary mt-1">
-          System configuration and user management
-        </p>
+      {/* Page header */}
+      <div className="page-header">
+        <div className="flex-1">
+          <div className="page-title">Settings</div>
+          <div className="page-subtitle">
+            System configuration and user management
+          </div>
+        </div>
       </div>
+
+      <div className="p-6">
 
       {/* Version Check */}
       <div className="mb-8">
@@ -418,7 +423,7 @@ export default function SettingsPage() {
       {admin && showForm && (
         <form
           onSubmit={handleCreate}
-          className="rounded-xl border border-border-subtle bg-surface p-6 mb-6 space-y-4"
+          className="card p-6 mb-6 space-y-4"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
@@ -480,7 +485,7 @@ export default function SettingsPage() {
       )}
 
       {/* Users Table */}
-      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+      <div className="panel">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border-subtle">
@@ -541,7 +546,7 @@ export default function SettingsPage() {
                   <td className="px-4 py-3">
                     <Badge variant={u.active ? "success" : "error"}>
                       <span
-                        className={`h-1.5 w-1.5 rounded-full ${u.active ? "bg-[#22c55e]" : "bg-[#ef4444]"}`}
+                        className={`h-1.5 w-1.5 rounded-full ${u.active ? "bg-healthy" : "bg-failed"}`}
                       />
                       {u.active ? "active" : "inactive"}
                     </Badge>
@@ -574,6 +579,7 @@ export default function SettingsPage() {
             )}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   );

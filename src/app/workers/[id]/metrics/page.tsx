@@ -98,7 +98,7 @@ export default function WorkerMetricsPage() {
   const tickFormatter = range === "7d" ? formatDateTime : formatTime;
 
   return (
-    <div>
+    <div className="p-6">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-2 text-sm text-secondary mb-2">
@@ -116,7 +116,7 @@ export default function WorkerMetricsPage() {
           <span className="text-primary">Metrics</span>
         </div>
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-primary">
+          <h1 className="page-title text-xl">
             {worker?.name} Metrics
           </h1>
           <div className="flex gap-1">
@@ -138,7 +138,7 @@ export default function WorkerMetricsPage() {
       </div>
 
       {metrics.length === 0 ? (
-        <div className="rounded-xl border border-border-subtle bg-surface p-12 text-center">
+        <div className="card p-12 text-center">
           <p className="text-sm text-muted">
             No metrics data available for this time range
           </p>
@@ -180,7 +180,7 @@ export default function WorkerMetricsPage() {
           />
 
           {/* Network I/O */}
-          <div className="rounded-xl border border-border-subtle bg-surface p-5">
+          <div className="card p-5">
             <h3 className="text-sm font-medium text-primary mb-4">
               Network I/O
             </h3>
@@ -277,7 +277,7 @@ function MetricChart({
   const latestVal = latest?.[dataKey];
 
   return (
-    <div className="rounded-xl border border-border-subtle bg-surface p-5">
+    <div className="card p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-medium text-primary">{title}</h3>
         {latestVal !== null && latestVal !== undefined && (

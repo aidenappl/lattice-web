@@ -146,7 +146,7 @@ export function UpdateBanner() {
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#3b82f6]/20">
             <FontAwesomeIcon
               icon={faArrowUp}
-              className="h-3.5 w-3.5 text-[#3b82f6]"
+              className="h-3.5 w-3.5 text-info"
             />
           </div>
           <div className="flex items-center gap-4 flex-wrap min-w-0">
@@ -208,7 +208,7 @@ export function UpdateBanner() {
             <div className="relative" ref={panelRef}>
               <button
                 onClick={() => setRunnerPanelOpen((v) => !v)}
-                className="flex items-center gap-1.5 rounded-lg border border-[#3b82f6]/40 bg-[#3b82f6]/10 px-3 py-1.5 text-xs font-medium text-[#3b82f6] hover:bg-[#3b82f6]/20 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 rounded-lg border border-[#3b82f6]/40 bg-[#3b82f6]/10 px-3 py-1.5 text-xs font-medium text-info hover:bg-[#3b82f6]/20 transition-colors cursor-pointer"
               >
                 <FontAwesomeIcon icon={faMicrochip} className="h-3 w-3" />
                 Upgrade Runners
