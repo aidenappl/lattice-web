@@ -4,13 +4,15 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   reqGetOverview,
+  reqGetFleetMetrics,
   OverviewData,
   WorkerMetricsSummary,
+  FleetMetricsPoint,
 } from "@/services/admin.service";
 import { APP_VERSION } from "@/lib/version";
 import { timeAgo } from "@/lib/utils";
 import { TopologyBoard } from "@/components/topology/TopologyBoard";
-import { Sparkline, Meter, generateSparkData } from "@/components/ui/sparkline";
+import { Sparkline, Meter } from "@/components/ui/sparkline";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -22,17 +24,21 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import type { Deployment } from "@/types";
 
-// ── Sparkline data seeds (consistent across renders) ────────────────
-const SPARK_SEEDS = {
-  cpu: generateSparkData(24, 1, 0.45, 0.15),
-  mem: generateSparkData(24, 2, 0.6, 0.1),
-  net: generateSparkData(24, 3, 0.3, 0.2),
-  req: generateSparkData(24, 4, 0.5, 0.18),
-};
-
 // ── KPI Row ─────────────────────────────────────────────────────────
 
-function DashboardKPIRow({ overview }: { overview: OverviewData | null }) {
+function DashboardKPIRow({
+  overview,
+  cpuHistory,
+  memHistory,
+  netHistory,
+  containerHistory,
+}: {
+  overview: OverviewData | null;
+  cpuHistory: number[];
+  memHistory: number[];
+  netHistory: number[];
+  containerHistory: number[];
+}) {
   return (
     <div
       className="card"
@@ -63,7 +69,10 @@ function DashboardKPIRow({ overview }: { overview: OverviewData | null }) {
           )}
         </div>
         <div className="kpi-spark">
-          <Sparkline data={SPARK_SEEDS.req} color="var(--healthy)" live />
+          <Sparkline
+            data={containerHistory.length > 1 ? containerHistory : [0.5]}
+            color="var(--healthy)"
+          />
         </div>
       </div>
 
@@ -79,7 +88,10 @@ function DashboardKPIRow({ overview }: { overview: OverviewData | null }) {
           <span className="up mono">active</span>
         </div>
         <div className="kpi-spark">
-          <Sparkline data={SPARK_SEEDS.cpu} color="var(--healthy)" live />
+          <Sparkline
+            data={containerHistory.length > 1 ? containerHistory : [0.5]}
+            color="var(--healthy)"
+          />
         </div>
       </div>
 
@@ -110,7 +122,10 @@ function DashboardKPIRow({ overview }: { overview: OverviewData | null }) {
             )}
         </div>
         <div className="kpi-spark">
-          <Sparkline data={SPARK_SEEDS.net} color="var(--info)" live />
+          <Sparkline
+            data={netHistory.length > 1 ? netHistory : [0.5]}
+            color="var(--info)"
+          />
         </div>
       </div>
 
@@ -124,7 +139,10 @@ function DashboardKPIRow({ overview }: { overview: OverviewData | null }) {
           <span className="mono text-muted">across fleet</span>
         </div>
         <div className="kpi-spark">
-          <Sparkline data={SPARK_SEEDS.cpu} color="var(--pending)" live />
+          <Sparkline
+            data={cpuHistory.length > 1 ? cpuHistory : [0.5]}
+            color="var(--pending)"
+          />
         </div>
       </div>
 
@@ -138,7 +156,10 @@ function DashboardKPIRow({ overview }: { overview: OverviewData | null }) {
           <span className="mono text-muted">across fleet</span>
         </div>
         <div className="kpi-spark">
-          <Sparkline data={SPARK_SEEDS.mem} color="var(--info)" live />
+          <Sparkline
+            data={memHistory.length > 1 ? memHistory : [0.5]}
+            color="var(--info)"
+          />
         </div>
       </div>
 
@@ -488,9 +509,17 @@ type MetricKey = "cpu" | "mem" | "net" | "req";
 function FleetResourcePanel({
   workerMetrics,
   overview,
+  cpuHistory,
+  memHistory,
+  netHistory,
+  containerHistory,
 }: {
   workerMetrics: WorkerMetricsSummary[] | null;
   overview: OverviewData | null;
+  cpuHistory: number[];
+  memHistory: number[];
+  netHistory: number[];
+  containerHistory: number[];
 }) {
   const [metric, setMetric] = useState<MetricKey>("cpu");
 
@@ -535,6 +564,14 @@ function FleetResourcePanel({
           : 0;
     }
   };
+
+  const historyMap: Record<MetricKey, number[]> = {
+    cpu: cpuHistory,
+    mem: memHistory,
+    net: netHistory,
+    req: containerHistory,
+  };
+  const chartData = historyMap[metric];
 
   return (
     <div
@@ -653,12 +690,11 @@ function FleetResourcePanel({
           }}
         >
           <Sparkline
-            data={SPARK_SEEDS[metric === "req" ? "req" : metric]}
+            data={chartData.length > 1 ? chartData : [0.5]}
             width={460}
             height={260}
             color={colors[metric]}
             fill
-            live
           />
         </div>
       </div>
@@ -774,10 +810,10 @@ function ResizableSplit({
         }
       };
 
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
     },
     [leftMin, rightMin, storageKey],
   );
@@ -787,15 +823,14 @@ function ResizableSplit({
       ref={containerRef}
       style={{
         display: "flex",
-        gap: 0,
         height,
+        gap: 0,
         ...style,
       }}
     >
       <div style={{ flex: 1, minWidth: leftMin, overflow: "hidden" }}>
         {left}
       </div>
-      {/* Drag handle */}
       <div
         onMouseDown={onMouseDown}
         style={{
@@ -812,10 +847,9 @@ function ResizableSplit({
             width: 3,
             height: 32,
             borderRadius: 2,
-            background: "var(--border)",
-            transition: "background 0.15s",
+            background: "var(--border-strong)",
+            opacity: 0.5,
           }}
-          className="hover:!bg-border-strong"
         />
       </div>
       <div
@@ -831,31 +865,163 @@ function ResizableSplit({
   );
 }
 
+// ── Helper: normalize fleet metrics to 0-1 range for sparklines ─────
+
+function normalizeHistory(
+  points: FleetMetricsPoint[],
+  key: "cpu_avg" | "memory_avg" | "network_rx_total" | "running_count",
+): number[] {
+  if (points.length === 0) return [];
+  const values = points.map((p) => p[key]);
+  const max = Math.max(...values, 1);
+  return values.map((v) => v / max);
+}
+
 // ── Dashboard Page ──────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const router = useRouter();
   const [overview, setOverview] = useState<OverviewData | null>(null);
   const [stackNames, setStackNames] = useState<Record<number, string>>({});
+  const [fleetHistory, setFleetHistory] = useState<FleetMetricsPoint[]>([]);
 
   useEffect(() => {
     document.title = "Lattice - Dashboard";
   }, []);
 
-  useEffect(() => {
-    const load = async () => {
-      const [overviewRes] = await Promise.all([reqGetOverview()]);
-      if (overviewRes.success) {
-        setOverview(overviewRes.data);
-      }
-    };
-    load();
-    // Refresh every 30s
-    const interval = setInterval(load, 30000);
-    return () => clearInterval(interval);
+  // Load overview + fleet metrics
+  const loadOverview = useCallback(async () => {
+    const res = await reqGetOverview();
+    if (res.success) setOverview(res.data);
   }, []);
 
-  // Resolve stack names from stacks API
+  const loadFleetHistory = useCallback(async () => {
+    const res = await reqGetFleetMetrics("24h");
+    if (res.success && res.data) setFleetHistory(res.data);
+  }, []);
+
+  useEffect(() => {
+    loadOverview();
+    loadFleetHistory();
+    // Refresh overview every 30s, history every 60s
+    const overviewInterval = setInterval(loadOverview, 30000);
+    const historyInterval = setInterval(loadFleetHistory, 60000);
+    return () => {
+      clearInterval(overviewInterval);
+      clearInterval(historyInterval);
+    };
+  }, [loadOverview, loadFleetHistory]);
+
+  // WebSocket: push live metrics into fleet history + update overview counters
+  const handleDashboardEvent = useCallback((event: AdminSocketEvent) => {
+    if (event.type === "worker_heartbeat" && event.payload) {
+      const p = event.payload;
+      const cpu = p.cpu_percent as number | undefined;
+      const memUsed = p.memory_used_mb as number | undefined;
+      const memTotal = p.memory_total_mb as number | undefined;
+      const netRx = p.network_rx_bytes as number | undefined;
+      const netTx = p.network_tx_bytes as number | undefined;
+      const containers = p.container_count as number | undefined;
+      const running = p.container_running_count as number | undefined;
+
+      // Push a new point to the fleet history (append, keep last 30 points)
+      setFleetHistory((prev) => {
+        const memPct =
+          memUsed != null && memTotal != null && memTotal > 0
+            ? (memUsed / memTotal) * 100
+            : prev.length > 0
+              ? prev[prev.length - 1].memory_avg
+              : 0;
+        const newPoint: FleetMetricsPoint = {
+          timestamp: new Date().toISOString(),
+          cpu_avg: cpu ?? (prev.length > 0 ? prev[prev.length - 1].cpu_avg : 0),
+          memory_avg: memPct,
+          network_rx_total: netRx ?? 0,
+          network_tx_total: netTx ?? 0,
+          container_count: containers ?? 0,
+          running_count: running ?? 0,
+        };
+        return [...prev.slice(-29), newPoint];
+      });
+
+      // Update overview fleet averages from latest heartbeat
+      if (cpu != null || memUsed != null) {
+        setOverview((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            fleet_cpu_avg: cpu ?? prev.fleet_cpu_avg,
+            fleet_memory_avg:
+              memUsed != null && memTotal != null && memTotal > 0
+                ? (memUsed / memTotal) * 100
+                : prev.fleet_memory_avg,
+            fleet_container_count: containers ?? prev.fleet_container_count,
+            fleet_running_count: running ?? prev.fleet_running_count,
+          };
+        });
+      }
+    }
+
+    if (event.type === "worker_connected") {
+      setOverview((prev) => {
+        if (!prev) return prev;
+        return { ...prev, online_workers: prev.online_workers + 1 };
+      });
+    }
+
+    if (event.type === "worker_disconnected") {
+      setOverview((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          online_workers: Math.max(0, prev.online_workers - 1),
+        };
+      });
+    }
+
+    if (event.type === "container_status" && event.payload) {
+      const status = event.payload.status as string | undefined;
+      if (status === "running") {
+        setOverview((prev) => {
+          if (!prev) return prev;
+          return { ...prev, running_containers: prev.running_containers + 1 };
+        });
+      } else if (status === "stopped" || status === "error") {
+        setOverview((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            running_containers: Math.max(0, prev.running_containers - 1),
+          };
+        });
+      }
+    }
+
+    if (event.type === "deployment_progress" && event.payload) {
+      const status = event.payload.status as string | undefined;
+      if (status === "deploying") {
+        setOverview((prev) => {
+          if (!prev) return prev;
+          return { ...prev, deploying_stacks: prev.deploying_stacks + 1 };
+        });
+      } else if (status === "deployed" || status === "failed") {
+        setOverview((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            deploying_stacks: Math.max(0, prev.deploying_stacks - 1),
+            ...(status === "failed"
+              ? { failed_stacks: prev.failed_stacks + 1 }
+              : {}),
+          };
+        });
+      }
+    }
+  }, []);
+
+  useAdminSocket(handleDashboardEvent);
+
+  // Resolve stack names
   useEffect(() => {
     import("@/services/stacks.service").then(({ reqGetStacks }) => {
       reqGetStacks().then((res) => {
@@ -870,6 +1036,24 @@ export default function DashboardPage() {
     });
   }, []);
 
+  // Derive sparkline arrays from fleet history
+  const cpuHistory = useMemo(
+    () => normalizeHistory(fleetHistory, "cpu_avg"),
+    [fleetHistory],
+  );
+  const memHistory = useMemo(
+    () => normalizeHistory(fleetHistory, "memory_avg"),
+    [fleetHistory],
+  );
+  const netHistory = useMemo(
+    () => normalizeHistory(fleetHistory, "network_rx_total"),
+    [fleetHistory],
+  );
+  const containerHistory = useMemo(
+    () => normalizeHistory(fleetHistory, "running_count"),
+    [fleetHistory],
+  );
+
   return (
     <div style={{ padding: 28 }}>
       {/* Failing stacks banner */}
@@ -879,7 +1063,13 @@ export default function DashboardPage() {
       />
 
       {/* KPI row */}
-      <DashboardKPIRow overview={overview} />
+      <DashboardKPIRow
+        overview={overview}
+        cpuHistory={cpuHistory}
+        memHistory={memHistory}
+        netHistory={netHistory}
+        containerHistory={containerHistory}
+      />
 
       {/* Topology + Event Stream (resizable) */}
       <ResizableSplit
@@ -913,6 +1103,10 @@ export default function DashboardPage() {
         <FleetResourcePanel
           workerMetrics={overview?.worker_metrics ?? null}
           overview={overview}
+          cpuHistory={cpuHistory}
+          memHistory={memHistory}
+          netHistory={netHistory}
+          containerHistory={containerHistory}
         />
       </div>
     </div>

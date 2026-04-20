@@ -44,10 +44,26 @@ export type AuditLogEntry = {
     inserted_at: string;
 };
 
+export type FleetMetricsPoint = {
+    timestamp: string;
+    cpu_avg: number;
+    memory_avg: number;
+    network_rx_total: number;
+    network_tx_total: number;
+    container_count: number;
+    running_count: number;
+};
+
 export const reqGetOverview = () =>
     fetchApi<OverviewData>({
         method: "GET",
         url: "/admin/overview",
+    });
+
+export const reqGetFleetMetrics = (range?: string) =>
+    fetchApi<FleetMetricsPoint[]>({
+        method: "GET",
+        url: `/admin/fleet-metrics${range ? `?range=${range}` : ""}`,
     });
 
 export const reqGetAuditLog = () =>
