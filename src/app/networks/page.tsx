@@ -3,7 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faRotate } from "@fortawesome/free-solid-svg-icons";
+import {
+  faRotate,
+  faArrowUpRightFromSquare,
+} from "@fortawesome/free-solid-svg-icons";
 import { Container, Stack, Worker } from "@/types";
 import { reqGetAllContainers, reqGetStacks } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
@@ -185,6 +188,7 @@ export default function NetworksPage() {
                       <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
                         Stack
                       </th>
+                      <th className="px-5 py-2.5" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#141414]">
@@ -247,6 +251,24 @@ export default function NetworksPage() {
                             >
                               {p.stack.name}
                             </Link>
+                          </td>
+                          <td className="px-5 py-2.5 text-right">
+                            {group.worker.ip_address &&
+                              p.protocol === "tcp" && (
+                                <a
+                                  href={`http://${group.worker.ip_address}:${p.hostPort}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-primary transition-colors"
+                                  title={`Open http://${group.worker.ip_address}:${p.hostPort}`}
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faArrowUpRightFromSquare}
+                                    className="h-3 w-3"
+                                  />
+                                  Open
+                                </a>
+                              )}
                           </td>
                         </tr>
                       );
