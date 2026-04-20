@@ -520,7 +520,7 @@ export function useTopologyData(viewMode: ViewMode, scale: NodeScale = "md") {
                     ...prev,
                     containers: prev.containers.map((c) =>
                         c.id === payload.container_id
-                            ? { ...c, health_status: payload.health_status as string }
+                            ? { ...c, health_status: payload.health_status as Container["health_status"] }
                             : c,
                     ),
                 }));
