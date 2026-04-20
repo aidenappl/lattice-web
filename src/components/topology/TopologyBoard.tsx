@@ -13,6 +13,7 @@ import {
   type NodeTypes,
   type EdgeTypes,
   type NodeMouseHandler,
+  type Node,
   BackgroundVariant,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -60,7 +61,11 @@ function TopologyBoardInner() {
   const { fitView } = useReactFlow();
   const [viewMode, setViewMode] = useState<ViewMode>("system");
   const [nodeScale, setNodeScale] = useState<NodeScale>("md");
-  const initialFit = useRef(true);
+  const prevViewMode = useRef(viewMode);
+  const prevScale = useRef(nodeScale);
+  const hasFitted = useRef(false);
+  const userDragged = useRef(false);
+
   const {
     nodes: layoutNodes,
     edges: layoutEdges,
@@ -71,15 +76,86 @@ function TopologyBoardInner() {
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutEdges);
 
-  // Sync layout changes into React Flow state
+  // Full layout reset when viewMode or scale changes
+  const layoutChanged =
+    viewMode !== prevViewMode.current || nodeScale !== prevScale.current;
+
   useEffect(() => {
-    setNodes(layoutNodes);
-    setEdges(layoutEdges);
-    // Skip animation on initial load to prevent zoom flash
-    const duration = initialFit.current ? 0 : 400;
-    initialFit.current = false;
-    requestAnimationFrame(() => fitView({ padding: 0.05, duration }));
-  }, [layoutNodes, layoutEdges, setNodes, setEdges, fitView]);
+    if (layoutChanged) {
+      // Reset everything on view/scale change
+      setNodes(layoutNodes);
+      setEdges(layoutEdges);
+      userDragged.current = false;
+      prevViewMode.current = viewMode;
+      prevScale.current = nodeScale;
+      hasFitted.current = false;
+    } else if (!userDragged.current) {
+      // Initial load or data refresh when user hasn't dragged — apply positions
+      setNodes(layoutNodes);
+      setEdges(layoutEdges);
+    } else {
+      // User has dragged nodes — only update data, preserve positions
+      setNodes((prev) => {
+        const layoutMap = new Map(layoutNodes.map((n) => [n.id, n]));
+        const updated: Node[] = [];
+        const existingIds = new Set(prev.map((n) => n.id));
+
+        for (const existing of prev) {
+          const fresh = layoutMap.get(existing.id);
+          if (fresh) {
+            updated.push({
+              ...existing,
+              data: fresh.data,
+              style: fresh.style,
+            });
+          }
+        }
+
+        // Add any new nodes that appeared
+        for (const ln of layoutNodes) {
+          if (!existingIds.has(ln.id)) {
+            updated.push(ln);
+          }
+        }
+
+        return updated;
+      });
+      setEdges(layoutEdges);
+    }
+  }, [
+    layoutNodes,
+    layoutEdges,
+    setNodes,
+    setEdges,
+    layoutChanged,
+    viewMode,
+    nodeScale,
+  ]);
+
+  // fitView after layout settles
+  useEffect(() => {
+    if (loading || layoutNodes.length === 0) return;
+    if (!hasFitted.current || layoutChanged) {
+      const t = requestAnimationFrame(() => {
+        fitView({
+          padding: 0.02,
+          maxZoom: 1.5,
+          duration: hasFitted.current ? 500 : 0,
+        });
+        hasFitted.current = true;
+      });
+      return () => cancelAnimationFrame(t);
+    }
+  }, [loading, layoutNodes, fitView, layoutChanged]);
+
+  const handleNodesChange: typeof onNodesChange = useCallback(
+    (changes) => {
+      const hasDrag = changes.some((c) => c.type === "position" && c.dragging);
+      if (hasDrag) userDragged.current = true;
+      onNodesChange(changes);
+    },
+    [onNodesChange],
+  );
 
   const onNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
@@ -105,7 +181,6 @@ function TopologyBoardInner() {
       <div className="flex items-center justify-between mb-3">
         <ViewModeSelector value={viewMode} onChange={setViewMode} />
         <div className="flex items-center gap-2">
-          {/* Node scale selector */}
           <div className="flex items-center gap-0.5 rounded-lg border border-border-strong bg-surface-alt p-0.5">
             {SCALE_OPTIONS.map((opt) => (
               <button
@@ -123,7 +198,14 @@ function TopologyBoardInner() {
             ))}
           </div>
           <button
-            onClick={refresh}
+            onClick={() => {
+              userDragged.current = false;
+              refresh().then(() => {
+                requestAnimationFrame(() =>
+                  fitView({ padding: 0.02, maxZoom: 1.5, duration: 500 }),
+                );
+              });
+            }}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-border-strong text-secondary hover:text-primary hover:bg-surface-active transition-colors cursor-pointer"
             title="Refresh topology"
             aria-label="Refresh"
@@ -138,13 +220,13 @@ function TopologyBoardInner() {
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={onNodesChange}
+          onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
           onNodeClick={onNodeClick}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          minZoom={0.1}
-          maxZoom={2}
+          minZoom={0.05}
+          maxZoom={3}
           proOptions={{ hideAttribution: true }}
           className="topology-flow"
         >

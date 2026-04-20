@@ -21,6 +21,7 @@ export type WorkerNodeData = {
     stackCount: number;
     lastHeartbeat: string | null;
     scale: NodeScale;
+    recentHeartbeat?: boolean;
 };
 
 export type StackNodeData = {
@@ -36,11 +37,10 @@ export type ContainerNodeData = {
     containerId: number;
     label: string;
     status: "running" | "stopped" | "error" | "pending" | "paused";
-    image: string;
-    tag: string;
     healthStatus: string;
     stackName: string;
     scale: NodeScale;
+    recentStatusChange?: boolean;
 };
 
 export type TopologyNode =

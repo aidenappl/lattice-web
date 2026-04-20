@@ -17,7 +17,7 @@ function StackNodeComponent({ data }: { data: StackNodeData }) {
   const dotClass = statusDots[data.status] ?? "bg-[#888888]";
 
   return (
-    <div className="rounded-xl border border-border-strong bg-surface-alt px-5 py-4 min-w-[260px] cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-[#a855f7]/30">
+    <div className="rounded-xl border border-border-strong bg-surface-alt px-5 py-4 w-full h-full cursor-pointer transition-all duration-300 hover:shadow-lg hover:border-[#a855f7]/30">
       <Handle
         type="target"
         position={Position.Top}

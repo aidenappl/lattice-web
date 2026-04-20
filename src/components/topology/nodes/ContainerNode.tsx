@@ -26,7 +26,7 @@ function ContainerNodeComponent({ data }: { data: ContainerNodeData }) {
 
   return (
     <div
-      className={`rounded-xl border bg-surface-alt px-5 py-4 min-w-[260px] cursor-pointer transition-all duration-200 hover:shadow-lg ${borderClass}`}
+      className={`rounded-xl border bg-surface-alt px-5 py-4 w-full h-full cursor-pointer transition-all duration-300 hover:shadow-lg ${borderClass} ${data.recentStatusChange ? "ring-2 ring-[#3b82f6]/40 ring-offset-1 ring-offset-transparent" : ""}`}
     >
       <Handle
         type="target"
@@ -35,20 +35,22 @@ function ContainerNodeComponent({ data }: { data: ContainerNodeData }) {
       />
       <div className="flex items-center gap-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#3b82f6]/10">
-          <FontAwesomeIcon
-            icon={faCube}
-            className="h-4 w-4 text-[#3b82f6]"
-          />
+          <FontAwesomeIcon icon={faCube} className="h-4 w-4 text-[#3b82f6]" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold text-primary truncate">
               {data.label}
             </p>
-            <span className={`h-2 w-2 rounded-full shrink-0 ${dotClass}`} />
+            <span
+              className={`h-2 w-2 rounded-full shrink-0 ${dotClass} ${data.status === "running" ? "animate-pulse" : ""}`}
+            />
           </div>
           <p className="text-[11px] text-muted truncate">
-            {data.image}:{data.tag}
+            {data.stackName}
+            {data.healthStatus && data.healthStatus !== "none"
+              ? ` · ${data.healthStatus}`
+              : ""}
           </p>
         </div>
       </div>

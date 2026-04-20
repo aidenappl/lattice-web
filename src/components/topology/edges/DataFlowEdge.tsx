@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useId } from "react";
 import { BaseEdge, getBezierPath, type EdgeProps } from "@xyflow/react";
 import type { DataFlowEdgeData } from "../types";
 
@@ -23,6 +23,7 @@ function DataFlowEdgeComponent({
   const status = edgeData?.status ?? "idle";
   const isAnimated = edgeData?.animated ?? false;
   const stroke = statusStroke[status] ?? "#555555";
+  const filterId = useId();
 
   const [edgePath] = getBezierPath({
     sourceX,
@@ -36,64 +37,35 @@ function DataFlowEdgeComponent({
 
   return (
     <>
+      {isAnimated && (
+        <defs>
+          <filter id={filterId} x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" />
+          </filter>
+        </defs>
+      )}
       <BaseEdge
         id={id}
         path={edgePath}
         style={{
           stroke,
-          strokeWidth: isAnimated ? 1.8 : 1.4,
-          strokeDasharray: isAnimated ? "6 4" : "none",
-          opacity: status === "offline" ? 0.25 : 0.6,
-          transition: "stroke 0.4s ease, opacity 0.4s ease, stroke-width 0.3s ease",
+          strokeWidth: isAnimated ? 2 : 1.4,
+          opacity: status === "offline" ? 0.2 : isAnimated ? 0.7 : 0.45,
+          transition:
+            "stroke 0.6s ease, opacity 0.6s ease, stroke-width 0.6s ease",
         }}
       />
       {isAnimated && (
-        <>
-          {/* Primary dot */}
-          <circle r="3" fill={stroke} opacity="0">
-            <animateMotion
-              dur="3s"
-              repeatCount="indefinite"
-              path={edgePath}
-              calcMode="spline"
-              keyPoints="0;1"
-              keyTimes="0;1"
-              keySplines="0.4 0 0.2 1"
-            />
-            <animate
-              attributeName="opacity"
-              values="0;0.85;0.85;0"
-              keyTimes="0;0.08;0.88;1"
-              dur="3s"
-              repeatCount="indefinite"
-              calcMode="spline"
-              keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"
-            />
-          </circle>
-          {/* Secondary dot — offset by half the cycle */}
-          <circle r="2.5" fill={stroke} opacity="0">
-            <animateMotion
-              dur="3s"
-              repeatCount="indefinite"
-              path={edgePath}
-              calcMode="spline"
-              keyPoints="0;1"
-              keyTimes="0;1"
-              keySplines="0.4 0 0.2 1"
-              begin="1.5s"
-            />
-            <animate
-              attributeName="opacity"
-              values="0;0.6;0.6;0"
-              keyTimes="0;0.08;0.88;1"
-              dur="3s"
-              repeatCount="indefinite"
-              begin="1.5s"
-              calcMode="spline"
-              keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"
-            />
-          </circle>
-        </>
+        <path
+          d={edgePath}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="3"
+          strokeLinecap="round"
+          opacity="0.6"
+          filter={`url(#${filterId})`}
+          className="topology-edge-flow"
+        />
       )}
     </>
   );

@@ -1,20 +1,32 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { Stack } from "@/types";
-import { reqGetStacks } from "@/services/stacks.service";
+import { Stack, Container, Worker } from "@/types";
+import { reqGetStacks, reqGetAllContainers } from "@/services/stacks.service";
+import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCube, faHeart, faCircle } from "@fortawesome/free-solid-svg-icons";
+import WorkerBadge from "@/components/ui/worker-badge";
 
 export default function StacksPage() {
   const [stacks, setStacks] = useState<Stack[]>([]);
+  const [containers, setContainers] = useState<Container[]>([]);
+  const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const refreshStacks = useCallback(async () => {
-    const res = await reqGetStacks();
-    if (res.success) setStacks(res.data ?? []);
+  const refresh = useCallback(async () => {
+    const [sRes, cRes, wRes] = await Promise.all([
+      reqGetStacks(),
+      reqGetAllContainers(),
+      reqGetWorkers(),
+    ]);
+    if (sRes.success) setStacks(sRes.data ?? []);
+    if (cRes.success) setContainers(cRes.data ?? []);
+    if (wRes.success) setWorkers(wRes.data ?? []);
   }, []);
 
   useEffect(() => {
@@ -22,10 +34,9 @@ export default function StacksPage() {
   }, []);
 
   useEffect(() => {
-    refreshStacks().then(() => setLoading(false));
-  }, [refreshStacks]);
+    refresh().then(() => setLoading(false));
+  }, [refresh]);
 
-  // Live updates via WebSocket
   const handleSocketEvent = useCallback(
     (event: AdminSocketEvent) => {
       if (
@@ -33,12 +44,27 @@ export default function StacksPage() {
         event.type === "container_sync" ||
         event.type === "deployment_progress"
       ) {
-        refreshStacks();
+        refresh();
       }
     },
-    [refreshStacks],
+    [refresh],
   );
   useAdminSocket(handleSocketEvent);
+
+  const workerMap = useMemo(
+    () => new Map(workers.map((w) => [w.id, w])),
+    [workers],
+  );
+
+  const containersByStack = useMemo(() => {
+    const map = new Map<number, Container[]>();
+    for (const c of containers) {
+      const list = map.get(c.stack_id) ?? [];
+      list.push(c);
+      map.set(c.stack_id, list);
+    }
+    return map;
+  }, [containers]);
 
   if (loading) return <PageLoader />;
 
@@ -64,30 +90,111 @@ export default function StacksPage() {
           <p className="text-sm text-muted">No stacks found</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {stacks.map((stack) => (
-            <Link
-              key={stack.id}
-              href={`/stacks/${stack.id}`}
-              className="rounded-xl border border-border-subtle bg-surface p-5 hover:border-border-strong hover:bg-surface-elevated transition-colors"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-primary">{stack.name}</h3>
-                <StatusBadge status={stack.status} />
-              </div>
-              {stack.description && (
-                <p className="text-xs text-secondary mb-3 line-clamp-2">
-                  {stack.description}
-                </p>
-              )}
-              <div className="flex items-center gap-4 text-xs text-muted">
-                <span>Strategy: {stack.deployment_strategy}</span>
-                {stack.auto_deploy && (
-                  <span className="text-[#3b82f6]">Auto-deploy</span>
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+          {stacks.map((stack) => {
+            const stackContainers = containersByStack.get(stack.id) ?? [];
+            const running = stackContainers.filter(
+              (c) => c.status === "running",
+            ).length;
+            const healthy = stackContainers.filter(
+              (c) => c.health_status === "healthy",
+            ).length;
+            const unhealthy = stackContainers.filter(
+              (c) => c.health_status === "unhealthy",
+            ).length;
+            const worker = stack.worker_id
+              ? workerMap.get(stack.worker_id)
+              : null;
+
+            return (
+              <Link
+                key={stack.id}
+                href={`/stacks/${stack.id}`}
+                className="rounded-xl border border-border-subtle bg-surface p-5 hover:border-border-strong hover:bg-surface-elevated transition-colors group"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-primary group-hover:text-accent transition-colors">
+                    {stack.name}
+                  </h3>
+                  <StatusBadge status={stack.status} />
+                </div>
+
+                {stack.description && (
+                  <p className="text-xs text-secondary mb-3 line-clamp-2">
+                    {stack.description}
+                  </p>
                 )}
-              </div>
-            </Link>
-          ))}
+
+                {/* Container images */}
+                {stackContainers.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {stackContainers.slice(0, 4).map((c) => (
+                      <span
+                        key={c.id}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-surface-alt border border-border-subtle px-2 py-0.5 text-[11px] text-secondary"
+                      >
+                        <FontAwesomeIcon
+                          icon={faCube}
+                          className="h-2.5 w-2.5 text-[#3b82f6]"
+                        />
+                        <span className="truncate max-w-[140px]">{c.name}</span>
+                        <FontAwesomeIcon
+                          icon={faCircle}
+                          className={`h-1.5 w-1.5 ${c.status === "running" ? "text-[#22c55e]" : c.status === "error" ? "text-[#ef4444]" : "text-[#888888]"}`}
+                        />
+                      </span>
+                    ))}
+                    {stackContainers.length > 4 && (
+                      <span className="inline-flex items-center rounded-md bg-surface-alt border border-border-subtle px-2 py-0.5 text-[11px] text-muted">
+                        +{stackContainers.length - 4} more
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Stats row */}
+                <div className="flex items-center gap-3 text-[11px] text-muted border-t border-border-subtle pt-3">
+                  <span className="flex items-center gap-1.5">
+                    <FontAwesomeIcon
+                      icon={faCube}
+                      className="h-3 w-3 text-[#3b82f6]"
+                    />
+                    {running}/{stackContainers.length} running
+                  </span>
+
+                  {(healthy > 0 || unhealthy > 0) && (
+                    <span className="flex items-center gap-1.5">
+                      <FontAwesomeIcon
+                        icon={faHeart}
+                        className={`h-3 w-3 ${unhealthy > 0 ? "text-[#ef4444]" : "text-[#22c55e]"}`}
+                      />
+                      {unhealthy > 0
+                        ? `${unhealthy} unhealthy`
+                        : `${healthy} healthy`}
+                    </span>
+                  )}
+
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-muted">
+                      {stack.deployment_strategy}
+                    </span>
+                  </span>
+
+                  {stack.auto_deploy && (
+                    <span className="text-[#3b82f6]">auto-deploy</span>
+                  )}
+                </div>
+
+                {/* Worker assignment */}
+                {worker && (
+                  <div className="mt-2" onClick={(e) => e.preventDefault()}>
+                    <WorkerBadge id={worker.id} name={worker.name} size="sm" />
+                  </div>
+                )}
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

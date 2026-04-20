@@ -33,6 +33,8 @@ function buildSystemView(
     stacks: Stack[],
     containers: Container[],
     scale: NodeScale = "md",
+    recentHeartbeats?: Set<number>,
+    recentContainerChanges?: Set<number>,
 ): { nodes: Node[]; edges: Edge[] } {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
@@ -73,6 +75,7 @@ function buildSystemView(
                 stackCount: wStacks.length,
                 lastHeartbeat: w.last_heartbeat_at,
                 scale,
+                recentHeartbeat: recentHeartbeats?.has(w.id),
             } satisfies WorkerNodeData,
         });
 
@@ -125,11 +128,10 @@ function buildSystemView(
                         containerId: c.id,
                         label: c.name,
                         status: c.status,
-                        image: c.image,
-                        tag: c.tag,
                         healthStatus: c.health_status,
                         stackName: s.name,
                         scale,
+                        recentStatusChange: recentContainerChanges?.has(c.id),
                     } satisfies ContainerNodeData,
                 });
 
@@ -182,6 +184,8 @@ function buildWorkerView(
     stacks: Stack[],
     containers: Container[],
     scale: NodeScale = "md",
+    recentHeartbeats?: Set<number>,
+    recentContainerChanges?: Set<number>,
 ): { nodes: Node[]; edges: Edge[] } {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
@@ -206,6 +210,7 @@ function buildWorkerView(
                 stackCount: wStacks.length,
                 lastHeartbeat: w.last_heartbeat_at,
                 scale,
+                recentHeartbeat: recentHeartbeats?.has(w.id),
             } satisfies WorkerNodeData,
         });
 
@@ -219,11 +224,10 @@ function buildWorkerView(
                     containerId: c.id,
                     label: c.name,
                     status: c.status,
-                    image: c.image,
-                    tag: c.tag,
                     healthStatus: c.health_status,
                     stackName: stack?.name ?? "unknown",
                     scale,
+                    recentStatusChange: recentContainerChanges?.has(c.id),
                 } satisfies ContainerNodeData,
             });
 
@@ -248,6 +252,8 @@ function buildStackView(
     stacks: Stack[],
     containers: Container[],
     scale: NodeScale = "md",
+    _recentHeartbeats?: Set<number>,
+    recentContainerChanges?: Set<number>,
 ): { nodes: Node[]; edges: Edge[] } {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
@@ -279,11 +285,10 @@ function buildStackView(
                     containerId: c.id,
                     label: c.name,
                     status: c.status,
-                    image: c.image,
-                    tag: c.tag,
                     healthStatus: c.health_status,
                     stackName: s.name,
                     scale,
+                    recentStatusChange: recentContainerChanges?.has(c.id),
                 } satisfies ContainerNodeData,
             });
 
@@ -308,6 +313,8 @@ function buildContainerView(
     stacks: Stack[],
     containers: Container[],
     scale: NodeScale = "md",
+    recentHeartbeats?: Set<number>,
+    recentContainerChanges?: Set<number>,
 ): { nodes: Node[]; edges: Edge[] } {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
@@ -333,6 +340,7 @@ function buildContainerView(
                 stackCount: wStacks.length,
                 lastHeartbeat: w.last_heartbeat_at,
                 scale,
+                recentHeartbeat: recentHeartbeats?.has(w.id),
             } satisfies WorkerNodeData,
         });
     }
@@ -377,11 +385,10 @@ function buildContainerView(
                     containerId: c.id,
                     label: c.name,
                     status: c.status,
-                    image: c.image,
-                    tag: c.tag,
                     healthStatus: c.health_status,
                     stackName: s.name,
                     scale,
+                    recentStatusChange: recentContainerChanges?.has(c.id),
                 } satisfies ContainerNodeData,
             });
 
@@ -401,10 +408,12 @@ function buildContainerView(
     return applyDagreLayout(nodes, edges, "LR", scale);
 }
 
-const builders: Record<
-    ViewMode,
-    (w: Worker[], s: Stack[], c: Container[], scale: NodeScale) => { nodes: Node[]; edges: Edge[] }
-> = {
+type BuilderFn = (
+    w: Worker[], s: Stack[], c: Container[], scale: NodeScale,
+    recentHeartbeats?: Set<number>, recentContainerChanges?: Set<number>,
+) => { nodes: Node[]; edges: Edge[] };
+
+const builders: Record<ViewMode, BuilderFn> = {
     system: buildSystemView,
     worker: buildWorkerView,
     stack: buildStackView,
@@ -419,8 +428,9 @@ export function useTopologyData(viewMode: ViewMode, scale: NodeScale = "md") {
         loading: true,
     });
 
-    // Track which workers have recent heartbeats for edge animation bursts
     const recentHeartbeats = useRef<Set<number>>(new Set());
+    const recentContainerChanges = useRef<Set<number>>(new Set());
+    const [wsVersion, setWsVersion] = useState(0);
 
     const load = useCallback(async () => {
         const [wRes, sRes, cRes] = await Promise.all([
@@ -441,12 +451,15 @@ export function useTopologyData(viewMode: ViewMode, scale: NodeScale = "md") {
         load();
     }, [load]);
 
-    // Real-time WebSocket updates
     const handleSocketEvent = useCallback((event: AdminSocketEvent) => {
         if (event.type === "worker_heartbeat" && event.worker_id) {
             const wid = event.worker_id;
             recentHeartbeats.current.add(wid);
-            setTimeout(() => recentHeartbeats.current.delete(wid), 3000);
+            setWsVersion((v) => v + 1);
+            setTimeout(() => {
+                recentHeartbeats.current.delete(wid);
+                setWsVersion((v) => v + 1);
+            }, 6500);
 
             setState((prev) => ({
                 ...prev,
@@ -481,11 +494,33 @@ export function useTopologyData(viewMode: ViewMode, scale: NodeScale = "md") {
         if (event.type === "container_status" && event.payload) {
             const payload = event.payload as { container_id?: number; status?: string };
             if (payload.container_id && payload.status) {
+                const cid = payload.container_id;
+                recentContainerChanges.current.add(cid);
+                setWsVersion((v) => v + 1);
+                setTimeout(() => {
+                    recentContainerChanges.current.delete(cid);
+                    setWsVersion((v) => v + 1);
+                }, 3000);
+
+                setState((prev) => ({
+                    ...prev,
+                    containers: prev.containers.map((c) =>
+                        c.id === cid
+                            ? { ...c, status: payload.status as Container["status"] }
+                            : c,
+                    ),
+                }));
+            }
+        }
+
+        if (event.type === "container_health_status" && event.payload) {
+            const payload = event.payload as { container_id?: number; health_status?: string };
+            if (payload.container_id && payload.health_status) {
                 setState((prev) => ({
                     ...prev,
                     containers: prev.containers.map((c) =>
                         c.id === payload.container_id
-                            ? { ...c, status: payload.status as Container["status"] }
+                            ? { ...c, health_status: payload.health_status as string }
                             : c,
                     ),
                 }));
@@ -497,8 +532,12 @@ export function useTopologyData(viewMode: ViewMode, scale: NodeScale = "md") {
 
     const { nodes, edges } = useMemo(() => {
         if (state.loading) return { nodes: [], edges: [] };
-        return builders[viewMode](state.workers, state.stacks, state.containers, scale);
-    }, [state, viewMode, scale]);
+        void wsVersion;
+        return builders[viewMode](
+            state.workers, state.stacks, state.containers, scale,
+            recentHeartbeats.current, recentContainerChanges.current,
+        );
+    }, [state, viewMode, scale, wsVersion]);
 
     return { nodes, edges, loading: state.loading, refresh: load };
 }
