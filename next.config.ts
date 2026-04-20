@@ -1,19 +1,7 @@
 import type { NextConfig } from "next";
-import { execSync } from "child_process";
-
-function gitSha(): string {
-  try {
-    return execSync("git rev-parse --short HEAD").toString().trim();
-  } catch {
-    return "unknown";
-  }
-}
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  env: {
-    NEXT_PUBLIC_APP_VERSION: gitSha(),
-  },
   async headers() {
     return [
       {
