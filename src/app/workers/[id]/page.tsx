@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Worker, WorkerToken, WorkerMetrics, Stack, Container } from "@/types";
+import { Worker, WorkerToken, WorkerMetrics, Stack, Container, DockerVolume, DockerNetwork } from "@/types";
 import {
   reqGetWorker,
   reqUpdateWorker,
@@ -18,6 +18,8 @@ import {
   reqStartAllContainers,
 } from "@/services/workers.service";
 import { reqGetStacks, reqGetAllContainers } from "@/services/stacks.service";
+import { reqListVolumes, reqCreateVolume, reqDeleteVolume } from "@/services/volumes.service";
+import { reqListNetworks, reqCreateNetwork, reqDeleteNetwork } from "@/services/networks.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
@@ -145,6 +147,12 @@ export default function WorkerDetailPage() {
   const [newTokenName, setNewTokenName] = useState("");
   const [createdToken, setCreatedToken] = useState<string | null>(null);
 
+  // Volume & Network state
+  const [volumes, setVolumes] = useState<DockerVolume[]>([]);
+  const [networks, setNetworks] = useState<DockerNetwork[]>([]);
+  const [newVolumeName, setNewVolumeName] = useState("");
+  const [newNetworkName, setNewNetworkName] = useState("");
+
   // Worker action state
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -186,6 +194,14 @@ export default function WorkerDetailPage() {
   useEffect(() => {
     load();
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch volumes and networks when worker comes online
+  useEffect(() => {
+    if (worker?.status === "online") {
+      reqListVolumes(id);
+      reqListNetworks(id);
+    }
+  }, [worker?.status, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // WebSocket: real-time worker status + metrics
   const handleSocketEvent = useCallback(
@@ -257,6 +273,27 @@ export default function WorkerDetailPage() {
           toast.error(`${label}: ${message || "failed"}`);
         } else {
           toast.success(`${label}: ${message || status}`);
+        }
+        // Refresh volumes/networks after create/remove
+        if (["create_volume", "remove_volume"].includes(action) && status === "success") {
+          reqListVolumes(id);
+        }
+        if (["create_network", "remove_network"].includes(action) && status === "success") {
+          reqListNetworks(id);
+        }
+      }
+
+      if (event.type === "list_volumes_response") {
+        const p = event.payload ?? {};
+        if (p.status === "success" && Array.isArray(p.volumes)) {
+          setVolumes(p.volumes as DockerVolume[]);
+        }
+      }
+
+      if (event.type === "list_networks_response") {
+        const p = event.payload ?? {};
+        if (p.status === "success" && Array.isArray(p.networks)) {
+          setNetworks(p.networks as DockerNetwork[]);
         }
       }
     },
@@ -425,18 +462,25 @@ export default function WorkerDetailPage() {
           <h1 className="text-xl font-semibold text-primary">{worker.name}</h1>
           <StatusBadge status={worker.status} />
         </div>
-        {!editing && canEdit(user) && (
+        {!editing && (
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setEditing(true)}>
-              Edit Worker
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteWorker}
-              disabled={deleteLoading}
-            >
-              {deleteLoading ? "Deleting..." : "Delete Worker"}
-            </Button>
+            <Link href={`/workers/${worker.id}/metrics`}>
+              <Button variant="secondary">View Metrics</Button>
+            </Link>
+            {canEdit(user) && (
+              <>
+                <Button variant="secondary" onClick={() => setEditing(true)}>
+                  Edit Worker
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteWorker}
+                  disabled={deleteLoading}
+                >
+                  {deleteLoading ? "Deleting..." : "Delete Worker"}
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -862,6 +906,149 @@ export default function WorkerDetailPage() {
               )}
             </div>
           </div>
+
+          {/* Docker Volumes */}
+          {worker.status === "online" && (
+            <div className="rounded-xl border border-border-subtle bg-surface p-5">
+              <h2 className="text-sm font-medium text-primary mb-4">
+                Volumes
+              </h2>
+              {canEdit(user) && (
+                <div className="flex gap-2 mb-4">
+                  <Input
+                    placeholder="Volume name"
+                    value={newVolumeName}
+                    onChange={(e) => setNewVolumeName(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button
+                    size="md"
+                    onClick={async () => {
+                      if (!newVolumeName.trim()) return;
+                      await reqCreateVolume(id, { name: newVolumeName.trim() });
+                      setNewVolumeName("");
+                    }}
+                    disabled={!newVolumeName.trim()}
+                  >
+                    Create
+                  </Button>
+                </div>
+              )}
+              <div className="space-y-2">
+                {volumes.length === 0 ? (
+                  <p className="text-xs text-muted py-4 text-center">
+                    No volumes found
+                  </p>
+                ) : (
+                  volumes.map((vol) => (
+                    <div
+                      key={vol.name}
+                      className="flex items-center justify-between rounded-lg bg-surface-elevated px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm text-primary break-all">{vol.name}</p>
+                        <p className="text-xs text-muted">
+                          {vol.driver} &middot; {vol.scope}
+                        </p>
+                      </div>
+                      {canEdit(user) && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={async () => {
+                            const ok = await showConfirm({
+                              title: "Delete volume",
+                              message: `Delete volume "${vol.name}"? Any data stored in this volume will be lost.`,
+                              confirmLabel: "Delete",
+                              variant: "danger",
+                            });
+                            if (!ok) return;
+                            await reqDeleteVolume(id, vol.name, true);
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Docker Networks */}
+          {worker.status === "online" && (
+            <div className="rounded-xl border border-border-subtle bg-surface p-5">
+              <h2 className="text-sm font-medium text-primary mb-4">
+                Networks
+              </h2>
+              {canEdit(user) && (
+                <div className="flex gap-2 mb-4">
+                  <Input
+                    placeholder="Network name"
+                    value={newNetworkName}
+                    onChange={(e) => setNewNetworkName(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button
+                    size="md"
+                    onClick={async () => {
+                      if (!newNetworkName.trim()) return;
+                      await reqCreateNetwork(id, { name: newNetworkName.trim() });
+                      setNewNetworkName("");
+                    }}
+                    disabled={!newNetworkName.trim()}
+                  >
+                    Create
+                  </Button>
+                </div>
+              )}
+              <div className="space-y-2">
+                {networks.length === 0 ? (
+                  <p className="text-xs text-muted py-4 text-center">
+                    No networks found
+                  </p>
+                ) : (
+                  networks.map((net) => {
+                    const containerCount = net.containers ? Object.keys(net.containers).length : 0;
+                    return (
+                      <div
+                        key={net.id}
+                        className="flex items-center justify-between rounded-lg bg-surface-elevated px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm text-primary break-all">{net.name}</p>
+                          <p className="text-xs text-muted">
+                            {net.driver} &middot; {net.scope}
+                            {containerCount > 0 && ` \u00b7 ${containerCount} container${containerCount !== 1 ? "s" : ""}`}
+                            {net.internal && " \u00b7 internal"}
+                          </p>
+                        </div>
+                        {canEdit(user) && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={async () => {
+                              const ok = await showConfirm({
+                                title: "Delete network",
+                                message: `Delete network "${net.name}"? Containers connected to this network will be disconnected.`,
+                                confirmLabel: "Delete",
+                                variant: "danger",
+                              });
+                              if (!ok) return;
+                              await reqDeleteNetwork(id, net.name);
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Worker Tokens */}
           <div className="rounded-xl border border-border-subtle bg-surface p-5">

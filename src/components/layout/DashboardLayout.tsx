@@ -7,6 +7,7 @@ import { UpdateBanner } from "./UpdateBanner";
 import { Toaster } from "react-hot-toast";
 import { ConfirmProvider } from "@/components/ui/confirm-modal";
 import { VersionCheckProvider } from "@/hooks/useVersionCheck";
+import { useNotifications } from "@/hooks/useNotifications";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -17,6 +18,8 @@ const publicPaths = ["/login", "/unauthorized"];
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const isPublic = publicPaths.includes(pathname);
+
+  useNotifications();
 
   if (isPublic) {
     return <>{children}</>;

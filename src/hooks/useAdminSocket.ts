@@ -90,6 +90,14 @@ function maybeDisconnect() {
     }
 }
 
+// ─── Send helper ─────────────────────────────────────────────────────────────
+
+export function sendAdminMessage(msg: Record<string, unknown>): void {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(msg));
+    }
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 /**

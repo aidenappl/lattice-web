@@ -41,7 +41,7 @@ export const reqDeployStack = (id: number) =>
 
 // --- Containers ---
 
-export const reqGetAllContainers = (params?: { stack_id?: number; worker_id?: number }) =>
+export const reqGetAllContainers = (params?: { stack_id?: number; worker_id?: number; name?: string; status?: string }) =>
     fetchApi<Container[]>({
         method: "GET",
         url: "/admin/containers",

@@ -13,8 +13,14 @@ import {
   faSun,
   faMoon,
   faDesktop,
+  faBell,
+  faBellSlash,
 } from "@fortawesome/free-solid-svg-icons";
 import { useAuth } from "@/store/hooks";
+import {
+  getNotificationsEnabled,
+  setNotificationsEnabled,
+} from "@/hooks/useNotifications";
 import { APP_VERSION } from "@/lib/version";
 import { Logo } from "@/components/ui/logo";
 import { useTheme, type Theme } from "@/components/ThemeProvider";
@@ -101,6 +107,9 @@ export function Navbar() {
 
         {/* Right side */}
         <div className="flex items-center gap-2">
+          {/* Notification toggle */}
+          <NotificationToggle />
+
           {/* Theme toggle */}
           <ThemeToggle theme={theme} setTheme={setTheme} />
 
@@ -263,6 +272,30 @@ function ThemeToggle({
         </div>
       )}
     </div>
+  );
+}
+
+function NotificationToggle() {
+  const [enabled, setEnabled] = useState(getNotificationsEnabled);
+
+  const toggle = () => {
+    const next = !enabled;
+    setEnabled(next);
+    setNotificationsEnabled(next);
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      className="flex h-9 w-9 items-center justify-center rounded-lg text-secondary hover:bg-surface-elevated hover:text-primary transition-colors cursor-pointer"
+      aria-label={enabled ? "Disable notifications" : "Enable notifications"}
+      title={enabled ? "Notifications on" : "Notifications off"}
+    >
+      <FontAwesomeIcon
+        icon={enabled ? faBell : faBellSlash}
+        className="h-4 w-4"
+      />
+    </button>
   );
 }
 

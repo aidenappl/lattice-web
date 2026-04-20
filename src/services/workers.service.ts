@@ -52,10 +52,11 @@ export const reqDeleteWorkerToken = (id: number) =>
         url: `/admin/worker-tokens/${id}`,
     });
 
-export const reqGetWorkerMetrics = (id: number) =>
+export const reqGetWorkerMetrics = (id: number, range?: string) =>
     fetchApi<WorkerMetrics[]>({
         method: "GET",
         url: `/admin/workers/${id}/metrics`,
+        params: range ? { range } : undefined,
     });
 
 export const reqRebootWorker = (id: number) =>

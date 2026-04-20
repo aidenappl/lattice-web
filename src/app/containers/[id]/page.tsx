@@ -16,6 +16,7 @@ import {
   faTrash,
   faPenToSquare,
   faSpinner,
+  faTerminal,
 } from "@fortawesome/free-solid-svg-icons";
 import { Container, ContainerLog, Stack, Worker } from "@/types";
 import {
@@ -45,6 +46,7 @@ import { CodeEditor } from "@/components/ui/code-editor";
 import { Alert } from "@/components/ui/alert";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import WorkerBadge from "@/components/ui/worker-badge";
+import { Terminal } from "@/components/ui/terminal";
 import {
   LogViewer,
   LogLimit,
@@ -141,6 +143,9 @@ export default function ContainerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("logs");
   const [logLimit, setLogLimit] = useState<LogLimit>(250);
+
+  // terminal state
+  const [showTerminal, setShowTerminal] = useState(false);
 
   // action state
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -709,6 +714,17 @@ export default function ContainerDetailPage() {
             <FontAwesomeIcon icon={faPenToSquare} className="h-3.5 w-3.5" />
             Edit
           </button>
+          {/* Terminal */}
+          {isRunning && worker && (
+            <button
+              onClick={() => setShowTerminal(true)}
+              title="Open terminal session"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 h-8 text-sm font-medium text-secondary hover:text-primary hover:bg-surface-active transition-colors cursor-pointer"
+            >
+              <FontAwesomeIcon icon={faTerminal} className="h-3.5 w-3.5" />
+              Terminal
+            </button>
+          )}
 
           {actionError && (
             <div className="ml-auto">
@@ -1265,6 +1281,16 @@ export default function ContainerDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Terminal modal */}
+      {showTerminal && container && worker && (
+        <Terminal
+          containerId={container.id}
+          containerName={container.name}
+          workerId={worker.id}
+          onClose={() => setShowTerminal(false)}
+        />
+      )}
     </div>
   );
 }
