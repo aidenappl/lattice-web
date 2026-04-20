@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   reqGetOverview,
@@ -159,7 +159,10 @@ function DashboardKPIRow({ overview }: { overview: OverviewData | null }) {
 
 // ── Event Stream ────────────────────────────────────────────────────
 
+let eventIdCounter = 0;
+
 type LiveEvent = {
+  id: number;
   ts: number;
   level: "info" | "ok" | "warn" | "err";
   source: string;
@@ -232,8 +235,9 @@ function EventStream() {
         msg = JSON.stringify(event.payload ?? {}).slice(0, 100);
     }
 
+    const id = ++eventIdCounter;
     setEvents((prev) =>
-      [{ ts: now, level, source, msg }, ...prev].slice(0, 60),
+      [{ id, ts: now, level, source, msg }, ...prev].slice(0, 60),
     );
   }, []);
 
@@ -273,7 +277,7 @@ function EventStream() {
           </div>
         )}
         {events.slice(0, 22).map((ev, i) => (
-          <div key={`${ev.ts}-${i}`} className="event-line">
+          <div key={ev.id} className={`event-line${i === 0 ? " new" : ""}`}>
             <span className="event-ts">
               {new Date(ev.ts).toLocaleTimeString("en-US", { hour12: false })}
             </span>
@@ -705,6 +709,128 @@ function FailingStacksBanner({
   );
 }
 
+// ── Resizable Split ─────────────────────────────────────────────────
+
+function ResizableSplit({
+  left,
+  right,
+  leftMin = 300,
+  rightMin = 200,
+  defaultRightWidth = 360,
+  storageKey,
+  height,
+  style,
+}: {
+  left: React.ReactNode;
+  right: React.ReactNode;
+  leftMin?: number;
+  rightMin?: number;
+  defaultRightWidth?: number;
+  storageKey?: string;
+  height: number;
+  style?: React.CSSProperties;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [rightWidth, setRightWidth] = useState(() => {
+    if (storageKey && typeof localStorage !== "undefined") {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) return parseInt(saved, 10);
+    }
+    return defaultRightWidth;
+  });
+  const dragging = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
+  const latestWidth = useRef(rightWidth);
+  latestWidth.current = rightWidth;
+
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragging.current = true;
+      startX.current = e.clientX;
+      startWidth.current = latestWidth.current;
+
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!dragging.current || !containerRef.current) return;
+        const containerWidth = containerRef.current.offsetWidth;
+        const delta = startX.current - ev.clientX;
+        const newRight = Math.max(
+          rightMin,
+          Math.min(containerWidth - leftMin - 12, startWidth.current + delta),
+        );
+        setRightWidth(newRight);
+        latestWidth.current = newRight;
+      };
+
+      const onMouseUp = () => {
+        dragging.current = false;
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        if (storageKey) {
+          localStorage.setItem(storageKey, String(latestWidth.current));
+        }
+      };
+
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [leftMin, rightMin, storageKey],
+  );
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        display: "flex",
+        gap: 0,
+        height,
+        ...style,
+      }}
+    >
+      <div style={{ flex: 1, minWidth: leftMin, overflow: "hidden" }}>
+        {left}
+      </div>
+      {/* Drag handle */}
+      <div
+        onMouseDown={onMouseDown}
+        style={{
+          width: 12,
+          cursor: "col-resize",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            width: 3,
+            height: 32,
+            borderRadius: 2,
+            background: "var(--border)",
+            transition: "background 0.15s",
+          }}
+          className="hover:!bg-border-strong"
+        />
+      </div>
+      <div
+        style={{
+          width: rightWidth,
+          flexShrink: 0,
+          overflow: "hidden",
+        }}
+      >
+        {right}
+      </div>
+    </div>
+  );
+}
+
 // ── Dashboard Page ──────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -755,26 +881,21 @@ export default function DashboardPage() {
       {/* KPI row */}
       <DashboardKPIRow overview={overview} />
 
-      {/* Topology + Event Stream */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 360px",
-          gap: 20,
-          marginBottom: 16,
-        }}
-      >
-        <div className="panel" style={{ height: 540, overflow: "hidden" }}>
-          <div className="panel-header">
-            <span>Topology</span>
-            <span className="muted">· live system map</span>
-          </div>
-          <div style={{ height: "calc(100% - 41px)" }}>
+      {/* Topology + Event Stream (resizable) */}
+      <ResizableSplit
+        leftMin={400}
+        rightMin={260}
+        defaultRightWidth={360}
+        storageKey="lattice-dash-topo-split"
+        height={540}
+        style={{ marginBottom: 16 }}
+        left={
+          <div className="panel" style={{ height: "100%", overflow: "hidden" }}>
             <TopologyBoard />
           </div>
-        </div>
-        <EventStream />
-      </div>
+        }
+        right={<EventStream />}
+      />
 
       {/* Deployment Timeline + Fleet Resources */}
       <div

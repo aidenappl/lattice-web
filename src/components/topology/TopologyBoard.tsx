@@ -1,257 +1,1054 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  useNodesState,
-  useEdgesState,
-  useReactFlow,
-  ReactFlowProvider,
-  type NodeTypes,
-  type EdgeTypes,
-  type NodeMouseHandler,
-  type Node,
-  BackgroundVariant,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faRotate } from "@fortawesome/free-solid-svg-icons";
+import { useTopologyData, type ViewMode } from "./useTopologyData";
+import { Sparkline, generateSparkData } from "@/components/ui/sparkline";
 import { PageLoader } from "@/components/ui/loading";
-import { useTopologyData } from "./useTopologyData";
-import { ViewModeSelector } from "./ViewModeSelector";
-import { SystemNode } from "./nodes/SystemNode";
-import { WorkerNode } from "./nodes/WorkerNode";
-import { StackNode } from "./nodes/StackNode";
-import { ContainerNode } from "./nodes/ContainerNode";
-import { DataFlowEdge } from "./edges/DataFlowEdge";
-import type { ViewMode } from "./types";
-import type { NodeScale } from "./layout";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faServer,
+  faLayerGroup,
+  faCube,
+  faNetworkWired,
+} from "@fortawesome/free-solid-svg-icons";
+import type { Worker, Stack, Container, ComposeNetwork } from "@/types";
 
-const nodeTypes: NodeTypes = {
-  system: SystemNode,
-  worker: WorkerNode,
-  stack: StackNode,
-  container: ContainerNode,
+// ── Layout types ────────────────────────────────────────────────────
+
+type TopoNode = {
+  id: string;
+  kind: "worker" | "stack" | "container";
+  entityId: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  status: string;
+  label: string;
+  meta?: Record<string, unknown>;
 };
 
-const edgeTypes: EdgeTypes = {
-  dataFlow: DataFlowEdge,
+type TopoEdge = {
+  from: TopoNode;
+  to: TopoNode;
+  status: string;
 };
 
-const SCALE_OPTIONS: { value: NodeScale; label: string }[] = [
-  { value: "sm", label: "S" },
-  { value: "md", label: "M" },
-  { value: "lg", label: "L" },
-];
+type NetworkGroup = {
+  stackId: number;
+  networkName: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
 
-export function TopologyBoard() {
+// ── Dimensions ──────────────────────────────────────────────────────
+
+const WORKER_W = 230;
+const WORKER_H = 68;
+const STACK_W = 260;
+const STACK_H = 60;
+const CONTAINER_W = 200;
+const CONTAINER_H = 46;
+const COL_HEADER_H = 28;
+const NET_PAD = 8;
+const NET_LABEL_H = 18;
+
+// ── Status helpers ──────────────────────────────────────────────────
+
+function workerStatusClass(status: string) {
+  if (status === "online") return "healthy";
+  if (status === "maintenance") return "pending";
+  return "failed";
+}
+
+function stackStatusClass(status: string) {
+  if (status === "active" || status === "deployed") return "healthy";
+  if (status === "deploying") return "pending";
+  if (status === "failed" || status === "error") return "failed";
+  return "off";
+}
+
+function containerStatusClass(status: string) {
+  if (status === "running") return "healthy";
+  if (status === "pending" || status === "paused") return "pending";
+  return "failed";
+}
+
+function isActiveEdge(status: string) {
   return (
-    <ReactFlowProvider>
-      <TopologyBoardInner />
-    </ReactFlowProvider>
+    status === "running" ||
+    status === "active" ||
+    status === "deployed" ||
+    status === "deploying" ||
+    status === "online"
   );
 }
 
-function TopologyBoardInner() {
-  const router = useRouter();
-  const { fitView } = useReactFlow();
-  const [viewMode, setViewMode] = useState<ViewMode>("system");
-  const [nodeScale, setNodeScale] = useState<NodeScale>("md");
-  const prevViewMode = useRef(viewMode);
-  const prevScale = useRef(nodeScale);
-  const hasFitted = useRef(false);
-  const userDragged = useRef(false);
+// ── Layout builder ──────────────────────────────────────────────────
 
-  const {
-    nodes: layoutNodes,
-    edges: layoutEdges,
-    loading,
-    refresh,
-  } = useTopologyData(viewMode, nodeScale);
+function buildLayout(
+  workers: Worker[],
+  stacks: Stack[],
+  containers: Container[],
+  networks: ComposeNetwork[],
+  viewMode: ViewMode,
+): {
+  nodes: TopoNode[];
+  edges: TopoEdge[];
+  networkGroups: NetworkGroup[];
+  totalW: number;
+  totalH: number;
+} {
+  const wNodes: TopoNode[] = [];
+  const sNodes: TopoNode[] = [];
+  const cNodes: TopoNode[] = [];
+  const networkGroups: NetworkGroup[] = [];
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(layoutEdges);
+  // Build a map of stack_id -> network names
+  const stackNetworks = new Map<number, string[]>();
+  for (const n of networks) {
+    const existing = stackNetworks.get(n.stack_id) ?? [];
+    existing.push(n.name);
+    stackNetworks.set(n.stack_id, existing);
+  }
 
-  // Full layout reset when viewMode or scale changes
-  const layoutChanged =
-    viewMode !== prevViewMode.current || nodeScale !== prevScale.current;
+  if (viewMode === "system") {
+    // ── SYSTEM VIEW: Workers → Stacks → Containers ──────────────
 
-  useEffect(() => {
-    if (layoutChanged) {
-      // Reset everything on view/scale change
-      setNodes(layoutNodes);
-      setEdges(layoutEdges);
-      userDragged.current = false;
-      prevViewMode.current = viewMode;
-      prevScale.current = nodeScale;
-      hasFitted.current = false;
-    } else if (!userDragged.current) {
-      // Initial load or data refresh when user hasn't dragged — apply positions
-      setNodes(layoutNodes);
-      setEdges(layoutEdges);
-    } else {
-      // User has dragged nodes — only update data, preserve positions
-      setNodes((prev) => {
-        const layoutMap = new Map(layoutNodes.map((n) => [n.id, n]));
-        const updated: Node[] = [];
-        const existingIds = new Set(prev.map((n) => n.id));
-
-        for (const existing of prev) {
-          const fresh = layoutMap.get(existing.id);
-          if (fresh) {
-            updated.push({
-              ...existing,
-              data: fresh.data,
-              style: fresh.style,
-            });
-          }
-        }
-
-        // Add any new nodes that appeared
-        for (const ln of layoutNodes) {
-          if (!existingIds.has(ln.id)) {
-            updated.push(ln);
-          }
-        }
-
-        return updated;
+    // Workers column
+    const wGap = 20;
+    const wTop = COL_HEADER_H + 8;
+    workers.forEach((w, i) => {
+      const containerCount = containers.filter((c) => {
+        const stack = stacks.find((s) => s.id === c.stack_id);
+        return stack?.worker_id === w.id;
+      }).length;
+      wNodes.push({
+        id: `worker-${w.id}`,
+        kind: "worker",
+        entityId: w.id,
+        x: 32,
+        y: wTop + i * (WORKER_H + wGap),
+        w: WORKER_W,
+        h: WORKER_H,
+        status: w.status,
+        label: w.name,
+        meta: {
+          hostname: w.hostname,
+          containerCount,
+          stackCount: stacks.filter((s) => s.worker_id === w.id).length,
+        },
       });
-      setEdges(layoutEdges);
-    }
-  }, [
-    layoutNodes,
-    layoutEdges,
-    setNodes,
-    setEdges,
-    layoutChanged,
-    viewMode,
-    nodeScale,
-  ]);
+    });
 
-  // fitView after layout settles
-  useEffect(() => {
-    if (loading || layoutNodes.length === 0) return;
-    if (!hasFitted.current || layoutChanged) {
-      const t = requestAnimationFrame(() => {
-        fitView({
-          padding: 0.02,
-          maxZoom: 1.5,
-          duration: hasFitted.current ? 500 : 0,
+    // Stacks column — sorted by worker_id to align with workers and minimize crossing
+    const sortedStacks = [...stacks].sort((a, b) => {
+      const aIdx = workers.findIndex((w) => w.id === a.worker_id);
+      const bIdx = workers.findIndex((w) => w.id === b.worker_id);
+      return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
+    });
+
+    const sGap = 12;
+    const sTop = COL_HEADER_H + 8;
+    const sX = 340;
+    sortedStacks.forEach((s, i) => {
+      const sContainers = containers.filter((c) => c.stack_id === s.id);
+      const runningCount = sContainers.filter((c) => c.status === "running").length;
+      sNodes.push({
+        id: `stack-${s.id}`,
+        kind: "stack",
+        entityId: s.id,
+        x: sX,
+        y: sTop + i * (STACK_H + sGap),
+        w: STACK_W,
+        h: STACK_H,
+        status: s.status,
+        label: s.name,
+        meta: {
+          workerId: s.worker_id,
+          containerCount: sContainers.length,
+          runningCount,
+          strategy: s.deployment_strategy,
+        },
+      });
+    });
+
+    // Container column — group by stack, with network boxes
+    const cGap = 6;
+    const cGroupGap = 16;
+    const cX = 700;
+    let cY = COL_HEADER_H + 8;
+
+    // Group containers by stack (using sorted stack order)
+    for (const stack of sortedStacks) {
+      const stackContainers = containers.filter((c) => c.stack_id === stack.id);
+      if (stackContainers.length === 0) continue;
+
+      const netNames = stackNetworks.get(stack.id);
+      const networkLabel = netNames && netNames.length > 0 ? netNames.join(", ") : null;
+
+      const groupStartY = cY;
+      if (networkLabel) {
+        cY += NET_LABEL_H + 4;
+      }
+
+      for (let ci = 0; ci < stackContainers.length; ci++) {
+        const c = stackContainers[ci];
+        cNodes.push({
+          id: `container-${c.id}`,
+          kind: "container",
+          entityId: c.id,
+          x: networkLabel ? cX + NET_PAD : cX,
+          y: cY,
+          w: CONTAINER_W,
+          h: CONTAINER_H,
+          status: c.status,
+          label: c.name,
+          meta: { stackId: c.stack_id },
         });
-        hasFitted.current = true;
-      });
-      return () => cancelAnimationFrame(t);
-    }
-  }, [loading, layoutNodes, fitView, layoutChanged]);
+        cY += CONTAINER_H + cGap;
+      }
 
-  const handleNodesChange: typeof onNodesChange = useCallback(
-    (changes) => {
-      const hasDrag = changes.some((c) => c.type === "position" && c.dragging);
-      if (hasDrag) userDragged.current = true;
-      onNodesChange(changes);
-    },
-    [onNodesChange],
+      if (networkLabel) {
+        // Remove last gap and add padding
+        const groupH = cY - groupStartY + NET_PAD - cGap;
+        networkGroups.push({
+          stackId: stack.id,
+          networkName: networkLabel,
+          x: cX,
+          y: groupStartY,
+          w: CONTAINER_W + NET_PAD * 2,
+          h: groupH,
+        });
+        cY = groupStartY + groupH + cGroupGap;
+      } else {
+        cY += cGroupGap - cGap;
+      }
+    }
+  } else if (viewMode === "worker") {
+    // ── WORKER VIEW: Workers + their containers ─────────────────
+    const wGap = 20;
+    const wTop = COL_HEADER_H + 8;
+    workers.forEach((w, i) => {
+      const containerCount = containers.filter((c) => {
+        const stack = stacks.find((s) => s.id === c.stack_id);
+        return stack?.worker_id === w.id;
+      }).length;
+      wNodes.push({
+        id: `worker-${w.id}`,
+        kind: "worker",
+        entityId: w.id,
+        x: 32,
+        y: wTop + i * (WORKER_H + wGap),
+        w: WORKER_W,
+        h: WORKER_H,
+        status: w.status,
+        label: w.name,
+        meta: {
+          hostname: w.hostname,
+          containerCount,
+          stackCount: stacks.filter((s) => s.worker_id === w.id).length,
+        },
+      });
+    });
+
+    // Containers grouped by worker
+    const cGap = 6;
+    const cGroupGap = 16;
+    const cX = 340;
+    let cY = COL_HEADER_H + 8;
+
+    for (const w of workers) {
+      const wContainers = containers.filter((c) => {
+        const stack = stacks.find((s) => s.id === c.stack_id);
+        return stack?.worker_id === w.id;
+      });
+      for (const c of wContainers) {
+        cNodes.push({
+          id: `container-${c.id}`,
+          kind: "container",
+          entityId: c.id,
+          x: cX,
+          y: cY,
+          w: CONTAINER_W,
+          h: CONTAINER_H,
+          status: c.status,
+          label: c.name,
+          meta: { stackId: c.stack_id },
+        });
+        cY += CONTAINER_H + cGap;
+      }
+      cY += cGroupGap;
+    }
+  } else if (viewMode === "stack") {
+    // ── STACK VIEW: Stacks → Containers ─────────────────────────
+    const sortedStacks = [...stacks].sort((a, b) => {
+      const aIdx = workers.findIndex((w) => w.id === a.worker_id);
+      const bIdx = workers.findIndex((w) => w.id === b.worker_id);
+      return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
+    });
+
+    const sGap = 12;
+    const sTop = COL_HEADER_H + 8;
+    sortedStacks.forEach((s, i) => {
+      const sContainers = containers.filter((c) => c.stack_id === s.id);
+      const runningCount = sContainers.filter((c) => c.status === "running").length;
+      sNodes.push({
+        id: `stack-${s.id}`,
+        kind: "stack",
+        entityId: s.id,
+        x: 32,
+        y: sTop + i * (STACK_H + sGap),
+        w: STACK_W,
+        h: STACK_H,
+        status: s.status,
+        label: s.name,
+        meta: {
+          workerId: s.worker_id,
+          containerCount: sContainers.length,
+          runningCount,
+          strategy: s.deployment_strategy,
+        },
+      });
+    });
+
+    // Containers grouped by stack
+    const cGap = 6;
+    const cGroupGap = 16;
+    const cX = 380;
+    let cY = COL_HEADER_H + 8;
+
+    for (const stack of sortedStacks) {
+      const stackContainers = containers.filter((c) => c.stack_id === stack.id);
+      if (stackContainers.length === 0) continue;
+
+      const netNames = stackNetworks.get(stack.id);
+      const networkLabel = netNames && netNames.length > 0 ? netNames.join(", ") : null;
+
+      const groupStartY = cY;
+      if (networkLabel) {
+        cY += NET_LABEL_H + 4;
+      }
+
+      for (const c of stackContainers) {
+        cNodes.push({
+          id: `container-${c.id}`,
+          kind: "container",
+          entityId: c.id,
+          x: networkLabel ? cX + NET_PAD : cX,
+          y: cY,
+          w: CONTAINER_W,
+          h: CONTAINER_H,
+          status: c.status,
+          label: c.name,
+          meta: { stackId: c.stack_id },
+        });
+        cY += CONTAINER_H + cGap;
+      }
+
+      if (networkLabel) {
+        const groupH = cY - groupStartY + NET_PAD - cGap;
+        networkGroups.push({
+          stackId: stack.id,
+          networkName: networkLabel,
+          x: cX,
+          y: groupStartY,
+          w: CONTAINER_W + NET_PAD * 2,
+          h: groupH,
+        });
+        cY = groupStartY + groupH + cGroupGap;
+      } else {
+        cY += cGroupGap - cGap;
+      }
+    }
+  } else {
+    // ── CONTAINER VIEW: flat list ───────────────────────────────
+    const cGap = 6;
+    const cGroupGap = 16;
+    const cX = 32;
+    let cY = COL_HEADER_H + 8;
+
+    // Group by stack
+    const stackIds = [...new Set(containers.map((c) => c.stack_id))];
+    for (const sid of stackIds) {
+      const stackContainers = containers.filter((c) => c.stack_id === sid);
+      const netNames = stackNetworks.get(sid);
+      const networkLabel = netNames && netNames.length > 0 ? netNames.join(", ") : null;
+
+      const groupStartY = cY;
+      if (networkLabel) {
+        cY += NET_LABEL_H + 4;
+      }
+
+      for (const c of stackContainers) {
+        cNodes.push({
+          id: `container-${c.id}`,
+          kind: "container",
+          entityId: c.id,
+          x: networkLabel ? cX + NET_PAD : cX,
+          y: cY,
+          w: CONTAINER_W,
+          h: CONTAINER_H,
+          status: c.status,
+          label: c.name,
+          meta: { stackId: c.stack_id },
+        });
+        cY += CONTAINER_H + cGap;
+      }
+
+      if (networkLabel) {
+        const groupH = cY - groupStartY + NET_PAD - cGap;
+        networkGroups.push({
+          stackId: sid,
+          networkName: networkLabel,
+          x: cX,
+          y: groupStartY,
+          w: CONTAINER_W + NET_PAD * 2,
+          h: groupH,
+        });
+        cY = groupStartY + groupH + cGroupGap;
+      } else {
+        cY += cGroupGap - cGap;
+      }
+    }
+  }
+
+  const allNodes = [...wNodes, ...sNodes, ...cNodes];
+
+  // Build edges
+  const edges: TopoEdge[] = [];
+
+  if (viewMode === "system") {
+    // Workers → Stacks
+    for (const s of sNodes) {
+      const wId = s.meta?.workerId as number | null;
+      if (wId) {
+        const w = wNodes.find((n) => n.entityId === wId);
+        if (w) edges.push({ from: w, to: s, status: s.status });
+      }
+    }
+    // Stacks → Containers
+    for (const c of cNodes) {
+      const sId = c.meta?.stackId as number;
+      const s = sNodes.find((n) => n.entityId === sId);
+      if (s) edges.push({ from: s, to: c, status: c.status });
+    }
+  } else if (viewMode === "worker") {
+    for (const c of cNodes) {
+      const sId = c.meta?.stackId as number;
+      const stack = stacks.find((s) => s.id === sId);
+      if (stack?.worker_id) {
+        const w = wNodes.find((n) => n.entityId === stack.worker_id);
+        if (w) edges.push({ from: w, to: c, status: c.status });
+      }
+    }
+  } else if (viewMode === "stack") {
+    for (const c of cNodes) {
+      const sId = c.meta?.stackId as number;
+      const s = sNodes.find((n) => n.entityId === sId);
+      if (s) edges.push({ from: s, to: c, status: c.status });
+    }
+  }
+
+  // Calculate total bounds
+  let totalW = 0;
+  let totalH = 0;
+  for (const n of allNodes) {
+    totalW = Math.max(totalW, n.x + n.w + 48);
+    totalH = Math.max(totalH, n.y + n.h + 48);
+  }
+  for (const g of networkGroups) {
+    totalW = Math.max(totalW, g.x + g.w + 48);
+    totalH = Math.max(totalH, g.y + g.h + 48);
+  }
+
+  return { nodes: allNodes, edges, networkGroups, totalW, totalH };
+}
+
+// ── SVG Edges ───────────────────────────────────────────────────────
+
+function EdgesSVG({
+  edges,
+  totalW,
+  totalH,
+}: {
+  edges: TopoEdge[];
+  totalW: number;
+  totalH: number;
+}) {
+  return (
+    <svg
+      width={totalW}
+      height={totalH}
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        pointerEvents: "none",
+      }}
+    >
+      {edges.map((e, i) => {
+        const x1 = e.from.x + e.from.w;
+        const y1 = e.from.y + e.from.h / 2;
+        const x2 = e.to.x;
+        const y2 = e.to.y + e.to.h / 2;
+        const cx = (x1 + x2) / 2;
+        const d = `M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`;
+        const active = isActiveEdge(e.status);
+        return (
+          <path
+            key={i}
+            d={d}
+            className={`flow-edge ${active ? "active" : ""}`}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+// ── Network group box ───────────────────────────────────────────────
+
+function NetworkGroupBox({ group }: { group: NetworkGroup }) {
+  return (
+    <div
+      className="topo-network-group"
+      style={{
+        position: "absolute",
+        left: group.x,
+        top: group.y,
+        width: group.w,
+        height: group.h,
+      }}
+    >
+      <div className="topo-network-label">
+        <FontAwesomeIcon icon={faNetworkWired} style={{ fontSize: 9 }} />
+        {group.networkName}
+      </div>
+    </div>
+  );
+}
+
+// ── Node components ─────────────────────────────────────────────────
+
+function WorkerNodeEl({
+  node,
+  selected,
+  onSelect,
+  onNavigate,
+}: {
+  node: TopoNode;
+  selected: boolean;
+  onSelect: () => void;
+  onNavigate: () => void;
+}) {
+  const st = workerStatusClass(node.status);
+  const meta = node.meta as {
+    hostname: string;
+    containerCount: number;
+    stackCount: number;
+  };
+
+  return (
+    <div
+      className={`topo-node ${selected ? "selected" : ""}`}
+      style={{ left: node.x, top: node.y, width: node.w, height: node.h }}
+      onClick={onSelect}
+      onDoubleClick={onNavigate}
+    >
+      <div
+        style={{
+          padding: "8px 10px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span className={`status-dot ${st}`} />
+          <FontAwesomeIcon
+            icon={faServer}
+            style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0 }}
+          />
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 500,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            {node.label}
+          </span>
+          <span
+            className="mono"
+            style={{
+              fontSize: 10,
+              color: "var(--text-muted)",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
+            {meta.hostname?.split(".")[0] ?? ""}
+          </span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            fontSize: 10,
+            fontFamily: "var(--font-mono)",
+            color: "var(--text-muted)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            alignItems: "center",
+          }}
+        >
+          <span>{meta.stackCount}s</span>
+          <span>{meta.containerCount}c</span>
+          <Sparkline
+            data={generateSparkData(12, node.entityId, 0.5, 0.2)}
+            width={28}
+            height={12}
+            color="var(--healthy)"
+            fill={false}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StackNodeEl({
+  node,
+  selected,
+  onSelect,
+  onNavigate,
+}: {
+  node: TopoNode;
+  selected: boolean;
+  onSelect: () => void;
+  onNavigate: () => void;
+}) {
+  const st = stackStatusClass(node.status);
+  const meta = node.meta as {
+    containerCount: number;
+    runningCount: number;
+    strategy: string;
+  };
+
+  return (
+    <div
+      className={`topo-node ${selected ? "selected" : ""}`}
+      style={{
+        left: node.x,
+        top: node.y,
+        width: node.w,
+        height: node.h,
+        borderColor:
+          st === "failed"
+            ? "var(--failed-dim)"
+            : st === "pending"
+              ? "var(--pending-dim)"
+              : undefined,
+      }}
+      onClick={onSelect}
+      onDoubleClick={onNavigate}
+    >
+      <div
+        style={{
+          padding: "8px 10px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <FontAwesomeIcon
+            icon={faLayerGroup}
+            style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0 }}
+          />
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 500,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            {node.label}
+          </span>
+          <span className={`status-dot ${st}`} style={{ marginLeft: "auto" }} />
+        </div>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            fontSize: 10,
+            fontFamily: "var(--font-mono)",
+            color: "var(--text-muted)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+          }}
+        >
+          <span>
+            {meta.runningCount}/{meta.containerCount} running
+          </span>
+          <span style={{ opacity: 0.4 }}>·</span>
+          <span>{meta.strategy}</span>
+          {node.status === "deploying" && (
+            <span style={{ color: "var(--pending)", marginLeft: "auto" }}>
+              deploying
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContainerNodeEl({
+  node,
+  onNavigate,
+}: {
+  node: TopoNode;
+  onNavigate: () => void;
+}) {
+  const st = containerStatusClass(node.status);
+
+  return (
+    <div
+      className="topo-node"
+      style={{
+        left: node.x,
+        top: node.y,
+        width: node.w,
+        height: node.h,
+        background: "var(--background)",
+      }}
+      onDoubleClick={onNavigate}
+    >
+      <div
+        style={{
+          padding: "6px 8px",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <span className={`status-dot ${st}`} />
+        <FontAwesomeIcon
+          icon={faCube}
+          style={{ fontSize: 9, color: "var(--text-muted)", flexShrink: 0 }}
+        />
+        <span
+          style={{
+            fontSize: 11,
+            fontFamily: "var(--font-mono)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {node.label}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Zoom / Scale ────────────────────────────────────────────────────
+
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 2.5;
+
+// ── View mode options ───────────────────────────────────────────────
+
+const VIEW_MODES: { value: ViewMode; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "worker", label: "Workers" },
+  { value: "stack", label: "Stacks" },
+  { value: "container", label: "Containers" },
+];
+
+// ── Main component ──────────────────────────────────────────────────
+
+export function TopologyBoard() {
+  const router = useRouter();
+  const { workers, stacks, containers, networks, loading } = useTopologyData();
+  const [viewMode, setViewMode] = useState<ViewMode>("system");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+
+  // Reset pan/zoom on view mode change
+  useEffect(() => {
+    setPan({ x: 0, y: 0 });
+    setZoom(1);
+    setSelected(null);
+  }, [viewMode]);
+
+  const { nodes, edges, networkGroups, totalW, totalH } = useMemo(
+    () => buildLayout(workers, stacks, containers, networks, viewMode),
+    [workers, stacks, containers, networks, viewMode],
   );
 
-  const onNodeClick: NodeMouseHandler = useCallback(
-    (_event, node) => {
-      if (node.type === "worker") {
-        const data = node.data as { workerId?: number };
-        if (data.workerId) router.push(`/workers/${data.workerId}`);
-      } else if (node.type === "stack") {
-        const data = node.data as { stackId?: number };
-        if (data.stackId) router.push(`/stacks/${data.stackId}`);
-      } else if (node.type === "container") {
-        const data = node.data as { containerId?: number };
-        if (data.containerId) router.push(`/containers/${data.containerId}`);
-      }
+  const handleNavigate = useCallback(
+    (kind: string, id: number) => {
+      if (kind === "worker") router.push(`/workers/${id}`);
+      else if (kind === "stack") router.push(`/stacks/${id}`);
+      else if (kind === "container") router.push(`/containers/${id}`);
     },
     [router],
   );
 
+  // Pan handlers
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if ((e.target as HTMLElement).closest(".topo-node")) return;
+      if ((e.target as HTMLElement).closest(".topo-network-group")) return;
+      dragging.current = true;
+      dragStart.current = {
+        x: e.clientX,
+        y: e.clientY,
+        panX: pan.x,
+        panY: pan.y,
+      };
+      e.preventDefault();
+    },
+    [pan],
+  );
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      const dx = e.clientX - dragStart.current.x;
+      const dy = e.clientY - dragStart.current.y;
+      setPan({
+        x: dragStart.current.panX + dx,
+        y: dragStart.current.panY + dy,
+      });
+    };
+    const onMouseUp = () => {
+      dragging.current = false;
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
+  // Zoom via scroll wheel
+  const onWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      // Mouse position relative to container
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      const delta = e.deltaY > 0 ? 0.92 : 1.08;
+      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * delta));
+
+      // Adjust pan so zoom is centered on cursor
+      const scale = newZoom / zoom;
+      setPan({
+        x: mx - (mx - pan.x) * scale,
+        y: my - (my - pan.y) * scale,
+      });
+      setZoom(newZoom);
+    },
+    [zoom, pan],
+  );
+
   if (loading) return <PageLoader />;
 
+  const workerCount = workers.length;
+  const stackCount = stacks.length;
+  const containerCount = containers.length;
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between mb-3">
-        <ViewModeSelector value={viewMode} onChange={setViewMode} />
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-0.5 rounded-lg border border-border-strong bg-surface-alt p-0.5">
-            {SCALE_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setNodeScale(opt.value)}
-                title={`Node size: ${opt.label === "S" ? "Small" : opt.label === "M" ? "Medium" : "Large"}`}
-                className={`flex items-center justify-center rounded-md w-7 h-7 text-[10px] font-semibold transition-colors cursor-pointer ${
-                  nodeScale === opt.value
-                    ? "bg-surface-active text-primary shadow-sm"
-                    : "text-muted hover:text-secondary"
-                }`}
+    <div className="flex flex-col h-full select-none">
+      {/* Header */}
+      <div className="panel-header" style={{ whiteSpace: "nowrap", minWidth: 0 }}>
+        <span>Topology</span>
+        <span className="muted">· live system map</span>
+        <div className="panel-header-right">
+          <div className="segmented">
+            {VIEW_MODES.map((m) => (
+              <div
+                key={m.value}
+                className={`segmented-option ${viewMode === m.value ? "active" : ""}`}
+                onClick={() => setViewMode(m.value)}
               >
-                {opt.label}
-              </button>
+                {m.label}
+              </div>
             ))}
           </div>
-          <button
-            onClick={() => {
-              userDragged.current = false;
-              refresh().then(() => {
-                requestAnimationFrame(() =>
-                  fitView({ padding: 0.02, maxZoom: 1.5, duration: 500 }),
-                );
-              });
+          <span
+            className="mono"
+            style={{
+              fontSize: 10,
+              color: "var(--text-muted)",
+              marginLeft: 8,
+              minWidth: 32,
+              textAlign: "center",
             }}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border-strong text-secondary hover:text-primary hover:bg-surface-active transition-colors cursor-pointer"
-            title="Refresh topology"
-            aria-label="Refresh"
           >
-            <FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />
-          </button>
+            {Math.round(zoom * 100)}%
+          </span>
         </div>
       </div>
 
       {/* Canvas */}
-      <div className="flex-1 rounded-xl border border-border-subtle overflow-hidden bg-background">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={handleNodesChange}
-          onEdgesChange={onEdgesChange}
-          onNodeClick={onNodeClick}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          minZoom={0.05}
-          maxZoom={3}
-          proOptions={{ hideAttribution: true }}
-          className="topology-flow"
+      <div
+        ref={containerRef}
+        className="topology"
+        style={{
+          flex: 1,
+          position: "relative",
+          overflow: "hidden",
+          cursor: dragging.current ? "grabbing" : "grab",
+        }}
+        onMouseDown={onMouseDown}
+        onWheel={onWheel}
+      >
+        {/* Dot grid background */}
+        <div className="topology-grid" />
+
+        {/* Pannable + zoomable inner content */}
+        <div
+          style={{
+            position: "absolute",
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transformOrigin: "0 0",
+            width: totalW,
+            height: totalH,
+          }}
         >
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={24}
-            size={1}
-            color="var(--border-subtle)"
-          />
-          <Controls
-            showInteractive={false}
-            className="!bg-surface-alt !border-border-strong !rounded-lg !shadow-lg [&>button]:!bg-surface-alt [&>button]:!border-border-strong [&>button]:!text-secondary [&>button:hover]:!bg-surface-active [&>button:hover]:!text-primary [&>button]:!w-7 [&>button]:!h-7"
-          />
-          <MiniMap
-            nodeStrokeWidth={3}
-            nodeColor={(node) => {
-              if (node.type === "system") return "#3b82f6";
-              if (node.type === "worker") return "#22c55e";
-              if (node.type === "stack") return "#a855f7";
-              return "#6b7280";
-            }}
-            maskColor="rgba(0,0,0,0.15)"
-            className="!bg-surface-alt !border-border-strong !rounded-lg"
-          />
-        </ReactFlow>
+          {/* Column headers */}
+          {viewMode === "system" && (
+            <>
+              <div className="topo-column-header" style={{ left: 40, top: 8 }}>
+                <FontAwesomeIcon icon={faServer} style={{ marginRight: 4 }} />
+                Workers · {workerCount}
+              </div>
+              <div className="topo-column-header" style={{ left: 348, top: 8 }}>
+                <FontAwesomeIcon icon={faLayerGroup} style={{ marginRight: 4 }} />
+                Stacks · {stackCount}
+              </div>
+              <div className="topo-column-header" style={{ left: 708, top: 8 }}>
+                <FontAwesomeIcon icon={faCube} style={{ marginRight: 4 }} />
+                Containers · {containerCount}
+              </div>
+            </>
+          )}
+          {viewMode === "worker" && (
+            <>
+              <div className="topo-column-header" style={{ left: 40, top: 8 }}>
+                <FontAwesomeIcon icon={faServer} style={{ marginRight: 4 }} />
+                Workers · {workerCount}
+              </div>
+              <div className="topo-column-header" style={{ left: 348, top: 8 }}>
+                <FontAwesomeIcon icon={faCube} style={{ marginRight: 4 }} />
+                Containers · {containerCount}
+              </div>
+            </>
+          )}
+          {viewMode === "stack" && (
+            <>
+              <div className="topo-column-header" style={{ left: 40, top: 8 }}>
+                <FontAwesomeIcon icon={faLayerGroup} style={{ marginRight: 4 }} />
+                Stacks · {stackCount}
+              </div>
+              <div className="topo-column-header" style={{ left: 388, top: 8 }}>
+                <FontAwesomeIcon icon={faCube} style={{ marginRight: 4 }} />
+                Containers · {containerCount}
+              </div>
+            </>
+          )}
+          {viewMode === "container" && (
+            <div className="topo-column-header" style={{ left: 40, top: 8 }}>
+              <FontAwesomeIcon icon={faCube} style={{ marginRight: 4 }} />
+              Containers · {containerCount}
+            </div>
+          )}
+
+          {/* SVG edges */}
+          <EdgesSVG edges={edges} totalW={totalW} totalH={totalH} />
+
+          {/* Network group boxes (rendered behind nodes) */}
+          {networkGroups.map((g) => (
+            <NetworkGroupBox key={`net-${g.stackId}`} group={g} />
+          ))}
+
+          {/* Nodes */}
+          {nodes.map((node) => {
+            if (node.kind === "worker") {
+              return (
+                <WorkerNodeEl
+                  key={node.id}
+                  node={node}
+                  selected={selected === node.id}
+                  onSelect={() => setSelected(node.id)}
+                  onNavigate={() => handleNavigate("worker", node.entityId)}
+                />
+              );
+            }
+            if (node.kind === "stack") {
+              return (
+                <StackNodeEl
+                  key={node.id}
+                  node={node}
+                  selected={selected === node.id}
+                  onSelect={() => setSelected(node.id)}
+                  onNavigate={() => handleNavigate("stack", node.entityId)}
+                />
+              );
+            }
+            return (
+              <ContainerNodeEl
+                key={node.id}
+                node={node}
+                onNavigate={() => handleNavigate("container", node.entityId)}
+              />
+            );
+          })}
+        </div>
+
+        {/* Status legend */}
+        <div className="topo-legend">
+          <span className="topo-legend-item">
+            <span className="status-dot healthy" />
+            healthy
+          </span>
+          <span className="topo-legend-item">
+            <span className="status-dot pending" />
+            pending
+          </span>
+          <span className="topo-legend-item">
+            <span className="status-dot failed" />
+            failed
+          </span>
+          <span style={{ opacity: 0.4 }}>· scroll to zoom · drag to pan</span>
+        </div>
       </div>
     </div>
   );

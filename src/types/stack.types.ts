@@ -37,6 +37,17 @@ export type Container = {
     updated_at: string;
 };
 
+export type ComposeNetwork = {
+    id: number;
+    stack_id: number;
+    name: string;
+    driver: string;
+    subnet: string | null;
+    options: string | null;
+    updated_at: string;
+    inserted_at: string;
+};
+
 export type Registry = {
     id: number;
     name: string;

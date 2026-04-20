@@ -1,4 +1,4 @@
-import { Stack, Container, ContainerLog, LifecycleLog } from "@/types";
+import { Stack, Container, ContainerLog, LifecycleLog, ComposeNetwork } from "@/types";
 import { fetchApi } from "./api.service";
 
 export const reqGetStacks = () =>
@@ -160,4 +160,10 @@ export const reqSyncCompose = (id: number) =>
     fetchApi<{ container_name: string; updated: boolean; reason?: string }[]>({
         method: "POST",
         url: `/admin/stacks/${id}/sync-compose`,
+    });
+
+export const reqGetAllNetworks = () =>
+    fetchApi<ComposeNetwork[]>({
+        method: "GET",
+        url: "/admin/networks",
     });
