@@ -34,6 +34,13 @@ export default function DeploymentDetailPage() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  const [liveMeta, setLiveMeta] = useState<{
+    attempt?: number;
+    maxRetries?: number;
+    step?: string;
+    message?: string;
+    lastProgressAt?: string;
+  }>({});
   const logsEndRef = useRef<HTMLDivElement>(null);
   const showConfirm = useConfirm();
 
@@ -61,10 +68,26 @@ export default function DeploymentDetailPage() {
   // WS: listen for deployment_progress events for this deployment
   const handleSocketEvent = useCallback(
     (event: AdminSocketEvent) => {
-      if (event.type !== "deployment_progress") return;
+      if (
+        event.type !== "deployment_progress" &&
+        event.type !== "deployment_status"
+      )
+        return;
       const payload = event.payload ?? {};
       const depId = payload["deployment_id"] as number | undefined;
       if (depId !== id) return;
+
+      setLiveMeta((prev) => ({
+        ...prev,
+        attempt: (payload["attempt"] as number | undefined) ?? prev.attempt,
+        maxRetries:
+          (payload["max_retries"] as number | undefined) ?? prev.maxRetries,
+        step: (payload["step"] as string | undefined) ?? prev.step,
+        message: (payload["message"] as string | undefined) ?? prev.message,
+        lastProgressAt:
+          (payload["last_progress_at"] as string | undefined) ??
+          prev.lastProgressAt,
+      }));
 
       // Update deployment status if present
       const status = payload["status"] as string | undefined;
@@ -84,7 +107,10 @@ export default function DeploymentDetailPage() {
             deployment_id: id,
             level: (payload["level"] as string) ?? "info",
             stage: (payload["stage"] as string) ?? null,
-            message,
+            message:
+              event.type === "deployment_status"
+                ? `[status-check] ${message}`
+                : message,
             recorded_at: new Date().toISOString(),
           },
         ]);
@@ -164,9 +190,7 @@ export default function DeploymentDetailPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="page-title text-xl">
-              Deployment #{deployment.id}
-            </h1>
+            <h1 className="page-title text-xl">Deployment #{deployment.id}</h1>
             <StatusBadge status={deployment.status} />
           </div>
           <p className="text-sm text-secondary mt-1">
@@ -259,6 +283,21 @@ export default function DeploymentDetailPage() {
               <p className="text-sm text-secondary mt-1">
                 {deployment.strategy}
               </p>
+            </div>
+
+            <div>
+              <p className="text-xs text-muted uppercase tracking-wider">
+                Live Progress
+              </p>
+              <p className="text-sm text-secondary mt-1">
+                {liveMeta.attempt && liveMeta.maxRetries
+                  ? `Attempt ${liveMeta.attempt}/${liveMeta.maxRetries}`
+                  : "Attempt 1/3"}
+                {liveMeta.step ? ` • ${liveMeta.step}` : ""}
+              </p>
+              {liveMeta.message && (
+                <p className="text-xs text-muted mt-1">{liveMeta.message}</p>
+              )}
             </div>
             <div>
               <p className="text-xs text-muted uppercase tracking-wider">
@@ -356,9 +395,7 @@ export default function DeploymentDetailPage() {
                     {new Date(log.recorded_at).toLocaleTimeString()}
                   </span>
                   {log.stage && (
-                    <span className="text-info shrink-0">
-                      [{log.stage}]
-                    </span>
+                    <span className="text-info shrink-0">[{log.stage}]</span>
                   )}
                   <span
                     className={cn(
