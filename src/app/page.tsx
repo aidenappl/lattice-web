@@ -156,7 +156,7 @@ function DashboardKPIRow({
         </div>
       </div>
 
-      <div className="kpi" style={{ borderRight: "none" }}>
+      <div className="kpi kpi-version" style={{ borderRight: "none" }}>
         <div className="kpi-label">Version</div>
         <div className="kpi-value text-[18px]">
           <span className="mono text-[13px] font-normal text-secondary">

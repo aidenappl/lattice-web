@@ -1645,6 +1645,32 @@ html {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   RESPONSIVE: Narrow desktop (≤1400px)
+   ═══════════════════════════════════════════════════════════════════ */
+@media (max-width: 1400px) {
+  .dash-kpi-row {
+    grid-template-columns: repeat(5, 1fr);
+  }
+  .kpi-version {
+    display: none;
+  }
+  .kpi:nth-child(5) {
+    border-right: none;
+  }
+  .kpi {
+    padding-right: 80px;
+  }
+  .kpi-spark {
+    width: 56px;
+    height: 24px;
+    right: 12px;
+  }
+  .kpi-value {
+    font-size: 26px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    RESPONSIVE: Tablet (≤1024px)
    ═══════════════════════════════════════════════════════════════════ */
 @media (max-width: 1024px) {
