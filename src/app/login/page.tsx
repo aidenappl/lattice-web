@@ -40,11 +40,12 @@ export default function LoginPage() {
       const ssoError = params.get("error");
       if (ssoError) {
         const messages: Record<string, string> = {
-          sso_denied: "SSO authentication was denied",
-          sso_failed: "SSO authentication failed",
-          sso_no_email: "SSO provider did not return an email address",
+          sso_denied: "SSO authentication was denied by the provider.",
+          sso_failed: "SSO authentication failed. Please try again.",
+          sso_no_email: "The SSO provider did not return an email address. Ensure your SSO scopes include 'email'.",
           sso_no_account: "No account found for this email. Contact your administrator.",
-          account_disabled: "Your account has been disabled",
+          sso_state_expired: "SSO session expired. Please try again.",
+          account_disabled: "Your account has been disabled. Contact your administrator.",
         };
         setError(messages[ssoError] ?? "SSO authentication failed");
         // Clean up URL
