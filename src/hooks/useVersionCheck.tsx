@@ -12,6 +12,7 @@ import {
 import { VersionInfo } from "@/types";
 import { reqGetVersions } from "@/services/admin.service";
 import { APP_VERSION } from "@/lib/version";
+import { isNewerVersion } from "@/lib/utils";
 
 type VersionState = {
   info: VersionInfo | null;
@@ -51,12 +52,12 @@ export function VersionCheckProvider({
     const webUpdateAvailable =
       APP_VERSION !== "dev" &&
       info.web.latest !== "" &&
-      APP_VERSION !== info.web.latest;
+      isNewerVersion(APP_VERSION, info.web.latest);
 
     const apiUpdateAvailable =
       info.api.current !== "" &&
       info.api.latest !== "" &&
-      info.api.current !== info.api.latest;
+      isNewerVersion(info.api.current, info.api.latest);
 
     setState({
       info,

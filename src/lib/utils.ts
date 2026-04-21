@@ -1,5 +1,19 @@
 import type { User, Worker, HealthCheckConfig } from "@/types";
 
+/**
+ * Returns true if `latest` is a newer semver than `current`.
+ * Strips a leading "v" and compares major.minor.patch numerically.
+ */
+export function isNewerVersion(current: string, latest: string): boolean {
+  const parse = (v: string) =>
+    v.replace(/^v/, "").split(".").map(Number);
+  const [cMaj = 0, cMin = 0, cPat = 0] = parse(current);
+  const [lMaj = 0, lMin = 0, lPat = 0] = parse(latest);
+  if (lMaj !== cMaj) return lMaj > cMaj;
+  if (lMin !== cMin) return lMin > cMin;
+  return lPat > cPat;
+}
+
 export function cn(...classes: (string | boolean | undefined | null)[]): string {
     return classes.filter(Boolean).join(' ');
 }

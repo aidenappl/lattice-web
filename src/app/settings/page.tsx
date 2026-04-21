@@ -12,7 +12,7 @@ import {
   reqRefreshVersions,
 } from "@/services/admin.service";
 import { useUser } from "@/store/hooks";
-import { isAdmin, formatDate } from "@/lib/utils";
+import { isAdmin, formatDate, isNewerVersion } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
@@ -141,9 +141,9 @@ function VersionCheckSection({ adminUser }: { adminUser: boolean }) {
   const outdatedRunners = info?.runner.outdated_count ?? 0;
   const totalRunners = info?.runner.workers.length ?? 0;
 
-  const apiUpToDate = !apiLatest || apiCurrent === apiLatest;
+  const apiUpToDate = !apiLatest || !isNewerVersion(apiCurrent, apiLatest);
   const webUpToDate =
-    webCurrent === "dev" || !webLatest || webCurrent === webLatest;
+    webCurrent === "dev" || !webLatest || !isNewerVersion(webCurrent, webLatest);
 
   const lastChecked = info?.last_checked ? new Date(info.last_checked) : null;
 
