@@ -624,9 +624,14 @@ export default function StackDetailPage() {
                 <span className="stack-chip text-pending">Unassigned</span>
               )}
               <span className="stack-chip">{stack.deployment_strategy}</span>
-              {stack.auto_deploy && (
-                <span className="stack-chip text-healthy">Auto-deploy</span>
-              )}
+              {stack.auto_deploy && (() => {
+                const watchedCount = containers.filter(c => c.registry_id).length;
+                return (
+                  <span className="stack-chip text-healthy" title={`${watchedCount} container${watchedCount !== 1 ? 's' : ''} watched for image updates`}>
+                    Auto-deploy {watchedCount > 0 ? `(${watchedCount})` : ""}
+                  </span>
+                );
+              })()}
               <span className="stack-chip">
                 {containers.length} container
                 {containers.length !== 1 ? "s" : ""}

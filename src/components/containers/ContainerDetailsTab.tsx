@@ -35,6 +35,25 @@ export function ContainerDetailsTab({ container }: ContainerDetailsTabProps) {
         </p>
       </section>
 
+      {/* Image Watching */}
+      <section>
+        <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
+          Image Watching
+        </h3>
+        {container.registry_id ? (
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-info animate-pulse" />
+            <p className="text-sm text-primary">
+              Watching for updates (Registry #{container.registry_id})
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted">
+            Not configured — link a registry in the edit form to enable automatic image update detection
+          </p>
+        )}
+      </section>
+
       {/* Port mappings */}
       <section>
         <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">

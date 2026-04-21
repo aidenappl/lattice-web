@@ -247,6 +247,7 @@ function SSOTab() {
   const [userIdentifier, setUserIdentifier] = useState("");
   const [buttonLabel, setButtonLabel] = useState("");
   const [autoProvision, setAutoProvision] = useState(true);
+  const [postLoginUrl, setPostLoginUrl] = useState("");
   const [showSecret, setShowSecret] = useState(false);
 
   const loadConfig = async () => {
@@ -259,6 +260,7 @@ function SSOTab() {
       setRedirectUrl(d.redirect_url); setLogoutUrl(d.logout_url);
       setScopes(d.scopes); setUserIdentifier(d.user_identifier);
       setButtonLabel(d.button_label); setAutoProvision(d.auto_provision);
+      setPostLoginUrl(d.post_login_url || "");
       if (d.authorize_url) setSelectedProvider("custom");
     }
     setLoading(false);
@@ -284,6 +286,7 @@ function SSOTab() {
       token_url: tokenUrl, userinfo_url: userinfoUrl, redirect_url: redirectUrl,
       logout_url: logoutUrl, scopes, user_identifier: userIdentifier,
       button_label: buttonLabel, auto_provision: autoProvision,
+      post_login_url: postLoginUrl,
     };
     if (clientSecret && !clientSecret.startsWith("••")) data.client_secret = clientSecret;
     const res = await reqUpdateSSOConfig(data);
@@ -389,7 +392,11 @@ function SSOTab() {
                 value={redirectUrl} onChange={(e) => setRedirectUrl(e.target.value)} />
               <Input id="sso-logout-url" label="Logout URL (optional)" type="url" placeholder="https://idp.example.com/logout"
                 value={logoutUrl} onChange={(e) => setLogoutUrl(e.target.value)} />
+              <Input id="sso-post-login-url" label="Post-Login Redirect URL" type="url"
+                placeholder="https://lattice.example.com"
+                value={postLoginUrl} onChange={(e) => setPostLoginUrl(e.target.value)} />
             </div>
+            <p className="text-[10px] text-muted mt-2">The Post-Login Redirect URL is the frontend URL where users are sent after SSO authentication completes.</p>
           </div>
 
           <div>

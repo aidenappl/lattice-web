@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPenToSquare } from "@fortawesome/free-solid-svg-icons";
 import toast from "react-hot-toast";
-import type { Container } from "@/types";
+import type { Container, Registry } from "@/types";
 import { reqUpdateContainer } from "@/services/stacks.service";
+import { reqGetRegistries } from "@/services/registries.service";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { Button } from "@/components/ui/button";
 
@@ -53,6 +54,11 @@ export function ContainerEditForm({
   );
   const [editDependsOn, setEditDependsOn] = useState(container.depends_on ?? "");
   const [saving, setSaving] = useState(false);
+  const [registries, setRegistries] = useState<Registry[]>([]);
+
+  useEffect(() => {
+    reqGetRegistries().then(res => { if (res.success) setRegistries(res.data ?? []); });
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -204,16 +210,19 @@ export function ContainerEditForm({
           </div>
           <div>
             <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-              Registry ID
+              Registry
             </label>
-            <input
-              type="number"
-              min="0"
+            <select
               value={editRegistryId}
               onChange={(e) => setEditRegistryId(e.target.value)}
-              placeholder="e.g. 1"
               className={inputClass}
-            />
+            >
+              <option value="">None (no image watching)</option>
+              {registries.map(r => (
+                <option key={r.id} value={r.id}>{r.name} — {r.url}</option>
+              ))}
+            </select>
+            <p className="text-[9px] text-muted mt-1">Link to a registry to enable automatic image update detection</p>
           </div>
           <div>
             <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">

@@ -395,6 +395,16 @@ export default function NewStackPage() {
           </div>
         </div>
 
+        {/* Image update watching guidance */}
+        <div className="rounded-lg border border-border-subtle bg-surface-alt p-3 mt-4">
+          <p className="text-xs text-secondary font-medium mb-1">Image Update Watching</p>
+          <p className="text-[11px] text-muted">
+            To enable automatic image update detection, link each container to a registry after creating the stack.
+            Go to the stack detail page, edit each container, and select a registry from the dropdown.
+            Enable &quot;Auto Deploy&quot; above to automatically trigger deployments when new images are detected.
+          </p>
+        </div>
+
         {/* Compose YAML editor */}
         <div className="card p-6">
           <div className="flex items-center justify-between mb-3">

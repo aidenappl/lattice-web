@@ -248,6 +248,11 @@ export function StackContainersList({
                   {container.image}:{container.tag}
                 </span>
                 <StatusBadge status={container.status} />
+                {container.registry_id && (
+                  <span className="text-[10px] text-info bg-info/10 px-1.5 py-0.5 rounded font-mono">
+                    watching
+                  </span>
+                )}
               </div>
             </div>
           ))}

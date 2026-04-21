@@ -132,7 +132,7 @@ export function StackEditForm({
               </span>
             </div>
             <p className="text-[10px] text-muted mt-1">
-              When enabled, Lattice watches linked registries for new image versions and fires webhooks to trigger deployments.
+              Watches registries for new image versions. Each container must have a registry linked (set via container edit) for updates to be detected. Configure a webhook for &quot;image.updated&quot; to receive notifications.
             </p>
           </div>
         </div>

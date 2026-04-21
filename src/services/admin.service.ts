@@ -145,6 +145,7 @@ export type SSOConfigData = {
     user_identifier: string;
     button_label: string;
     auto_provision: boolean;
+    post_login_url: string;
 };
 
 export const reqGetSSOConfig = () =>

@@ -45,6 +45,19 @@ export function ContainerInfoPanels({
               label="Last Updated"
               value={timeAgo(container.updated_at)}
             />
+            <InfoRow
+              label="Image Watching"
+              value={
+                container.registry_id ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-info animate-pulse" />
+                    <span className="text-info">Active</span>
+                  </span>
+                ) : (
+                  <span className="text-muted">Not configured</span>
+                )
+              }
+            />
             {container.cpu_limit != null && (
               <InfoRow
                 label="CPU Limit"
