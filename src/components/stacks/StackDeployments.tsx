@@ -99,21 +99,21 @@ export function StackDeployments({
                 No logs yet
               </p>
             ) : (
-              <div className="space-y-0.5 max-h-[500px] overflow-y-auto font-mono text-xs">
+              <div className="space-y-0.5 max-h-[500px] overflow-y-auto overflow-x-hidden font-mono text-xs">
                 {deploymentLogs.map((log) => (
                   <div
                     key={log.id}
-                    className={`flex gap-2 px-2 py-1 rounded ${log.level === "error" ? "bg-red-950/30 text-red-400" : "text-secondary"}`}
+                    className={`px-2 py-1 rounded ${log.level === "error" ? "bg-red-950/30 text-red-400" : "text-secondary"}`}
                   >
-                    <span className="text-dimmed shrink-0 tabular-nums">
+                    <span className="text-dimmed tabular-nums">
                       {new Date(log.recorded_at).toLocaleTimeString()}
                     </span>
                     {log.stage && (
-                      <span className="text-muted shrink-0">
+                      <span className="text-muted ml-1">
                         [{log.stage}]
                       </span>
                     )}
-                    <span className="break-all">{log.message}</span>
+                    <span className="ml-1 break-words">{log.message}</span>
                   </div>
                 ))}
                 <div ref={deploymentLogsEndRef} />

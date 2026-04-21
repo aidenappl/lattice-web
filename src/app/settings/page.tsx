@@ -336,6 +336,8 @@ const WEBHOOK_EVENTS = [
   { value: "deployment.success", label: "Deployment success" },
   { value: "worker.disconnected", label: "Worker disconnected" },
   { value: "worker.crash", label: "Worker crash" },
+  { value: "image.updated", label: "Image version updated" },
+  { value: "image.auto_deploy_requested", label: "Auto-deploy requested" },
 ];
 
 function WebhookSection({ adminUser }: { adminUser: boolean }) {
@@ -1315,18 +1317,18 @@ export default function SettingsPage() {
         </table>
       </div>
 
-      {/* Global Environment Variables Section */}
-      <div className="mt-8 mb-8">
-        <GlobalEnvVarsSection adminUser={admin} />
-      </div>
-
       {/* Webhooks Section */}
       <div className="mt-8 mb-8">
         <WebhookSection adminUser={admin} />
       </div>
 
+      {/* Global Environment Variables Section */}
+      <div className="mb-8">
+        <GlobalEnvVarsSection adminUser={admin} />
+      </div>
+
       {/* Templates Section */}
-      <div className="mt-8 mb-8">
+      <div className="mb-8">
         <TemplatesSection />
       </div>
       </div>

@@ -108,7 +108,7 @@ export default function ContainerDetailPage() {
         }
       }
     } else {
-      console.error(
+      if (process.env.NODE_ENV === "development") console.error(
         `[ContainerInspector] failed to load container ${id}:`,
         res.error_message,
       );
@@ -134,7 +134,7 @@ export default function ContainerDetailPage() {
           event.type === "container_sync" ||
           event.type === "container_health_status"
         ) {
-          console.log(
+          if (process.env.NODE_ENV === "development") console.log(
             `[ContainerInspector] WS ${event.type} matched "${myName}"`,
             payload,
           );
@@ -216,7 +216,7 @@ export default function ContainerDetailPage() {
     setActionLoading(action);
 
     const toastId = toast.loading(`Sending ${label.toLowerCase()} to ${name}\u2026`);
-    console.log(
+    if (process.env.NODE_ENV === "development") console.log(
       `[ContainerInspector] sending action "${action}" to container ${id} (${name})`,
     );
 
@@ -224,7 +224,7 @@ export default function ContainerDetailPage() {
       const res = await fn();
       if (res.success) {
         toast.success(`${label} command sent to ${name}`, { id: toastId });
-        console.log(`[ContainerInspector] action "${action}" ok for ${name}`);
+        if (process.env.NODE_ENV === "development") console.log(`[ContainerInspector] action "${action}" ok for ${name}`);
         // Inject a synthetic lifecycle log for immediate feedback.
         const lifecycleMsg: Record<string, string> = {
           restart: "container restarting\u2026",
@@ -248,7 +248,7 @@ export default function ContainerDetailPage() {
       } else {
         const msg = res.error_message ?? "Unknown error";
         toast.error(`${label} failed: ${msg}`, { id: toastId });
-        console.error(
+        if (process.env.NODE_ENV === "development") console.error(
           `[ContainerInspector] action "${action}" failed for ${name}:`,
           msg,
         );
@@ -257,7 +257,7 @@ export default function ContainerDetailPage() {
     } catch (err) {
       const msg = String(err);
       toast.error(`${label} error: ${msg}`, { id: toastId });
-      console.error(
+      if (process.env.NODE_ENV === "development") console.error(
         `[ContainerInspector] action "${action}" threw for ${name}:`,
         err,
       );

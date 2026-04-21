@@ -7,10 +7,11 @@ import {
   faRotate,
   faArrowUpRightFromSquare,
 } from "@fortawesome/free-solid-svg-icons";
-import type { Container, Stack, Worker, PortEntry, WorkerGroup } from "@/types";
+import type { Container, Stack, Worker, PortEntry, WorkerGroup, GlobalEnvVar } from "@/types";
 import { reqGetAllContainers, reqGetStacks } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
-import { parsePortMappings } from "@/lib/utils";
+import { reqGetGlobalEnvVars } from "@/services/admin.service";
+import { parsePortMappings, parseJSON } from "@/lib/utils";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import WorkerBadge from "@/components/ui/worker-badge";
@@ -19,17 +20,20 @@ export default function NetworksPage() {
   const [containers, setContainers] = useState<Container[]>([]);
   const [stacks, setStacks] = useState<Stack[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [globalEnvVars, setGlobalEnvVars] = useState<GlobalEnvVar[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [cRes, sRes, wRes] = await Promise.all([
+    const [cRes, sRes, wRes, gRes] = await Promise.all([
       reqGetAllContainers(),
       reqGetStacks(),
       reqGetWorkers(),
+      reqGetGlobalEnvVars(),
     ]);
     if (cRes.success) setContainers(cRes.data ?? []);
     if (sRes.success) setStacks(sRes.data ?? []);
     if (wRes.success) setWorkers(wRes.data ?? []);
+    if (gRes.success) setGlobalEnvVars(gRes.data ?? []);
     setLoading(false);
   }, []);
 
@@ -46,6 +50,19 @@ export default function NetworksPage() {
   const stackMap = Object.fromEntries(stacks.map((s) => [s.id, s]));
   const workerMap = Object.fromEntries(workers.map((w) => [w.id, w]));
 
+  // Build global env lookup
+  const globalEnv: Record<string, string> = {};
+  for (const gv of globalEnvVars) {
+    globalEnv[gv.key] = gv.value;
+  }
+
+  // Resolve ${VAR} references in a string against env vars
+  const resolveVars = (s: string, envMap: Record<string, string>): string =>
+    s.replace(/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g, (match, braced, bare) => {
+      const key = braced ?? bare;
+      return envMap[key] ?? match;
+    });
+
   // Group ports by worker
   const workerGroups: WorkerGroup[] = [];
   const workerPortMap = new Map<number, PortEntry[]>();
@@ -54,12 +71,19 @@ export default function NetworksPage() {
     const stack = stackMap[c.stack_id];
     if (!stack?.worker_id) continue;
 
+    // Build merged env: global -> stack -> container
+    const mergedEnv: Record<string, string> = { ...globalEnv };
+    const stackEnv = parseJSON<Record<string, string>>(stack.env_vars) ?? {};
+    Object.assign(mergedEnv, stackEnv);
+    const containerEnv = parseJSON<Record<string, string>>(c.env_vars) ?? {};
+    Object.assign(mergedEnv, containerEnv);
+
     const ports = parsePortMappings(c.port_mappings);
     for (const p of ports) {
       if (!p.host_port) continue;
       const entry: PortEntry = {
-        hostPort: p.host_port,
-        containerPort: p.container_port ?? "?",
+        hostPort: resolveVars(p.host_port, mergedEnv),
+        containerPort: resolveVars(p.container_port ?? "?", mergedEnv),
         protocol: p.protocol ?? "tcp",
         container: c,
         stack,

@@ -238,17 +238,21 @@ function UserMenu() {
             </p>
             <p className="text-xs text-secondary truncate">{user?.email}</p>
           </div>
-          <a
-            href={`${API_URL}/auth/logout`}
-            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-failed hover:bg-surface cursor-pointer"
-            onClick={() => setOpen(false)}
+          <button
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-failed hover:bg-surface cursor-pointer w-full"
+            onClick={async () => {
+              setOpen(false);
+              const { reqLogout } = await import("@/services/auth.service");
+              await reqLogout();
+              window.location.replace("/login");
+            }}
           >
             <FontAwesomeIcon
               icon={faRightFromBracket}
               className="h-3.5 w-3.5"
             />
             Sign Out
-          </a>
+          </button>
         </div>
       )}
     </div>

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import type { Stack, Container, Worker } from "@/types";
+import type { Stack, Container, Worker, StackImportPayload } from "@/types";
 import { reqGetStacks, reqGetAllContainers, reqImportStackExport } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
@@ -90,7 +90,7 @@ export default function StacksPage() {
               if (!file) return;
               const text = await file.text();
               try {
-                const data = JSON.parse(text);
+                const data = JSON.parse(text) as StackImportPayload;
                 const res = await reqImportStackExport(data);
                 if (res.success) {
                   toast.success("Stack imported successfully");

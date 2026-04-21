@@ -1,6 +1,8 @@
 "use client";
 
-export function WorkerContainerStats({ stats }: { stats: any[] }) {
+import type { ContainerResourceUsage } from "@/types";
+
+export function WorkerContainerStats({ stats }: { stats: ContainerResourceUsage[] }) {
   if (!stats || stats.length === 0) return null;
   return (
     <div className="panel">
@@ -25,7 +27,7 @@ export function WorkerContainerStats({ stats }: { stats: any[] }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-border-subtle">
-          {stats.map((s: any) => (
+          {stats.map((s) => (
             <tr key={s.id || s.name}>
               <td className="px-4 py-2 text-sm font-mono text-primary">
                 {s.name}

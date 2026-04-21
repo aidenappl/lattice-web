@@ -1,4 +1,4 @@
-import { Stack, Container, ContainerLog, LifecycleLog, ComposeNetwork, DeployToken } from "@/types";
+import { Stack, Container, ContainerLog, LifecycleLog, ComposeNetwork, DeployToken, StackExportPayload, StackImportPayload } from "@/types";
 import { fetchApi } from "./api.service";
 
 export const reqGetStacks = () =>
@@ -187,13 +187,13 @@ export const reqStartStack = (stackId: number) =>
     });
 
 export const reqExportStack = (stackId: number) =>
-    fetchApi<any>({
+    fetchApi<StackExportPayload>({
         method: "GET",
         url: `/admin/stacks/${stackId}/export`,
     });
 
-export const reqImportStackExport = (data: any) =>
-    fetchApi<any>({
+export const reqImportStackExport = (data: StackImportPayload) =>
+    fetchApi<Stack>({
         method: "POST",
         url: `/admin/stacks/import-export`,
         data,

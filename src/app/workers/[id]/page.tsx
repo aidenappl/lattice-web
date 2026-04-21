@@ -8,6 +8,7 @@ import type {
   WorkerMetrics,
   Stack,
   Container,
+  ContainerResourceUsage,
   DockerVolume,
   DockerNetwork,
 } from "@/types";
@@ -89,7 +90,7 @@ export default function WorkerDetailPage() {
   const [editing, setEditing] = useState(false);
 
   // Container stats from heartbeat
-  const [containerStats, setContainerStats] = useState<any[]>([]);
+  const [containerStats, setContainerStats] = useState<ContainerResourceUsage[]>([]);
 
   // Volume & Network state (driven by WebSocket)
   const [volumes, setVolumes] = useState<DockerVolume[]>([]);
@@ -182,7 +183,7 @@ export default function WorkerDetailPage() {
         };
         dispatch(pushMetricsSnapshot(snapshot));
         if (p.container_stats) {
-          setContainerStats(p.container_stats as any[]);
+          setContainerStats(p.container_stats as ContainerResourceUsage[]);
         }
         setLastUpdated(new Date());
       }
@@ -281,7 +282,7 @@ export default function WorkerDetailPage() {
       if (!ok) return;
     }
     setActionLoading(action);
-    const actionMap: Record<string, (id: number) => Promise<any>> = {
+    const actionMap: Record<string, (id: number) => Promise<{ success: boolean }>> = {
       reboot: reqRebootWorker,
       upgrade: reqUpgradeRunner,
       "stop-all": reqStopAllContainers,

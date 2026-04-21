@@ -63,6 +63,7 @@ import { StackEnvTab } from "@/components/stacks/StackEnvTab";
 import { StackLogsTab } from "@/components/stacks/StackLogsTab";
 import { StackDeployments } from "@/components/stacks/StackDeployments";
 import StackDeployTokensPanel from "@/components/stacks/StackDeployTokensPanel";
+import { StackDependencyGraph } from "@/components/stacks/StackDependencyGraph";
 
 export default function StackDetailPage() {
   const params = useParams();
@@ -270,7 +271,7 @@ export default function StackDetailPage() {
         event.type === "container_health_status"
       ) {
         if (containerNamesRef.current.has(eventName)) {
-          console.log(
+          if (process.env.NODE_ENV === "development") console.log(
             `[StackPage] WS ${event.type} for "${eventName}" — refreshing containers`,
           );
           refreshContainers();
@@ -460,24 +461,24 @@ export default function StackDetailPage() {
 
     const fn = actionFns[action];
     if (!fn) {
-      console.warn(`[StackPage] unknown action "${action}"`);
+      if (process.env.NODE_ENV === "development") console.warn(`[StackPage] unknown action "${action}"`);
       setActionLoading((prev) => ({ ...prev, [key]: false }));
       return;
     }
 
     const toastId = toast.loading(`Sending ${label.toLowerCase()} to ${name}…`);
-    console.log(
+    if (process.env.NODE_ENV === "development") console.log(
       `[StackPage] sending action "${action}" to container ${containerId} (${name})`,
     );
 
     const res = await fn(containerId);
     if (res.success) {
       toast.success(`${label} command sent to ${name}`, { id: toastId });
-      console.log(`[StackPage] action "${action}" ok for ${name}`);
+      if (process.env.NODE_ENV === "development") console.log(`[StackPage] action "${action}" ok for ${name}`);
     } else {
       const msg = res.error_message ?? "Unknown error";
       toast.error(`${label} failed: ${msg}`, { id: toastId });
-      console.error(`[StackPage] action "${action}" failed for ${name}:`, msg);
+      if (process.env.NODE_ENV === "development") console.error(`[StackPage] action "${action}" failed for ${name}:`, msg);
     }
 
     setTimeout(async () => {
@@ -821,6 +822,9 @@ export default function StackDetailPage() {
         </div>
       </div>
 
+      {/* ─── Dependency Graph (auto-hides when no depends_on) ──── */}
+      <StackDependencyGraph containers={containers} />
+
       {/* ─── Tab Navigation ─────────────────────────────────────── */}
       <div className="stack-tabs">
         {(["containers", "compose", "env", "logs"] as StackTab[]).map((tab) => (
@@ -841,8 +845,8 @@ export default function StackDetailPage() {
       </div>
 
       {/* ─── Main Content Grid ──────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        <div className="xl:col-span-2">
           {/* ─── Containers Tab ─────────────────────────── */}
           {activeTab === "containers" && (
             <StackContainersList

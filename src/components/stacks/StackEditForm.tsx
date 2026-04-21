@@ -131,6 +131,9 @@ export function StackEditForm({
                 {editStackAutoDeploy ? "Enabled" : "Disabled"}
               </span>
             </div>
+            <p className="text-[10px] text-muted mt-1">
+              When enabled, Lattice watches linked registries for new image versions and fires webhooks to trigger deployments.
+            </p>
           </div>
         </div>
         <div className="flex flex-col gap-1.5">

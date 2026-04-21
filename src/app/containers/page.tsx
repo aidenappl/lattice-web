@@ -79,7 +79,7 @@ export default function ContainersPage() {
       reqGetWorkers(),
     ]);
     if (cRes.success) setContainers(cRes.data ?? []);
-    else console.error("[Containers] failed to load:", cRes.error_message);
+    else if (process.env.NODE_ENV === "development") console.error("[Containers] failed to load:", cRes.error_message);
     if (sRes.success) setStacks(sRes.data ?? []);
     if (wRes.success) setWorkers(wRes.data ?? []);
     setLoading(false);
@@ -99,7 +99,7 @@ export default function ContainersPage() {
         event.type === "container_health_status"
       ) {
         const name = (event.payload?.["container_name"] as string) ?? "?";
-        console.log(
+        if (process.env.NODE_ENV === "development") console.log(
           `[Containers] WS ${event.type} for "${name}"`,
           event.payload,
         );
@@ -179,15 +179,15 @@ export default function ContainersPage() {
       const res = await fns[action]?.(id);
       if (res?.success) {
         toast.success(`${label} command sent to ${name}`, { id: toastId });
-        console.log(`[Containers] ${action} ok for container ${id} (${name})`);
+        if (process.env.NODE_ENV === "development") console.log(`[Containers] ${action} ok for container ${id} (${name})`);
       } else {
         const msg = res?.error_message ?? "Unknown error";
         toast.error(`${label} failed: ${msg}`, { id: toastId });
-        console.error(`[Containers] ${action} failed for ${name}:`, msg);
+        if (process.env.NODE_ENV === "development") console.error(`[Containers] ${action} failed for ${name}:`, msg);
       }
     } catch (err) {
       toast.error(`${label} error: ${String(err)}`, { id: toastId });
-      console.error(`[Containers] ${action} threw for ${name}:`, err);
+      if (process.env.NODE_ENV === "development") console.error(`[Containers] ${action} threw for ${name}:`, err);
     }
 
     setActionLoading((p) => {

@@ -17,6 +17,8 @@ import {
   faGear,
   faChevronLeft,
   faChevronRight,
+  faKey,
+  faFileCode,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { useAuth } from "@/store/hooks";
@@ -56,7 +58,11 @@ const SIDEBAR_GROUPS: NavGroup[] = [
   },
   {
     group: "Workspace",
-    items: [{ path: "/settings", label: "Settings", icon: faGear }],
+    items: [
+      { path: "/env-vars", label: "Env Variables", icon: faKey },
+      { path: "/templates", label: "Templates", icon: faFileCode },
+      { path: "/settings", label: "Settings", icon: faGear },
+    ],
   },
 ];
 

@@ -17,6 +17,13 @@ export const reqCreateTemplateFromStack = (
         data,
     });
 
+export const reqCreateTemplate = (data: { name: string; description?: string; config: string }) =>
+    fetchApi<Template>({
+        method: "POST",
+        url: "/admin/templates",
+        data,
+    });
+
 export const reqDeleteTemplate = (id: number) =>
     fetchApi<null>({
         method: "DELETE",
