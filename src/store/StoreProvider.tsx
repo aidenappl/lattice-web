@@ -30,7 +30,7 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
       // Skip auth check on public pages to prevent redirect loops
       if (typeof window !== "undefined") {
         const path = window.location.pathname;
-        if (path === "/unauthorized" || path === "/login") {
+        if (path === "/unauthorized" || path === "/login" || path === "/pending") {
           setIsReady(true);
           return;
         }
@@ -42,6 +42,10 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
           storeInstance.dispatch(setIsLogged(true));
           storeInstance.dispatch(setUser(authRes.data));
           storeInstance.dispatch(setIsLoading(false));
+          if (authRes.data.role === "pending") {
+            window.location.href = "/pending";
+            return;
+          }
         } else if (!authRes.success && authRes.error_code === 4003) {
           // Grant revoked — fetchApi already redirecting to /unauthorized
           return;

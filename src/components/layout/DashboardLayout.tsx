@@ -16,7 +16,7 @@ interface DashboardLayoutProps {
   children: ReactNode;
 }
 
-const publicPaths = ["/login", "/unauthorized"];
+const publicPaths = ["/login", "/unauthorized", "/pending"];
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();

@@ -196,7 +196,32 @@ function UsersTab({ admin }: { admin: boolean }) {
                     {u.name && <p className="text-xs text-muted">{u.email}</p>}
                   </td>
                   <td className="text-secondary">{u.auth_type}</td>
-                  <td><Badge variant={u.role === "admin" ? "warning" : "default"}>{u.role}</Badge></td>
+                  <td>
+                    {admin ? (
+                      <select
+                        value={u.role}
+                        onChange={async (e) => {
+                          const res = await reqUpdateUser(u.id, { role: e.target.value });
+                          if (res.success) {
+                            setUsers((prev) => prev.map((x) => (x.id === u.id ? res.data : x)));
+                            toast.success(`Role updated to ${e.target.value}`);
+                          } else {
+                            toast.error("Failed to update role");
+                          }
+                        }}
+                        className="bg-surface-elevated border border-border-strong text-foreground px-2 py-1 rounded-md text-xs cursor-pointer"
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="viewer">Viewer</option>
+                        <option value="editor">Editor</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    ) : (
+                      <Badge variant={u.role === "admin" ? "warning" : u.role === "pending" ? "error" : "default"}>
+                        {u.role}
+                      </Badge>
+                    )}
+                  </td>
                   <td>
                     <Badge variant={u.active ? "success" : "error"}>
                       <span className={`h-1.5 w-1.5 rounded-full ${u.active ? "bg-healthy" : "bg-failed"}`} />
@@ -207,6 +232,23 @@ function UsersTab({ admin }: { admin: boolean }) {
                   {admin && (
                     <td className="text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {u.role === "pending" && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={async () => {
+                              const res = await reqUpdateUser(u.id, { role: "viewer" });
+                              if (res.success) {
+                                setUsers((prev) => prev.map((x) => (x.id === u.id ? res.data : x)));
+                                toast.success(`${u.name || u.email} approved`);
+                              } else {
+                                toast.error("Failed to approve user");
+                              }
+                            }}
+                          >
+                            Approve
+                          </Button>
+                        )}
                         <Button variant={u.active ? "destructive" : "secondary"} size="sm"
                           onClick={() => handleToggleActive(u)}>
                           {u.active ? "Deactivate" : "Activate"}
@@ -416,7 +458,7 @@ function SSOTab() {
               <FontAwesomeIcon icon={faUserPlus} className="h-4 w-4 text-muted" />
               <div>
                 <p className="text-sm font-medium text-primary">Auto-provision Users</p>
-                <p className="text-xs text-muted">Create account (viewer role) on first SSO login</p>
+                <p className="text-xs text-muted">Create account (pending approval) on first SSO login</p>
               </div>
             </div>
             <button type="button" role="switch" aria-checked={autoProvision} onClick={() => setAutoProvision(!autoProvision)}

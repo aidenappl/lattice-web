@@ -30,6 +30,17 @@ export const fetchApi = async <T>(
             return response;
         }
 
+        if (
+            response.status === 403 &&
+            !response.success &&
+            "error_code" in response &&
+            response.error_code === 4004 &&
+            typeof window !== "undefined"
+        ) {
+            window.location.href = "/pending";
+            return response;
+        }
+
         if (response.status === 401) {
             const refreshResult = await handle401Response<T>(config);
             if (refreshResult) return refreshResult;
