@@ -18,7 +18,7 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 export const useTheme = () => useContext(ThemeContext);
 
-const COOKIE_NAME = "forta-appearance";
+const COOKIE_NAME = "lattice-appearance";
 const LS_KEY = "lattice-appearance";
 const VALID: Theme[] = ["light", "dark", "system"];
 
@@ -75,7 +75,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync from cookie whenever the tab becomes visible (e.g. user returns from forta-web)
+  // Sync from cookie whenever the tab becomes visible (e.g. user returns from another tab)
   // and poll every 2s as a fallback for same-tab cross-origin cookie changes.
   useEffect(() => {
     const syncFromCookie = () => {

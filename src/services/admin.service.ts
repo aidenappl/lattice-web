@@ -130,3 +130,25 @@ export const reqDeleteGlobalEnvVar = (id: number) =>
         method: "DELETE",
         url: `/admin/env-vars/${id}`,
     });
+
+// SSO Configuration
+export type SSOConfigData = {
+    enabled: boolean;
+    client_id: string;
+    client_secret: string;
+    authorize_url: string;
+    token_url: string;
+    userinfo_url: string;
+    redirect_url: string;
+    logout_url: string;
+    scopes: string;
+    user_identifier: string;
+    button_label: string;
+    auto_provision: boolean;
+};
+
+export const reqGetSSOConfig = () =>
+    fetchApi<SSOConfigData>({ method: "GET", url: "/admin/sso-config" });
+
+export const reqUpdateSSOConfig = (data: Partial<SSOConfigData>) =>
+    fetchApi<null>({ method: "PUT", url: "/admin/sso-config", data });

@@ -30,7 +30,7 @@ src/
   app/
     layout.tsx              # Root layout: Redux + Theme + DashboardLayout
     page.tsx                # Dashboard — topology, KPIs, event stream, fleet resources
-    login/page.tsx          # Email/password + Forta OAuth login
+    login/page.tsx          # Email/password + SSO login
     unauthorized/page.tsx   # Grant revocation landing
     workers/
       page.tsx              # Worker list with token management
@@ -117,7 +117,7 @@ src/
 
   services/
     api.service.ts          # fetchApi<T> wrapper: Axios, withCredentials, 401 auto-refresh, 403 redirect
-    auth.service.ts         # reqGetSelf, reqLogin
+    auth.service.ts         # reqGetSelf, reqLogin, reqLogout
     admin.service.ts        # reqGetOverview, reqGetFleetMetrics, reqGetAuditLog, reqGetUsers, reqCreateUser, reqUpdateUser, reqDeleteUser, reqGetVersions, reqRefreshVersions, reqUpdateAPI, reqUpdateWeb
     workers.service.ts      # reqGetWorkers, reqGetWorker, reqCreateWorker, reqUpdateWorker, reqDeleteWorker, reqGetWorkerTokens, reqCreateWorkerToken, reqDeleteWorkerToken, reqGetWorkerMetrics, reqRebootWorker, reqUpgradeRunner, reqStopAllContainers, reqStartAllContainers
     stacks.service.ts       # reqGetStacks, reqGetStack, reqCreateStack, reqUpdateStack, reqDeleteStack, reqDeployStack, reqGetAllContainers, reqGetContainers, reqCreateContainer, reqUpdateContainer, reqDeleteContainer, reqGetContainerLogs, reqGetLifecycleLogs, req{Start,Stop,Kill,Restart,Pause,Unpause,Remove,Recreate}Container, reqImportCompose, reqUpdateCompose, reqSyncCompose
@@ -150,7 +150,7 @@ src/
     worker.types.ts         # Worker, WorkerToken, WorkerMetrics
     stack.types.ts          # Stack, Container, ComposeNetwork, Registry, ContainerLog, LifecycleLog
     deployment.types.ts     # Deployment, DeploymentLog
-    user.types.ts           # User (auth_type: oauth|local, role: admin|editor|viewer)
+    user.types.ts           # User (auth_type: oauth|local, role: admin|editor|viewer) — SSO users identified by email
     version.types.ts        # VersionInfo, WorkerVersionInfo
     volume.types.ts         # DockerVolume, DockerNetwork
     admin.types.ts          # OverviewData, WorkerMetricsSummary, AuditLogEntry, FleetMetricsPoint
@@ -217,7 +217,7 @@ Node scale selector (Small 0.85x / Medium 1x / Large 1.2x). Dagre for hierarchic
 - Custom hooks extract common patterns: `usePoll` (intervals), `useContainerLogs` (log state)
 - Detail pages are orchestrators: they handle data loading, WS events, and delegate rendering to sub-components
 - Destructive actions use `useConfirm` hook for confirmation dialogs
-- Theme stored in `forta-appearance` cookie + localStorage, `.dark` class on html
+- Theme stored in `lattice-appearance` cookie + localStorage, `.dark` class on html
 - Log viewer supports stdout/stderr/lifecycle filtering, download as .txt, session break detection
 - Container detail page has full action bar: start, stop, kill, restart, pause, unpause, remove, recreate
 

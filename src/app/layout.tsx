@@ -51,7 +51,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
-  const appearance = cookieStore.get("forta-appearance")?.value;
+  const appearance = cookieStore.get("lattice-appearance")?.value;
   // Default to dark. "system" defaults dark server-side; client ThemeProvider resolves it.
   const isDark = appearance !== "light";
   return (

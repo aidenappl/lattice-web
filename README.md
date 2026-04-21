@@ -28,7 +28,7 @@ Management frontend for the Lattice orchestrator platform. Provides a real-time 
 ## Features
 
 - **Real-time dashboard** — Topology graph, fleet KPIs with sparklines, live event stream, fleet resource charts
-- **Dual authentication** — Local email/password login + Forta OAuth
+- **Dual authentication** — Local email/password login + SSO (OAuth2)
 - **Worker management** — Live metrics (CPU, memory, disk, network), volumes, networks, tokens, upgrade/reboot
 - **Stack management** — Create, configure, deploy, compose YAML editor, environment variables
 - **Container management** — Full lifecycle (start, stop, kill, restart, pause, recreate, remove), live logs, health checks, terminal
@@ -64,7 +64,7 @@ npm run dev-http
 | Route                   | Description                                              |
 | ----------------------- | -------------------------------------------------------- |
 | `/`                     | Dashboard: topology, KPIs, event stream, fleet resources |
-| `/login`                | Dual auth login (local + Forta OAuth)                    |
+| `/login`                | Dual auth login (local + SSO)                            |
 | `/workers`              | Worker list with status and metrics                      |
 | `/workers/[id]`         | Worker detail, tokens, metrics, volumes, networks        |
 | `/workers/[id]/metrics` | Full metrics view with charts                            |

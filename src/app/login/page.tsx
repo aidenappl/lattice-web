@@ -19,9 +19,38 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState(0);
+  const [ssoConfig, setSsoConfig] = useState<{ enabled: boolean; button_label: string; login_url: string } | null>(null);
 
   useEffect(() => {
     document.title = "Lattice - Login";
+  }, []);
+
+  useEffect(() => {
+    // Fetch SSO config (public endpoint)
+    fetch(`${API_URL}/auth/sso/config`)
+      .then(res => res.json())
+      .then(data => setSsoConfig(data))
+      .catch(() => {}); // SSO not available
+  }, []);
+
+  // Handle SSO error from redirect
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const ssoError = params.get("error");
+      if (ssoError) {
+        const messages: Record<string, string> = {
+          sso_denied: "SSO authentication was denied",
+          sso_failed: "SSO authentication failed",
+          sso_no_email: "SSO provider did not return an email address",
+          sso_no_account: "No account found for this email. Contact your administrator.",
+          account_disabled: "Your account has been disabled",
+        };
+        setError(messages[ssoError] ?? "SSO authentication failed");
+        // Clean up URL
+        window.history.replaceState({}, "", "/login");
+      }
+    }
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -108,20 +137,24 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-6">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-xs text-muted">or</span>
-            <div className="flex-1 h-px bg-border" />
-          </div>
+          {ssoConfig?.enabled && (
+            <>
+              {/* Divider */}
+              <div className="flex items-center gap-3 my-6">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs text-muted">or</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
 
-          {/* OAuth */}
-          <a
-            href={`${API_URL}/forta/login`}
-            className="btn btn-secondary w-full justify-center !h-10"
-          >
-            Sign in with Forta
-          </a>
+              {/* SSO */}
+              <a
+                href={`${API_URL}${ssoConfig.login_url}`}
+                className="btn btn-secondary w-full justify-center !h-10"
+              >
+                {ssoConfig.button_label}
+              </a>
+            </>
+          )}
       </div>
     </div>
   );
