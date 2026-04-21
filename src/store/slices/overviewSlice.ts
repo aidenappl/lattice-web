@@ -55,6 +55,16 @@ const overviewSlice = createSlice({
                 Object.assign(state.data, action.payload);
             }
         },
+        // Increment/decrement reducers that read from current state inside the reducer
+        // to avoid stale-closure issues in WebSocket handlers
+        incrementOverviewField(state, action: PayloadAction<{ field: keyof OverviewData; delta: number }>) {
+            if (state.data) {
+                const current = state.data[action.payload.field];
+                if (typeof current === "number") {
+                    (state.data as Record<string, unknown>)[action.payload.field] = Math.max(0, current + action.payload.delta);
+                }
+            }
+        },
         pushFleetHistoryPoint(state, action: PayloadAction<FleetMetricsPoint>) {
             state.fleetHistory = [...state.fleetHistory.slice(-299), action.payload];
         },
@@ -81,7 +91,7 @@ const overviewSlice = createSlice({
     },
 });
 
-export const { updateOverviewField, pushFleetHistoryPoint } = overviewSlice.actions;
+export const { updateOverviewField, incrementOverviewField, pushFleetHistoryPoint } = overviewSlice.actions;
 
 export const selectOverview = (state: RootState) => state.overview.data;
 export const selectOverviewLoading = (state: RootState) => state.overview.loading;

@@ -11,6 +11,7 @@ import {
   selectFleetHistory,
   selectAuditLog,
   updateOverviewField,
+  incrementOverviewField,
   pushFleetHistoryPoint,
 } from "@/store/slices/overviewSlice";
 import { fetchStacks, selectStackNameMap } from "@/store/slices/stacksSlice";
@@ -198,28 +199,14 @@ export default function DashboardPage() {
       }
 
       if (event.type === "worker_connected") {
-        if (overview) {
-          dispatch(
-            updateOverviewField({
-              online_workers: overview.online_workers + 1,
-            }),
-          );
-        }
-        // Reset heartbeat count so we skip the first calibration beat
+        dispatch(incrementOverviewField({ field: "online_workers", delta: 1 }));
         if (event.worker_id != null) {
           workerHeartbeatCount.current.set(event.worker_id, 0);
         }
       }
 
       if (event.type === "worker_disconnected") {
-        if (overview) {
-          dispatch(
-            updateOverviewField({
-              online_workers: Math.max(0, overview.online_workers - 1),
-            }),
-          );
-        }
-        // Remove disconnected worker from metrics map and reset beat count
+        dispatch(incrementOverviewField({ field: "online_workers", delta: -1 }));
         if (event.worker_id != null) {
           workerMetricsRef.current.delete(event.worker_id as number);
           workerHeartbeatCount.current.delete(event.worker_id);
@@ -228,47 +215,29 @@ export default function DashboardPage() {
 
       if (event.type === "container_status" && event.payload) {
         const actionStatus = event.payload.status as string | undefined;
-        const containerState = event.payload.container_state as
-          | string
-          | undefined;
-        if (actionStatus === "success" && containerState && overview) {
+        const containerState = event.payload.container_state as string | undefined;
+        if (actionStatus === "success" && containerState) {
           if (containerState === "running") {
-            dispatch(
-              updateOverviewField({
-                running_containers: overview.running_containers + 1,
-              }),
-            );
+            dispatch(incrementOverviewField({ field: "running_containers", delta: 1 }));
           } else if (containerState === "stopped") {
-            dispatch(
-              updateOverviewField({
-                running_containers: Math.max(0, overview.running_containers - 1),
-              }),
-            );
+            dispatch(incrementOverviewField({ field: "running_containers", delta: -1 }));
           }
         }
       }
 
       if (event.type === "deployment_progress" && event.payload) {
         const status = event.payload.status as string | undefined;
-        if (status === "deploying" && overview) {
-          dispatch(
-            updateOverviewField({
-              deploying_stacks: overview.deploying_stacks + 1,
-            }),
-          );
-        } else if ((status === "deployed" || status === "failed") && overview) {
-          dispatch(
-            updateOverviewField({
-              deploying_stacks: Math.max(0, overview.deploying_stacks - 1),
-              ...(status === "failed"
-                ? { failed_stacks: overview.failed_stacks + 1 }
-                : {}),
-            }),
-          );
+        if (status === "deploying") {
+          dispatch(incrementOverviewField({ field: "deploying_stacks", delta: 1 }));
+        } else if (status === "deployed" || status === "failed") {
+          dispatch(incrementOverviewField({ field: "deploying_stacks", delta: -1 }));
+          if (status === "failed") {
+            dispatch(incrementOverviewField({ field: "failed_stacks", delta: 1 }));
+          }
         }
       }
     },
-    [computeFleetAggregate, dispatch, overview],
+    [computeFleetAggregate, dispatch],
   );
 
   useAdminSocket(handleDashboardEvent);

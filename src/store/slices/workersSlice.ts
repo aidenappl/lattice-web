@@ -99,6 +99,10 @@ const workersSlice = createSlice({
                 state.current = action.payload;
                 state.loading = false;
             })
+            .addCase(fetchWorker.rejected, (state, action) => {
+                state.error = action.error.message ?? "Failed to load worker";
+                state.loading = false;
+            })
             .addCase(fetchWorkerMetrics.fulfilled, (state, action) => {
                 state.metrics = action.payload;
             })

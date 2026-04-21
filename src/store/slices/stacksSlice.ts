@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, createSelector, PayloadAction } from "@reduxjs/toolkit";
 import type { Stack } from "@/types";
 import { reqGetStacks, reqGetStack } from "@/services/stacks.service";
 import type { RootState } from "../index";
@@ -64,6 +64,10 @@ const stacksSlice = createSlice({
             .addCase(fetchStack.fulfilled, (state, action) => {
                 state.current = action.payload;
                 state.loading = false;
+            })
+            .addCase(fetchStack.rejected, (state, action) => {
+                state.error = action.error.message ?? "Failed to load stack";
+                state.loading = false;
             });
     },
 });
@@ -73,10 +77,13 @@ export const { setCurrent, updateCurrent } = stacksSlice.actions;
 export const selectStacks = (state: RootState) => state.stacks.list;
 export const selectCurrentStack = (state: RootState) => state.stacks.current;
 export const selectStacksLoading = (state: RootState) => state.stacks.loading;
-export const selectStackNameMap = (state: RootState) => {
-    const map: Record<number, string> = {};
-    state.stacks.list.forEach((s) => { map[s.id] = s.name; });
-    return map;
-};
+export const selectStackNameMap = createSelector(
+    [selectStacks],
+    (stacks) => {
+        const map: Record<number, string> = {};
+        stacks.forEach((s) => { map[s.id] = s.name; });
+        return map;
+    },
+);
 
 export default stacksSlice.reducer;

@@ -79,6 +79,8 @@ export default function ContainerDetailPage() {
     logsLoading,
     logLimit,
     setLogLimit,
+    streamFilter,
+    setStreamFilter,
     loadLogs,
     handleDownloadVisible,
     handleDownloadLastRun,
@@ -115,8 +117,8 @@ export default function ContainerDetailPage() {
   }, [id]);
 
   const loadLogsForContainer = useCallback(() => {
-    loadLogs(id);
-  }, [id, loadLogs]);
+    loadLogs(id, streamFilter);
+  }, [id, streamFilter, loadLogs]);
 
   // WebSocket: refresh on events matching this container
   const handleSocketEvent = useCallback(
@@ -455,15 +457,34 @@ export default function ContainerDetailPage() {
 
         {/* LOGS TAB */}
         {tab === "logs" && (
-          <LogViewer
-            logs={logs}
-            logLimit={logLimit}
-            onLimitChange={setLogLimit}
-            onDownloadVisible={() => handleDownloadVisible(container.name)}
-            onDownloadLastRun={() => handleDownloadLastRun(container.name)}
-            onDownloadAll={() => handleDownloadAll(container.id, container.name)}
-            loading={logsLoading}
-          />
+          <>
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-border-subtle">
+              <select
+                value={streamFilter}
+                onChange={(e) => setStreamFilter(e.target.value)}
+                className="bg-surface-elevated border border-border-strong text-foreground px-2 py-1 rounded-md text-xs cursor-pointer"
+              >
+                <option value="all">All streams</option>
+                <option value="stdout">stdout</option>
+                <option value="stderr">stderr</option>
+              </select>
+              <button
+                onClick={loadLogsForContainer}
+                className="text-xs text-info hover:text-info transition-colors cursor-pointer"
+              >
+                Refresh
+              </button>
+            </div>
+            <LogViewer
+              logs={logs}
+              logLimit={logLimit}
+              onLimitChange={setLogLimit}
+              onDownloadVisible={() => handleDownloadVisible(container.name)}
+              onDownloadLastRun={() => handleDownloadLastRun(container.name)}
+              onDownloadAll={() => handleDownloadAll(container.id, container.name)}
+              loading={logsLoading}
+            />
+          </>
         )}
 
         {/* DETAILS TAB */}
