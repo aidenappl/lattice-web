@@ -100,15 +100,25 @@ const handle401Response = async <T>(
     return null;
 };
 
+function getCSRFToken(): string {
+    if (typeof document === "undefined") return "";
+    const match = document.cookie.match(/(?:^|;\s*)lattice-csrf=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : "";
+}
+
 const executeRequest = async <T>(
     config: AxiosRequestConfig,
     token: string | null,
 ): Promise<ApiResponse<T>> => {
+    const method = (config.method ?? "GET").toUpperCase();
+    const needsCsrf = method === "POST" || method === "PUT" || method === "DELETE";
+
     const requestConfig: AxiosRequestConfig = {
         ...config,
         headers: {
             ...config.headers,
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(needsCsrf ? { "X-CSRF-Token": getCSRFToken() } : {}),
         },
     };
 
