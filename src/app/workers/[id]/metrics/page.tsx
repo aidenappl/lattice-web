@@ -3,10 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { WorkerMetrics } from "@/types";
-import { reqGetWorkerMetrics } from "@/services/workers.service";
-import { reqGetWorker } from "@/services/workers.service";
-import { Worker } from "@/types";
+import type { WorkerMetrics, Worker } from "@/types";
+import { reqGetWorkerMetrics, reqGetWorker } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import {

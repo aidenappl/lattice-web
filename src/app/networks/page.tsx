@@ -7,37 +7,13 @@ import {
   faRotate,
   faArrowUpRightFromSquare,
 } from "@fortawesome/free-solid-svg-icons";
-import { Container, Stack, Worker } from "@/types";
+import type { Container, Stack, Worker, PortEntry, WorkerGroup } from "@/types";
 import { reqGetAllContainers, reqGetStacks } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
+import { parsePortMappings } from "@/lib/utils";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import WorkerBadge from "@/components/ui/worker-badge";
-
-type PortEntry = {
-  hostPort: string;
-  containerPort: string;
-  protocol: string;
-  container: Container;
-  stack: Stack;
-};
-
-type WorkerGroup = {
-  worker: Worker;
-  ports: PortEntry[];
-};
-
-function parsePortMappings(
-  raw: string | null,
-): { host_port?: string; container_port?: string; protocol?: string }[] {
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
-  }
-}
 
 export default function NetworksPage() {
   const [containers, setContainers] = useState<Container[]>([]);

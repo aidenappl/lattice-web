@@ -7,23 +7,13 @@ import toast from "react-hot-toast";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChevronRight,
-  faPlay,
-  faStop,
-  faXmark,
-  faRotate,
-  faPause,
   faRecycle,
-  faTrash,
   faPenToSquare,
-  faSpinner,
   faTerminal,
 } from "@fortawesome/free-solid-svg-icons";
-import { Container, ContainerLog, Stack, Worker } from "@/types";
+import type { Container, Stack, Worker } from "@/types";
 import {
   reqGetContainer,
-  reqUpdateContainer,
-  reqGetContainerLogs,
-  reqGetLifecycleLogs,
   reqStartContainer,
   reqStopContainer,
   reqKillContainer,
@@ -37,96 +27,23 @@ import { reqGetStack } from "@/services/stacks.service";
 import { reqGetWorker } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
-import { formatDate, timeAgo, workerStaleReason, canEdit } from "@/lib/utils";
+import { canEdit, parseHealthCheck, workerStaleReason } from "@/lib/utils";
 import { useUser } from "@/store/hooks";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
+import { useContainerLogs } from "@/hooks/useContainerLogs";
+import { usePoll } from "@/hooks/usePoll";
 import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
-import { CodeEditor } from "@/components/ui/code-editor";
 import { Alert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import WorkerBadge from "@/components/ui/worker-badge";
 import { Terminal } from "@/components/ui/terminal";
-import {
-  LogViewer,
-  LogLimit,
-  isSynthetic,
-  syntheticId,
-  sortLogs,
-  downloadLogsAsTxt,
-  isNewSession,
-  lifecycleToContainerLog,
-} from "@/components/ui/log-viewer";
-
-// ─── helpers ──────────────────────────────────────────────────────────────────
-
-function parseJSON<T>(raw: string | null): T | null {
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-}
-
-function parsePortMappings(
-  raw: string | null,
-): { host_port?: string; container_port?: string; protocol?: string }[] {
-  return (
-    parseJSON<
-      { host_port?: string; container_port?: string; protocol?: string }[]
-    >(raw) ?? []
-  );
-}
-
-function parseEnvVars(raw: string | null): Record<string, string> {
-  return parseJSON<Record<string, string>>(raw) ?? {};
-}
-
-function parseVolumes(
-  raw: string | null,
-): { host?: string; container?: string }[] {
-  const data = parseJSON<
-    Record<string, string> | { host?: string; container?: string }[]
-  >(raw);
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  return Object.entries(data).map(([host, container]) => ({ host, container }));
-}
-
-interface HealthCheckConfig {
-  test?: string[] | string;
-  interval?: string;
-  timeout?: string;
-  retries?: number;
-  start_period?: string;
-  disable?: boolean;
-}
-
-function parseHealthCheck(raw: string | null): HealthCheckConfig | null {
-  return parseJSON<HealthCheckConfig>(raw);
-}
-
-function formatTestCommand(test: string[] | string | undefined): string {
-  if (!test) return "";
-  if (typeof test === "string") return test;
-  // ["CMD-SHELL", "curl ..."] or ["CMD", "arg1", "arg2"]
-  if (test[0] === "CMD-SHELL" && test.length === 2) return test[1];
-  if (test[0] === "CMD") return test.slice(1).join(" ");
-  return test.join(" ");
-}
-
-function prettyField(raw: string | null): string {
-  if (!raw) return "";
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed.join(" ");
-    return JSON.stringify(parsed, null, 2);
-  } catch {
-    return raw;
-  }
-}
+import { LogViewer } from "@/components/ui/log-viewer";
+import { ContainerActionBar, ActionButton } from "@/components/containers/ContainerActionBar";
+import { ContainerEditForm } from "@/components/containers/ContainerEditForm";
+import { ContainerDetailsTab } from "@/components/containers/ContainerDetailsTab";
+import { ContainerHealthTab } from "@/components/containers/ContainerHealthTab";
+import { ContainerInfoPanels } from "@/components/containers/ContainerInfoPanels";
 
 type Tab = "logs" | "details" | "health";
 
@@ -140,10 +57,8 @@ export default function ContainerDetailPage() {
   const [container, setContainer] = useState<Container | null>(null);
   const [stack, setStack] = useState<Stack | null>(null);
   const [worker, setWorker] = useState<Worker | null>(null);
-  const [logs, setLogs] = useState<ContainerLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("logs");
-  const [logLimit, setLogLimit] = useState<LogLimit>(250);
 
   // terminal state
   const [showTerminal, setShowTerminal] = useState(false);
@@ -154,24 +69,22 @@ export default function ContainerDetailPage() {
 
   // edit state
   const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState("");
-  const [editImage, setEditImage] = useState("");
-  const [editTag, setEditTag] = useState("");
-  const [editRestartPolicy, setEditRestartPolicy] = useState("");
-  const [editCommand, setEditCommand] = useState("");
-  const [editEntrypoint, setEditEntrypoint] = useState("");
-  const [editCpuLimit, setEditCpuLimit] = useState("");
-  const [editMemoryLimit, setEditMemoryLimit] = useState("");
-  const [editReplicas, setEditReplicas] = useState("");
-  const [editEnvVars, setEditEnvVars] = useState("");
-  const [editPortMappings, setEditPortMappings] = useState("");
-  const [editVolumes, setEditVolumes] = useState("");
-  const [editHealthCheck, setEditHealthCheck] = useState("");
-  const [editRegistryId, setEditRegistryId] = useState("");
-  const [saving, setSaving] = useState(false);
 
   const containerNameRef = useRef<string>("");
   const showConfirm = useConfirm();
+
+  // Container logs hook
+  const {
+    logs,
+    logsLoading,
+    logLimit,
+    setLogLimit,
+    loadLogs,
+    handleDownloadVisible,
+    handleDownloadLastRun,
+    handleDownloadAll,
+    handleLogSocketEvent,
+  } = useContainerLogs();
 
   // Worker liveness — must be declared unconditionally before any early return
   const workerListForLiveness = worker ? [worker] : [];
@@ -182,28 +95,6 @@ export default function ContainerDetailPage() {
     if (res.success) {
       setContainer(res.data);
       containerNameRef.current = res.data.name;
-      if (!editing) {
-        setEditName(res.data.name);
-        setEditImage(res.data.image);
-        setEditTag(res.data.tag);
-        setEditRestartPolicy(res.data.restart_policy ?? "");
-        setEditCommand(res.data.command ?? "");
-        setEditEntrypoint(res.data.entrypoint ?? "");
-        setEditCpuLimit(
-          res.data.cpu_limit != null ? String(res.data.cpu_limit) : "",
-        );
-        setEditMemoryLimit(
-          res.data.memory_limit != null ? String(res.data.memory_limit) : "",
-        );
-        setEditReplicas(String(res.data.replicas));
-        setEditEnvVars(res.data.env_vars ?? "");
-        setEditPortMappings(res.data.port_mappings ?? "");
-        setEditVolumes(res.data.volumes ?? "");
-        setEditHealthCheck(res.data.health_check ?? "");
-        setEditRegistryId(
-          res.data.registry_id != null ? String(res.data.registry_id) : "",
-        );
-      }
       if (res.data.stack_id) {
         const sRes = await reqGetStack(res.data.stack_id);
         if (sRes.success) {
@@ -221,33 +112,11 @@ export default function ContainerDetailPage() {
       );
     }
     setLoading(false);
-  }, [id, editing]);
+  }, [id]);
 
-  const loadLogs = useCallback(async () => {
-    const [logRes, lcRes] = await Promise.all([
-      reqGetContainerLogs(id, { limit: logLimit }),
-      reqGetLifecycleLogs(id, { limit: logLimit }),
-    ]);
-    const dbLogs = logRes.success ? (logRes.data ?? []).slice().reverse() : [];
-    const lcLogs = lcRes.success
-      ? (lcRes.data ?? []).map(lifecycleToContainerLog)
-      : [];
-    if (logRes.success || lcRes.success) {
-      setLogs((prev) => {
-        // Keep synthetic (WS-delivered) entries that haven't been persisted yet.
-        const dbMessages = new Set(dbLogs.map((l) => l.message));
-        const pendingSynthetics = prev.filter(
-          (l) => isSynthetic(l) && !dbMessages.has(l.message),
-        );
-        return sortLogs([...dbLogs, ...lcLogs, ...pendingSynthetics]);
-      });
-    } else {
-      console.warn(
-        `[ContainerInspector] failed to load logs for container ${id}:`,
-        logRes.error_message,
-      );
-    }
-  }, [id, logLimit]);
+  const loadLogsForContainer = useCallback(() => {
+    loadLogs(id);
+  }, [id, loadLogs]);
 
   // WebSocket: refresh on events matching this container
   const handleSocketEvent = useCallback(
@@ -268,63 +137,19 @@ export default function ContainerDetailPage() {
             payload,
           );
           loadContainer();
-          if (tab === "logs") loadLogs();
+          if (tab === "logs") loadLogsForContainer();
         }
 
-        if (event.type === "container_logs") {
-          const message = payload["message"] as string | undefined;
-          const rawStream =
-            (payload["stream"] as string | undefined) ?? "stdout";
-          const stream: "stdout" | "stderr" =
-            rawStream === "stderr" ? "stderr" : "stdout";
-          if (message) {
-            const entry: ContainerLog = {
-              id: syntheticId() as unknown as number, // string UUID; isSynthetic() detects it
-              container_id: null,
-              container_name: myName,
-              worker_id: event.worker_id ?? 0,
-              stream,
-              message,
-              recorded_at: new Date().toISOString(),
-            };
-            // Insert in chronological order and cap at current limit.
-            // Only skip if a DB-fetched entry with the same message arrived
-            // within 2 s (same boot burst). This avoids dropping lines that
-            // legitimately repeat across sessions (e.g. "Starting...").
-            setLogs((prev) => {
-              const now = Date.now();
-              const dominated = prev.some(
-                (l) =>
-                  !isSynthetic(l) &&
-                  l.message === message &&
-                  Math.abs(now - new Date(l.recorded_at).getTime()) < 2_000,
-              );
-              if (dominated) return prev;
-              return sortLogs([...prev.slice(-(logLimit - 1)), entry]);
-            });
-          }
+        if (event.type === "container_logs" || event.type === "lifecycle_log") {
+          handleLogSocketEvent(event, myName);
         }
       }
 
-      // Live lifecycle_log entries from the runner (verbose action progress).
-      if (event.type === "lifecycle_log") {
+      // lifecycle_log can also come with a different container_name path
+      if (event.type === "lifecycle_log" && !eventName) {
         const lcName = (payload["container_name"] as string) ?? "";
         if (lcName === myName) {
-          const message = (payload["message"] as string) ?? "";
-          if (message) {
-            const entry: ContainerLog = {
-              id: `lc_${syntheticId()}` as unknown as number,
-              container_id: null,
-              container_name: myName,
-              worker_id: event.worker_id ?? 0,
-              stream: "lifecycle" as "stdout",
-              message,
-              recorded_at: new Date().toISOString(),
-            };
-            setLogs((prev) =>
-              sortLogs([...prev.slice(-(logLimit - 1)), entry]),
-            );
-          }
+          handleLogSocketEvent(event, myName);
         }
       }
 
@@ -335,56 +160,18 @@ export default function ContainerDetailPage() {
         event.type === "worker_crash" ||
         event.type === "worker_disconnected"
       ) {
-        // Only refresh if this container belongs to the affected worker
         const workerID = event.worker_id;
         if (workerID != null) {
           loadContainer();
           if (tab === "logs") {
-            // Slight delay to allow DB writes to complete before fetching
-            setTimeout(loadLogs, 500);
+            setTimeout(loadLogsForContainer, 500);
           }
         }
       }
     },
-    [loadContainer, loadLogs, tab, logLimit],
+    [loadContainer, loadLogsForContainer, handleLogSocketEvent, tab],
   );
   useAdminSocket(handleSocketEvent);
-
-  // ─── Download handlers ─────────────────────────────────────────────────────
-
-  const handleDownloadVisible = () => {
-    const name = container?.name ?? String(id);
-    downloadLogsAsTxt(logs, `${name}-logs-visible.txt`);
-  };
-
-  const handleDownloadLastRun = () => {
-    // Find the start of the last session (latest session-break boundary).
-    let startIdx = 0;
-    for (let i = logs.length - 1; i > 0; i--) {
-      if (isNewSession(logs[i - 1], logs[i])) {
-        startIdx = i;
-        break;
-      }
-    }
-    const name = container?.name ?? String(id);
-    downloadLogsAsTxt(logs.slice(startIdx), `${name}-logs-last-run.txt`);
-  };
-
-  const handleDownloadAll = async () => {
-    const [logRes, lcRes] = await Promise.all([
-      reqGetContainerLogs(id, { limit: 9999 }),
-      reqGetLifecycleLogs(id, { limit: 9999 }),
-    ]);
-    if (logRes.success) {
-      const dbLogs = (logRes.data ?? []).slice();
-      const lcLogs = lcRes.success
-        ? (lcRes.data ?? []).map(lifecycleToContainerLog)
-        : [];
-      const all = sortLogs([...dbLogs, ...lcLogs]);
-      const name = container?.name ?? String(id);
-      downloadLogsAsTxt(all, `${name}-logs-all.txt`);
-    }
-  };
 
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -392,26 +179,41 @@ export default function ContainerDetailPage() {
     if (container) document.title = `Lattice - ${container.name}`;
   }, [container]);
 
+  // Initial load
   useEffect(() => {
     loadContainer();
-    loadLogs();
-    const interval = setInterval(() => {
-      loadContainer();
-      if (tab === "logs") loadLogs();
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [loadContainer, loadLogs, tab]);
+    loadLogsForContainer();
+  }, [loadContainer, loadLogsForContainer]);
 
-  const runAction = async (
-    action: string,
-    fn: () => Promise<{ success: boolean; error_message?: string }>,
-  ) => {
+  // 10s polling via usePoll
+  usePoll(
+    useCallback(() => {
+      loadContainer();
+      if (tab === "logs") loadLogsForContainer();
+    }, [loadContainer, loadLogsForContainer, tab]),
+    10000,
+  );
+
+  const runAction = async (action: string) => {
+    const actionFns: Record<string, () => Promise<{ success: boolean; error_message?: string }>> = {
+      start: () => reqStartContainer(container!.id),
+      stop: () => reqStopContainer(container!.id),
+      kill: () => reqKillContainer(container!.id),
+      restart: () => reqRestartContainer(container!.id),
+      pause: () => reqPauseContainer(container!.id),
+      unpause: () => reqUnpauseContainer(container!.id),
+      remove: () => reqRemoveContainer(container!.id),
+      recreate: () => reqRecreateContainer(container!.id),
+    };
+    const fn = actionFns[action];
+    if (!fn || !container) return;
+
     const name = containerNameRef.current || String(id);
     const label = action.charAt(0).toUpperCase() + action.slice(1);
     setActionError(null);
     setActionLoading(action);
 
-    const toastId = toast.loading(`Sending ${label.toLowerCase()} to ${name}…`);
+    const toastId = toast.loading(`Sending ${label.toLowerCase()} to ${name}\u2026`);
     console.log(
       `[ContainerInspector] sending action "${action}" to container ${id} (${name})`,
     );
@@ -422,7 +224,6 @@ export default function ContainerDetailPage() {
         toast.success(`${label} command sent to ${name}`, { id: toastId });
         console.log(`[ContainerInspector] action "${action}" ok for ${name}`);
         // Inject a synthetic lifecycle log for immediate feedback.
-        // Uses "lc_" prefix so LogLine renders it with lifecycle styling.
         const lifecycleMsg: Record<string, string> = {
           restart: "container restarting\u2026",
           start: "container starting\u2026",
@@ -431,18 +232,16 @@ export default function ContainerDetailPage() {
           recreate: "container recreating\u2026",
         };
         if (lifecycleMsg[action]) {
-          setLogs((prev) => [
-            ...prev,
-            {
-              id: `lc_${syntheticId()}` as unknown as number,
-              container_id: null,
+          // Use the hook's handleLogSocketEvent to inject lifecycle entry
+          const syntheticEvent: AdminSocketEvent = {
+            type: "lifecycle_log",
+            worker_id: 0,
+            payload: {
               container_name: containerNameRef.current,
-              worker_id: 0,
-              stream: "stdout" as const,
               message: lifecycleMsg[action],
-              recorded_at: new Date().toISOString(),
             },
-          ]);
+          };
+          handleLogSocketEvent(syntheticEvent, containerNameRef.current);
         }
       } else {
         const msg = res.error_message ?? "Unknown error";
@@ -464,42 +263,14 @@ export default function ContainerDetailPage() {
     }
 
     setActionLoading(null);
-    // Burst-poll to catch state + log changes — new container logs can take
-    // several seconds to be persisted after a restart.
+    // Burst-poll to catch state + log changes
     setTimeout(loadContainer, 2000);
-    [2000, 5000, 10000, 20000].forEach((d) => setTimeout(loadLogs, d));
+    [2000, 5000, 10000, 20000].forEach((d) => setTimeout(loadLogsForContainer, d));
   };
 
-  const handleSave = async () => {
-    if (!container) return;
-    setSaving(true);
-    const toastId = toast.loading("Saving container config…");
-    const res = await reqUpdateContainer(container.id, {
-      name: editName || undefined,
-      image: editImage || undefined,
-      tag: editTag || undefined,
-      restart_policy: editRestartPolicy || undefined,
-      command: editCommand || null,
-      entrypoint: editEntrypoint || null,
-      cpu_limit: editCpuLimit ? Number(editCpuLimit) : null,
-      memory_limit: editMemoryLimit ? Number(editMemoryLimit) : null,
-      replicas: editReplicas ? Number(editReplicas) : undefined,
-      env_vars: editEnvVars || null,
-      port_mappings: editPortMappings || null,
-      volumes: editVolumes || null,
-      health_check: editHealthCheck || null,
-      registry_id: editRegistryId ? Number(editRegistryId) : null,
-    } as Partial<Container>);
-    setSaving(false);
-    if (res.success) {
-      toast.success("Container config saved", { id: toastId });
-      setEditing(false);
-      loadContainer();
-    } else {
-      toast.error(`Save failed: ${res.error_message ?? "unknown error"}`, {
-        id: toastId,
-      });
-    }
+  const handleEditSave = () => {
+    setEditing(false);
+    loadContainer();
   };
 
   if (loading) return <PageLoader />;
@@ -511,9 +282,6 @@ export default function ContainerDetailPage() {
     );
   }
 
-  const ports = parsePortMappings(container.port_mappings);
-  const envVars = parseEnvVars(container.env_vars);
-  const volumes = parseVolumes(container.volumes);
   const healthConfig = parseHealthCheck(container.health_check);
 
   const isRunning = container.status === "running";
@@ -617,10 +385,7 @@ export default function ContainerDetailPage() {
                     confirmLabel: "Recreate",
                     variant: "warning",
                   });
-                  if (ok)
-                    runAction("recreate", () =>
-                      reqRecreateContainer(container.id),
-                    );
+                  if (ok) runAction("recreate");
                 }}
               />
             </div>
@@ -643,410 +408,32 @@ export default function ContainerDetailPage() {
 
       {/* Action bar */}
       {canEdit(user) && (
-        <div className="panel">
-          <div className="flex flex-wrap items-center gap-2 p-3">
-            <ActionButton
-              label="Start"
-              icon={<FontAwesomeIcon icon={faPlay} className="h-3.5 w-3.5" />}
-              disabled={!isStopped || controlsDisabled}
-              loading={actionLoading === "start"}
-              color="text-healthy hover:bg-healthy/10"
-              onClick={() =>
-                runAction("start", () => reqStartContainer(container.id))
-              }
-            />
-            <ActionButton
-              label="Stop"
-              icon={<FontAwesomeIcon icon={faStop} className="h-3.5 w-3.5" />}
-              disabled={!isRunning || controlsDisabled}
-              loading={actionLoading === "stop"}
-              color="text-secondary hover:bg-border-strong"
-              onClick={async () => {
-                const ok = await showConfirm({
-                  title: "Stop container",
-                  message: `Stop "${container.name}"? The container will be gracefully shut down.`,
-                  confirmLabel: "Stop",
-                  variant: "warning",
-                });
-                if (ok) runAction("stop", () => reqStopContainer(container.id));
-              }}
-            />
-            <ActionButton
-              label="Kill"
-              title="Force-kill container (SIGKILL)"
-              icon={<FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />}
-              disabled={!isRunning || controlsDisabled}
-              loading={actionLoading === "kill"}
-              color="text-failed hover:bg-failed/10"
-              onClick={async () => {
-                const ok = await showConfirm({
-                  title: "Kill container",
-                  message: `Force-kill "${container.name}"? This sends SIGKILL immediately.`,
-                  confirmLabel: "Kill",
-                  variant: "danger",
-                });
-                if (ok) runAction("kill", () => reqKillContainer(container.id));
-              }}
-            />
-            <ActionButton
-              label="Restart"
-              icon={<FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />}
-              disabled={!isRunning || controlsDisabled}
-              loading={actionLoading === "restart"}
-              color="text-info hover:bg-info/10"
-              onClick={async () => {
-                const ok = await showConfirm({
-                  title: "Restart container",
-                  message: `Restart "${container.name}"? The container will be stopped and started.`,
-                  confirmLabel: "Restart",
-                  variant: "warning",
-                });
-                if (ok)
-                  runAction("restart", () => reqRestartContainer(container.id));
-              }}
-            />
-            <ActionButton
-              label="Pause"
-              icon={<FontAwesomeIcon icon={faPause} className="h-3.5 w-3.5" />}
-              disabled={!isRunning || controlsDisabled}
-              loading={actionLoading === "pause"}
-              color="text-secondary hover:bg-border-strong"
-              onClick={() =>
-                runAction("pause", () => reqPauseContainer(container.id))
-              }
-            />
-            <ActionButton
-              label="Resume"
-              icon={<FontAwesomeIcon icon={faPlay} className="h-3.5 w-3.5" />}
-              disabled={!isPaused || controlsDisabled}
-              loading={actionLoading === "unpause"}
-              color="text-healthy hover:bg-healthy/10"
-              onClick={() =>
-                runAction("unpause", () => reqUnpauseContainer(container.id))
-              }
-            />
-
-            <div className="h-5 w-px bg-border-strong mx-1 hidden sm:block" />
-
-            <ActionButton
-              label="Remove"
-              title="Permanently remove container from Docker"
-              icon={<FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />}
-              disabled={controlsDisabled}
-              loading={actionLoading === "remove"}
-              color="text-failed hover:bg-failed/10"
-              onClick={async () => {
-                const ok = await showConfirm({
-                  title: "Remove container",
-                  message: `Permanently remove "${container.name}" from Docker? This cannot be undone.`,
-                  confirmLabel: "Remove",
-                  variant: "danger",
-                });
-                if (ok)
-                  runAction("remove", () => reqRemoveContainer(container.id));
-              }}
-            />
-
-            {actionError && (
-              <div className="ml-auto">
-                <Alert variant="error" onDismiss={() => setActionError(null)}>
-                  {actionError}
-                </Alert>
-              </div>
-            )}
-          </div>
-        </div>
+        <ContainerActionBar
+          containerName={container.name}
+          containerId={container.id}
+          isRunning={isRunning}
+          isStopped={isStopped}
+          isPaused={isPaused}
+          controlsDisabled={controlsDisabled}
+          actionLoading={actionLoading}
+          actionError={actionError}
+          onAction={runAction}
+          onClearError={() => setActionError(null)}
+          showConfirm={showConfirm}
+        />
       )}
 
       {/* Edit form */}
       {editing && canEdit(user) && (
-        <div className="panel">
-          <div className="panel-header">
-            <FontAwesomeIcon
-              icon={faPenToSquare}
-              className="h-3.5 w-3.5 text-muted"
-            />
-            <span>Edit Container</span>
-          </div>
-          <div className="p-4 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-                  Name
-                </label>
-                <input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-                  Image
-                </label>
-                <input
-                  value={editImage}
-                  onChange={(e) => setEditImage(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-                  Tag
-                </label>
-                <input
-                  value={editTag}
-                  onChange={(e) => setEditTag(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-                  Restart Policy
-                </label>
-                <select
-                  value={editRestartPolicy}
-                  onChange={(e) => setEditRestartPolicy(e.target.value)}
-                  className={inputClass}
-                >
-                  <option value="">none</option>
-                  <option value="always">always</option>
-                  <option value="unless-stopped">unless-stopped</option>
-                  <option value="on-failure">on-failure</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-                  CPU Limit (cores)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={editCpuLimit}
-                  onChange={(e) => setEditCpuLimit(e.target.value)}
-                  placeholder="e.g. 0.5"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-                  Memory Limit (MB)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editMemoryLimit}
-                  onChange={(e) => setEditMemoryLimit(e.target.value)}
-                  placeholder="e.g. 512"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-                  Replicas
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={editReplicas}
-                  onChange={(e) => setEditReplicas(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-                  Command
-                </label>
-                <input
-                  value={editCommand}
-                  onChange={(e) => setEditCommand(e.target.value)}
-                  placeholder="e.g. npm start"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-                  Entrypoint
-                </label>
-                <input
-                  value={editEntrypoint}
-                  onChange={(e) => setEditEntrypoint(e.target.value)}
-                  placeholder="e.g. /bin/sh"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-                  Registry ID
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editRegistryId}
-                  onChange={(e) => setEditRegistryId(e.target.value)}
-                  placeholder="e.g. 1"
-                  className={inputClass}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-                  Environment Variables (JSON)
-                </label>
-                <CodeEditor
-                  rows={4}
-                  value={editEnvVars}
-                  onChange={setEditEnvVars}
-                  placeholder={'{"KEY": "value"}'}
-                  language="json"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-                  Port Mappings (JSON)
-                </label>
-                <CodeEditor
-                  rows={4}
-                  value={editPortMappings}
-                  onChange={setEditPortMappings}
-                  placeholder={
-                    '[{"host_port": "8080", "container_port": "80"}]'
-                  }
-                  language="json"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-                  Volumes (JSON)
-                </label>
-                <CodeEditor
-                  rows={4}
-                  value={editVolumes}
-                  onChange={setEditVolumes}
-                  placeholder={'[{"host": "/data", "container": "/app/data"}]'}
-                  language="json"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
-                  Health Check (JSON)
-                </label>
-                <CodeEditor
-                  rows={4}
-                  value={editHealthCheck}
-                  onChange={setEditHealthCheck}
-                  placeholder={
-                    '{"test": ["CMD", "curl", "-f", "http://localhost"], "interval": "30s", "timeout": "10s", "retries": 3}'
-                  }
-                  language="json"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={handleSave} disabled={saving} size="sm">
-                {saving ? "Saving…" : "Save Changes"}
-              </Button>
-              <Button
-                onClick={() => setEditing(false)}
-                variant="ghost"
-                size="sm"
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </div>
+        <ContainerEditForm
+          container={container}
+          onSave={handleEditSave}
+          onCancel={() => setEditing(false)}
+        />
       )}
 
       {/* Info panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 panel">
-          <div className="panel-header">
-            <span>Container Info</span>
-          </div>
-          <div className="p-4">
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
-              <InfoRow
-                label="Container ID"
-                value={
-                  <span className="font-mono text-xs">{container.id}</span>
-                }
-              />
-              <InfoRow
-                label="Status"
-                value={<StatusBadge status={container.status} />}
-              />
-              <InfoRow label="Replicas" value={String(container.replicas)} />
-              <InfoRow
-                label="Restart Policy"
-                value={container.restart_policy ?? "none"}
-              />
-              <InfoRow
-                label="Created"
-                value={formatDate(container.inserted_at)}
-              />
-              <InfoRow
-                label="Last Updated"
-                value={timeAgo(container.updated_at)}
-              />
-              {container.cpu_limit != null && (
-                <InfoRow
-                  label="CPU Limit"
-                  value={`${container.cpu_limit} cores`}
-                />
-              )}
-              {container.memory_limit != null && (
-                <InfoRow
-                  label="Memory Limit"
-                  value={`${container.memory_limit} MB`}
-                />
-              )}
-            </dl>
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-header">
-            <span>Health</span>
-          </div>
-          <div className="p-4">
-            {container.health_status === "none" && !healthConfig ? (
-              <p className="text-xs text-muted">No health check configured</p>
-            ) : (
-              <dl className="space-y-3">
-                <InfoRow
-                  label="Health Status"
-                  value={<StatusBadge status={container.health_status} />}
-                />
-                {healthConfig && (
-                  <InfoRow
-                    label="Test Command"
-                    value={
-                      <span className="font-mono text-xs break-all">
-                        {formatTestCommand(healthConfig.test)}
-                      </span>
-                    }
-                  />
-                )}
-                {healthConfig?.interval && (
-                  <InfoRow label="Interval" value={healthConfig.interval} />
-                )}
-                {healthConfig?.timeout && (
-                  <InfoRow label="Timeout" value={healthConfig.timeout} />
-                )}
-                {healthConfig?.retries != null && (
-                  <InfoRow
-                    label="Retries"
-                    value={String(healthConfig.retries)}
-                  />
-                )}
-              </dl>
-            )}
-          </div>
-        </div>
-      </div>
+      <ContainerInfoPanels container={container} healthConfig={healthConfig} />
 
       {/* Tabs */}
       <div className="panel">
@@ -1072,237 +459,19 @@ export default function ContainerDetailPage() {
             logs={logs}
             logLimit={logLimit}
             onLimitChange={setLogLimit}
-            onDownloadVisible={handleDownloadVisible}
-            onDownloadLastRun={handleDownloadLastRun}
-            onDownloadAll={handleDownloadAll}
-            loading={loading}
+            onDownloadVisible={() => handleDownloadVisible(container.name)}
+            onDownloadLastRun={() => handleDownloadLastRun(container.name)}
+            onDownloadAll={() => handleDownloadAll(container.id, container.name)}
+            loading={logsLoading}
           />
         )}
 
         {/* DETAILS TAB */}
-        {tab === "details" && (
-          <div className="p-5 space-y-6">
-            {/* Image */}
-            <section>
-              <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
-                Image
-              </h3>
-              <p className="text-sm text-primary font-mono">
-                {container.image}:{container.tag}
-              </p>
-            </section>
-
-            {/* Port mappings */}
-            <section>
-              <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
-                Port Configuration
-              </h3>
-              {ports.length === 0 ? (
-                <p className="text-sm text-muted">No ports exposed</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {ports.map((p, i) => (
-                    <span
-                      key={i}
-                      className="rounded-lg border border-border-strong bg-surface-elevated px-3 py-1 text-xs font-mono text-primary"
-                    >
-                      {p.host_port ?? "?"}:{p.container_port ?? "?"}
-                      {p.protocol && p.protocol !== "tcp"
-                        ? `/${p.protocol}`
-                        : ""}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Volumes */}
-            <section>
-              <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
-                Volumes
-              </h3>
-              {volumes.length === 0 ? (
-                <p className="text-sm text-muted">No volumes mounted</p>
-              ) : (
-                <div className="space-y-1">
-                  {volumes.map((v, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-2 text-xs font-mono"
-                    >
-                      <span className="text-secondary">{v.host ?? "?"}</span>
-                      <span className="text-dimmed">→</span>
-                      <span className="text-primary">{v.container ?? "?"}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* CMD */}
-            {container.command && (
-              <section>
-                <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
-                  CMD
-                </h3>
-                <code className="text-sm text-subtle font-mono">
-                  {prettyField(container.command)}
-                </code>
-              </section>
-            )}
-
-            {/* ENTRYPOINT */}
-            {container.entrypoint && (
-              <section>
-                <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
-                  ENTRYPOINT
-                </h3>
-                <code className="text-sm text-subtle font-mono">
-                  {prettyField(container.entrypoint)}
-                </code>
-              </section>
-            )}
-
-            {/* Resource limits */}
-            <section>
-              <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
-                Resource Limits
-              </h3>
-              <div className="flex flex-wrap gap-4">
-                <div>
-                  <p className="text-xs text-muted">CPU</p>
-                  <p className="text-sm text-primary">
-                    {container.cpu_limit != null
-                      ? `${container.cpu_limit} cores`
-                      : "unlimited"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted">Memory</p>
-                  <p className="text-sm text-primary">
-                    {container.memory_limit != null
-                      ? `${container.memory_limit} MB`
-                      : "unlimited"}
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            {/* Environment variables */}
-            <section>
-              <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
-                Environment Variables
-              </h3>
-              {Object.keys(envVars).length === 0 ? (
-                <p className="text-sm text-muted">No environment variables</p>
-              ) : (
-                <div className="rounded-lg border border-border-subtle overflow-hidden">
-                  <table className="w-full">
-                    <tbody className="divide-y divide-border-subtle">
-                      {Object.entries(envVars).map(([k, v]) => (
-                        <tr key={k}>
-                          <td className="px-3 py-2 text-xs font-mono text-secondary w-1/3 align-top">
-                            {k}
-                          </td>
-                          <td className="px-3 py-2 text-xs font-mono text-primary break-all">
-                            {v}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          </div>
-        )}
+        {tab === "details" && <ContainerDetailsTab container={container} />}
 
         {/* HEALTH TAB */}
         {tab === "health" && (
-          <div className="p-5 space-y-4">
-            <div>
-              <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
-                Health Status
-              </h3>
-              <StatusBadge status={container.health_status} />
-            </div>
-            {healthConfig ? (
-              <>
-                {/* Test command */}
-                <section>
-                  <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
-                    Test Command
-                  </h3>
-                  <code className="text-sm font-mono text-subtle bg-background-alt rounded-lg px-3 py-2 block whitespace-pre-wrap break-all">
-                    {formatTestCommand(healthConfig.test)}
-                  </code>
-                </section>
-
-                {/* Config table */}
-                <section>
-                  <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
-                    Configuration
-                  </h3>
-                  <div className="rounded-lg border border-border-subtle overflow-hidden">
-                    <table className="w-full">
-                      <tbody className="divide-y divide-border-subtle">
-                        {healthConfig.interval && (
-                          <tr>
-                            <td className="px-3 py-2 text-xs font-mono text-secondary w-1/3">
-                              Interval
-                            </td>
-                            <td className="px-3 py-2 text-xs font-mono text-primary">
-                              {healthConfig.interval}
-                            </td>
-                          </tr>
-                        )}
-                        {healthConfig.timeout && (
-                          <tr>
-                            <td className="px-3 py-2 text-xs font-mono text-secondary w-1/3">
-                              Timeout
-                            </td>
-                            <td className="px-3 py-2 text-xs font-mono text-primary">
-                              {healthConfig.timeout}
-                            </td>
-                          </tr>
-                        )}
-                        {healthConfig.retries != null && (
-                          <tr>
-                            <td className="px-3 py-2 text-xs font-mono text-secondary w-1/3">
-                              Retries
-                            </td>
-                            <td className="px-3 py-2 text-xs font-mono text-primary">
-                              {healthConfig.retries}
-                            </td>
-                          </tr>
-                        )}
-                        {healthConfig.start_period && (
-                          <tr>
-                            <td className="px-3 py-2 text-xs font-mono text-secondary w-1/3">
-                              Start Period
-                            </td>
-                            <td className="px-3 py-2 text-xs font-mono text-primary">
-                              {healthConfig.start_period}
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-
-                <p className="text-xs text-muted">
-                  Health checks are configured in your compose file and synced
-                  automatically.
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-muted">
-                No health check detected. Configure a healthcheck in your
-                compose file and redeploy — Lattice will sync it automatically.
-              </p>
-            )}
-          </div>
+          <ContainerHealthTab container={container} healthConfig={healthConfig} />
         )}
       </div>
 
@@ -1316,58 +485,5 @@ export default function ContainerDetailPage() {
         />
       )}
     </div>
-  );
-}
-
-// ─── sub-components ───────────────────────────────────────────────────────────
-
-const inputClass =
-  "w-full rounded-lg border border-border-strong bg-background-alt px-3 py-1.5 text-sm text-primary placeholder-[#444444] focus:border-[#3b82f6] focus:outline-none";
-
-function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-[10px] text-muted uppercase tracking-wider font-mono">
-        {label}
-      </dt>
-      <dd className="mt-0.5 text-sm text-primary">{value}</dd>
-    </div>
-  );
-}
-
-function ActionButton({
-  label,
-  icon,
-  disabled,
-  loading,
-  color,
-  onClick,
-  title,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  disabled: boolean;
-  loading: boolean;
-  color: string;
-  onClick: () => void;
-  title?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title ?? label}
-      className={`inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 h-8 text-sm font-medium transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${color}`}
-    >
-      {loading ? (
-        <FontAwesomeIcon
-          icon={faSpinner}
-          className="h-3.5 w-3.5 animate-spin"
-        />
-      ) : (
-        icon
-      )}
-      {label}
-    </button>
   );
 }

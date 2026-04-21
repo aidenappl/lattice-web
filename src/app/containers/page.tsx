@@ -3,9 +3,10 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { Container } from "@/types";
+import type { Container, Stack, Worker } from "@/types";
 import {
   reqGetAllContainers,
+  reqGetStacks,
   reqStartContainer,
   reqStopContainer,
   reqRestartContainer,
@@ -13,7 +14,6 @@ import {
   reqUnpauseContainer,
 } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
-import { reqGetStacks } from "@/services/stacks.service";
 import { PageLoader } from "@/components/ui/loading";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -25,7 +25,6 @@ import {
   faChevronRight,
 } from "@fortawesome/free-solid-svg-icons";
 import { StatusBadge } from "@/components/ui/badge";
-import { Stack, Worker } from "@/types";
 import { timeAgo } from "@/lib/utils";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";

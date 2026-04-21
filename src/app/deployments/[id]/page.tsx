@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Deployment, DeploymentLog, Stack } from "@/types";
+import type { Deployment, DeploymentLog, Stack } from "@/types";
 import {
   reqGetDeployment,
   reqGetDeploymentLogs,

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { reqGetAuditLog, AuditLogEntry } from "@/services/admin.service";
+import { reqGetAuditLog } from "@/services/admin.service";
 import { reqGetUsers } from "@/services/admin.service";
-import { User } from "@/types";
+import type { AuditLogEntry, User } from "@/types";
 import { PageLoader } from "@/components/ui/loading";
 import { formatDate } from "@/lib/utils";
 

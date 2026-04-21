@@ -6,14 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
-  faEllipsisVertical,
-  faPlay,
-  faStop,
-  faRotateRight,
   faCubes,
-  faTrash,
-  faCircleCheck,
-  faCircleXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import toast from "react-hot-toast";
 import {
@@ -21,15 +14,12 @@ import {
   Container,
   Deployment,
   DeploymentLog,
-  ContainerLog,
   Worker,
 } from "@/types";
 import {
   reqGetStack,
   reqGetContainers,
   reqDeployStack,
-  reqGetContainerLogs,
-  reqGetLifecycleLogs,
   reqDeleteContainer,
   reqUpdateStack,
   reqDeleteStack,
@@ -51,27 +41,22 @@ import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { CodeEditor } from "@/components/ui/code-editor";
-import { EnvVarEditor } from "@/components/ui/env-var-editor";
-import { formatDate, timeAgo, workerStaleReason, canEdit } from "@/lib/utils";
+import { canEdit, timeAgo, workerStaleReason } from "@/lib/utils";
 import { useUser } from "@/store/hooks";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
+import { useContainerLogs } from "@/hooks/useContainerLogs";
+import { usePoll } from "@/hooks/usePoll";
 import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
 import { useConfirm } from "@/components/ui/confirm-modal";
-import { Alert } from "@/components/ui/alert";
-import {
-  LogViewer,
-  LogLimit,
-  sortLogs,
-  downloadLogsAsTxt,
-  isNewSession,
-  syntheticId,
-  isSynthetic,
-  lifecycleToContainerLog,
-} from "@/components/ui/log-viewer";
 import WorkerBadge from "@/components/ui/worker-badge";
+
+import { StackEditForm } from "@/components/stacks/StackEditForm";
+import { StackContainersList } from "@/components/stacks/StackContainersList";
+import { StackComposeTab } from "@/components/stacks/StackComposeTab";
+import { StackEnvTab } from "@/components/stacks/StackEnvTab";
+import { StackLogsTab } from "@/components/stacks/StackLogsTab";
+import { StackDeployments } from "@/components/stacks/StackDeployments";
 
 export default function StackDetailPage() {
   const params = useParams();
@@ -86,8 +71,7 @@ export default function StackDetailPage() {
   const [loading, setLoading] = useState(true);
   const [deploying, setDeploying] = useState(false);
 
-  // Worker liveness — must be declared unconditionally before any early return.
-  // Passes all workers; we filter to the stack's worker after loading.
+  // Worker liveness
   const workerLiveness = useWorkerLiveness(workers);
   const showConfirm = useConfirm();
 
@@ -96,19 +80,29 @@ export default function StackDetailPage() {
     {},
   );
 
-  // Logs state
+  // Container logs via hook
+  const {
+    logs,
+    logsLoading,
+    logLimit,
+    setLogLimit,
+    streamFilter,
+    setStreamFilter,
+    loadLogs,
+    handleDownloadVisible,
+    handleDownloadLastRun,
+    handleDownloadAll,
+    handleLogSocketEvent,
+  } = useContainerLogs();
+
+  // Selected container for logs
   const [selectedContainer, setSelectedContainer] = useState<number | null>(
     null,
   );
-  const [logs, setLogs] = useState<ContainerLog[]>([]);
-  const [logsLoading, setLogsLoading] = useState(false);
-  const [streamFilter, setStreamFilter] = useState<string>("all");
-  const [logLimit, setLogLimit] = useState<LogLimit>(250);
 
   // Refs to allow WS handler to access current state without stale closures
   const selectedContainerNameRef = useRef<string>("");
   const selectedContainerRef = useRef<number | null>(null);
-  const logLimitRef = useRef<LogLimit>(250);
 
   // Stack env vars
   const [stackEnvVars, setStackEnvVars] = useState("");
@@ -137,24 +131,13 @@ export default function StackDetailPage() {
   );
   const [deploymentLogs, setDeploymentLogs] = useState<DeploymentLog[]>([]);
   const [deploymentLogsLoading, setDeploymentLogsLoading] = useState(false);
-  const deploymentLogsEndRef = useRef<HTMLDivElement>(null);
 
   // Delete stack
   const [deleting, setDeleting] = useState(false);
 
-  // Create container
-  const [showCreateContainer, setShowCreateContainer] = useState(false);
-  const [newContainerName, setNewContainerName] = useState("");
-  const [newContainerImage, setNewContainerImage] = useState("");
-  const [newContainerTag, setNewContainerTag] = useState("latest");
-  const [creatingContainer, setCreatingContainer] = useState(false);
-
   // Tab state
   type StackTab = "containers" | "compose" | "env" | "logs";
   const [activeTab, setActiveTab] = useState<StackTab>("containers");
-
-  // Container action menu
-  const [openActionMenu, setOpenActionMenu] = useState<number | null>(null);
 
   // Deploy button state
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
@@ -162,12 +145,6 @@ export default function StackDetailPage() {
 
   // Stack settings edit state
   const [editingStack, setEditingStack] = useState(false);
-  const [editStackName, setEditStackName] = useState("");
-  const [editStackDescription, setEditStackDescription] = useState("");
-  const [editStackWorkerId, setEditStackWorkerId] = useState("");
-  const [editStackStrategy, setEditStackStrategy] = useState("");
-  const [editStackAutoDeploy, setEditStackAutoDeploy] = useState(false);
-  const [savingStack, setSavingStack] = useState(false);
 
   useEffect(() => {
     if (stack) document.title = `Lattice - ${stack.name}`;
@@ -198,7 +175,6 @@ export default function StackDetailPage() {
         );
         setDeployments(filtered);
 
-        // Compute whether any container was modified after the last deployment.
         const latestDeploy = [...filtered].sort(
           (a, b) =>
             new Date(b.inserted_at).getTime() -
@@ -228,10 +204,9 @@ export default function StackDetailPage() {
     }
   }, [containers, selectedContainer]);
 
-  // Poll while stack is deploying to pick up terminal status
-  useEffect(() => {
-    if (!stack || stack.status !== "deploying") return;
-    const interval = setInterval(async () => {
+  // Poll while stack is deploying to pick up terminal status (3s)
+  usePoll(
+    async () => {
       const [stackRes, deploymentsRes, containersRes] = await Promise.all([
         reqGetStack(id),
         reqGetDeployments(),
@@ -246,21 +221,24 @@ export default function StackDetailPage() {
           (d) => d.stack_id === id,
         );
         setDeployments(filtered);
-        // Auto-refresh logs for the selected deployment
         if (selectedDeployment) {
           const logsRes = await reqGetDeploymentLogs(selectedDeployment);
           if (logsRes.success) setDeploymentLogs(logsRes.data ?? []);
         }
       }
       if (containersRes.success) setContainers(containersRes.data ?? []);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [stack?.status, id, selectedDeployment]);
+    },
+    3000,
+    stack?.status === "deploying",
+  );
 
-  const refreshContainers = async () => {
+  const refreshContainers = useCallback(async () => {
     const res = await reqGetContainers(id);
     if (res.success) setContainers(res.data ?? []);
-  };
+  }, [id]);
+
+  // Periodic lightweight container status refresh (every 8s)
+  usePoll(refreshContainers, 8000);
 
   // WebSocket: refresh containers on any sync/status event for this stack's containers
   const containerNamesRef = useRef<Set<string>>(new Set());
@@ -274,9 +252,6 @@ export default function StackDetailPage() {
     selectedContainerNameRef.current = c?.name ?? "";
     selectedContainerRef.current = selectedContainer;
   }, [selectedContainer, containers]);
-  useEffect(() => {
-    logLimitRef.current = logLimit;
-  }, [logLimit]);
 
   const handleSocketEvent = useCallback(
     (event: AdminSocketEvent) => {
@@ -294,7 +269,6 @@ export default function StackDetailPage() {
           );
           refreshContainers();
           // Reload logs when the selected container's status changes
-          // (picks up lifecycle entries from lifecycle_logs table)
           if (eventName === selectedContainerNameRef.current) {
             setTimeout(() => {
               const sel = selectedContainerRef.current;
@@ -306,62 +280,11 @@ export default function StackDetailPage() {
 
       // Live-stream log lines for the currently selected container
       if (
-        event.type === "container_logs" &&
+        (event.type === "container_logs" || event.type === "lifecycle_log") &&
         eventName &&
         eventName === selectedContainerNameRef.current
       ) {
-        const message = payload["message"] as string | undefined;
-        const rawStream = (payload["stream"] as string | undefined) ?? "stdout";
-        const stream: "stdout" | "stderr" =
-          rawStream === "stderr" ? "stderr" : "stdout";
-        if (message) {
-          const entry: ContainerLog = {
-            id: syntheticId() as unknown as number,
-            container_id: null,
-            container_name: eventName,
-            worker_id: event.worker_id ?? 0,
-            stream,
-            message,
-            recorded_at: new Date().toISOString(),
-          };
-          const limit = logLimitRef.current;
-          setLogs((prev) => {
-            // Only skip if a DB-fetched entry with the same message arrived
-            // within 2 s (same boot burst). This avoids dropping lines that
-            // legitimately repeat across sessions (e.g. "Starting...").
-            const now = Date.now();
-            const dominated = prev.some(
-              (l) =>
-                !isSynthetic(l) &&
-                l.message === message &&
-                Math.abs(now - new Date(l.recorded_at).getTime()) < 2_000,
-            );
-            if (dominated) return prev;
-            return sortLogs([...prev.slice(-(limit - 1)), entry]);
-          });
-        }
-      }
-
-      // Live lifecycle_log entries from the runner (verbose action progress).
-      if (
-        event.type === "lifecycle_log" &&
-        eventName &&
-        eventName === selectedContainerNameRef.current
-      ) {
-        const message = (payload["message"] as string) ?? "";
-        if (message) {
-          const entry: ContainerLog = {
-            id: `lc_${syntheticId()}` as unknown as number,
-            container_id: null,
-            container_name: eventName,
-            worker_id: event.worker_id ?? 0,
-            stream: "lifecycle" as "stdout",
-            message,
-            recorded_at: new Date().toISOString(),
-          };
-          const limit = logLimitRef.current;
-          setLogs((prev) => sortLogs([...prev.slice(-(limit - 1)), entry]));
-        }
+        handleLogSocketEvent(event, eventName);
       }
 
       // Worker lifecycle events — reload logs after a short delay
@@ -374,16 +297,9 @@ export default function StackDetailPage() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [id],
+    [id, refreshContainers, handleLogSocketEvent, loadLogs],
   );
   useAdminSocket(handleSocketEvent);
-
-  // Periodic lightweight container status refresh (every 8s)
-  useEffect(() => {
-    const interval = setInterval(refreshContainers, 8000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
 
   const handleDeploy = async () => {
     setDeploying(true);
@@ -392,7 +308,6 @@ export default function StackDetailPage() {
       setHasPendingChanges(false);
       const stackRes = await reqGetStack(id);
       if (stackRes.success) setStack(stackRes.data);
-      // Refresh deployments list
       const deploymentsRes = await reqGetDeployments();
       if (deploymentsRes.success) {
         setDeployments(
@@ -422,55 +337,40 @@ export default function StackDetailPage() {
     setDeleting(false);
   };
 
-  const handleCreateContainer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newContainerName.trim() || !newContainerImage.trim()) return;
-    setCreatingContainer(true);
+  const handleCreateContainer = async (data: {
+    name: string;
+    image: string;
+    tag: string;
+  }) => {
     const res = await reqCreateContainer(id, {
-      name: newContainerName.trim(),
-      image: newContainerImage.trim(),
-      tag: newContainerTag.trim() || "latest",
+      name: data.name,
+      image: data.image,
+      tag: data.tag,
     } as Partial<Container>);
     if (res.success) {
       setContainers((prev) => [...prev, res.data]);
       setHasPendingChanges(true);
-      setShowCreateContainer(false);
-      setNewContainerName("");
-      setNewContainerImage("");
-      setNewContainerTag("latest");
     }
-    setCreatingContainer(false);
   };
 
-  const openEditStack = () => {
-    if (!stack) return;
-    setEditStackName(stack.name);
-    setEditStackDescription(stack.description ?? "");
-    setEditStackWorkerId(stack.worker_id?.toString() ?? "");
-    setEditStackStrategy(stack.deployment_strategy);
-    setEditStackAutoDeploy(stack.auto_deploy);
-    setEditingStack(true);
-  };
-
-  const handleSaveStack = async () => {
-    if (!stack) return;
-    setSavingStack(true);
+  const handleSaveStack = async (data: {
+    name: string;
+    description: string;
+    worker_id: string;
+    strategy: string;
+    auto_deploy: boolean;
+  }) => {
     const res = await reqUpdateStack(id, {
-      name: editStackName.trim(),
-      description: editStackDescription.trim(),
-      worker_id: editStackWorkerId ? Number(editStackWorkerId) : 0,
-      deployment_strategy: editStackStrategy,
-      auto_deploy: editStackAutoDeploy,
+      name: data.name,
+      description: data.description,
+      worker_id: data.worker_id ? Number(data.worker_id) : 0,
+      deployment_strategy: data.strategy,
+      auto_deploy: data.auto_deploy,
     });
     if (res.success) {
       setStack(res.data);
       setEditingStack(false);
     }
-    setSavingStack(false);
-  };
-
-  const handleCancelEditStack = () => {
-    setEditingStack(false);
   };
 
   const loadDeploymentLogs = async (deploymentId: number) => {
@@ -479,90 +379,15 @@ export default function StackDetailPage() {
     const res = await reqGetDeploymentLogs(deploymentId);
     if (res.success) {
       setDeploymentLogs(res.data ?? []);
-      setTimeout(
-        () =>
-          deploymentLogsEndRef.current?.scrollIntoView({ behavior: "smooth" }),
-        50,
-      );
     }
     setDeploymentLogsLoading(false);
   };
-
-  const loadLogs = useCallback(
-    async (containerId: number, stream?: string, limit?: number) => {
-      setLogsLoading(true);
-      const params: { limit: number; stream?: string } = {
-        limit: limit ?? logLimitRef.current,
-      };
-      if (stream && stream !== "all") params.stream = stream;
-      const [logRes, lcRes] = await Promise.all([
-        reqGetContainerLogs(containerId, params),
-        reqGetLifecycleLogs(containerId, { limit: params.limit }),
-      ]);
-      const dbLogs = logRes.success ? (logRes.data ?? []) : [];
-      const lcLogs = lcRes.success
-        ? (lcRes.data ?? []).map(lifecycleToContainerLog)
-        : [];
-      if (logRes.success || lcRes.success) {
-        // Message-based dedup (safe against clock skew)
-        const seen = new Set<string>();
-        const unique = [...dbLogs, ...lcLogs].filter((l) => {
-          const key = `${l.recorded_at}|${l.message}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-        setLogs(sortLogs(unique));
-      }
-      setLogsLoading(false);
-    },
-    [],
-  );
 
   useEffect(() => {
     if (selectedContainer) {
       loadLogs(selectedContainer, streamFilter);
     }
   }, [selectedContainer, streamFilter, logLimit, loadLogs]);
-
-  // ─── Download handlers ─────────────────────────────────────────────────────
-
-  const handleDownloadVisible = () => {
-    const c = containers.find((cc) => cc.id === selectedContainer);
-    const name = c?.name ?? String(selectedContainer);
-    downloadLogsAsTxt(logs, `${name}-logs-visible.txt`);
-  };
-
-  const handleDownloadLastRun = () => {
-    let startIdx = 0;
-    for (let i = logs.length - 1; i > 0; i--) {
-      if (isNewSession(logs[i - 1], logs[i])) {
-        startIdx = i;
-        break;
-      }
-    }
-    const c = containers.find((cc) => cc.id === selectedContainer);
-    const name = c?.name ?? String(selectedContainer);
-    downloadLogsAsTxt(logs.slice(startIdx), `${name}-logs-last-run.txt`);
-  };
-
-  const handleDownloadAll = async () => {
-    if (!selectedContainer) return;
-    const [logRes, lcRes] = await Promise.all([
-      reqGetContainerLogs(selectedContainer, { limit: 9999 }),
-      reqGetLifecycleLogs(selectedContainer, { limit: 9999 }),
-    ]);
-    if (logRes.success) {
-      const dbLogs = (logRes.data ?? []).slice();
-      const lcLogs = lcRes.success
-        ? (lcRes.data ?? []).map(lifecycleToContainerLog)
-        : [];
-      const all = sortLogs([...dbLogs, ...lcLogs]);
-      const c = containers.find((cc) => cc.id === selectedContainer);
-      const name = c?.name ?? String(selectedContainer);
-      downloadLogsAsTxt(all, `${name}-logs-all.txt`);
-    }
-  };
 
   const handleDeleteContainer = async (containerId: number) => {
     const confirmed = await showConfirm({
@@ -584,7 +409,6 @@ export default function StackDetailPage() {
     const name = container?.name ?? String(containerId);
     const label = action.charAt(0).toUpperCase() + action.slice(1);
 
-    // Confirm destructive actions
     const confirmMap: Record<
       string,
       { title: string; message: string; variant: "danger" | "warning" }
@@ -648,7 +472,6 @@ export default function StackDetailPage() {
       console.error(`[StackPage] action "${action}" failed for ${name}:`, msg);
     }
 
-    // Give the worker a moment to execute, then refresh
     setTimeout(async () => {
       await refreshContainers();
       const stackRes = await reqGetStack(id);
@@ -717,6 +540,12 @@ export default function StackDetailPage() {
     return w ? w.name : `Worker #${wId}`;
   };
 
+  // Download handlers — pass container name from current selection
+  const selectedContainerName = useMemo(() => {
+    const c = containers.find((cc) => cc.id === selectedContainer);
+    return c?.name ?? String(selectedContainer);
+  }, [containers, selectedContainer]);
+
   if (loading) return <PageLoader />;
   if (!stack)
     return (
@@ -729,21 +558,13 @@ export default function StackDetailPage() {
   const stackWorker = workers.find((w) => w.id === stack.worker_id) ?? null;
   const workerOnline = stackWorker
     ? (workerLiveness[stackWorker.id] ?? true)
-    : true; // no worker assigned → don't block
+    : true;
   const staleReason = stackWorker ? workerStaleReason(stackWorker) : null;
 
   const runningCount = containers.filter((c) => c.status === "running").length;
   const stoppedCount = containers.filter(
     (c) => c.status === "stopped" || c.status === "error",
   ).length;
-
-  const containerStatusIcon = (status: string) => {
-    if (status === "running") return <span className="status-dot healthy" />;
-    if (status === "stopped" || status === "error")
-      return <span className="status-dot failed" />;
-    if (status === "paused") return <span className="status-dot pending" />;
-    return <span className="status-dot off" />;
-  };
 
   return (
     <div className="stack-page">
@@ -842,7 +663,11 @@ export default function StackDetailPage() {
                 );
               })()}
             {canEdit(user) && (
-              <Button variant="ghost" size="sm" onClick={openEditStack}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditingStack(true)}
+              >
                 Edit
               </Button>
             )}
@@ -862,98 +687,12 @@ export default function StackDetailPage() {
 
       {/* ─── Edit Stack Modal (inline) ──────────────────────────── */}
       {editingStack && (
-        <div className="card p-5 mb-5">
-          <h2 className="text-sm font-medium text-primary mb-4">Edit Stack</h2>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <Input
-                id="edit-stack-name"
-                label="Name"
-                value={editStackName}
-                onChange={(e) => setEditStackName(e.target.value)}
-                required
-              />
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-secondary uppercase tracking-wider">
-                  Worker
-                </label>
-                <select
-                  value={editStackWorkerId}
-                  onChange={(e) => setEditStackWorkerId(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none"
-                >
-                  <option value="">Unassigned</option>
-                  {workers.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name} ({w.hostname})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-secondary uppercase tracking-wider">
-                Description
-              </label>
-              <textarea
-                rows={2}
-                value={editStackDescription}
-                onChange={(e) => setEditStackDescription(e.target.value)}
-                placeholder="Optional description..."
-                className="w-full rounded-lg border border-border-strong bg-surface-elevated px-3 py-2 text-sm text-primary placeholder:text-muted focus:border-border-emphasis focus:outline-none resize-none"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-secondary uppercase tracking-wider">
-                  Deployment Strategy
-                </label>
-                <select
-                  value={editStackStrategy}
-                  onChange={(e) => setEditStackStrategy(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none"
-                >
-                  <option value="rolling">Rolling</option>
-                  <option value="blue-green">Blue-Green</option>
-                  <option value="canary">Canary</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-secondary uppercase tracking-wider">
-                  Auto Deploy
-                </label>
-                <div className="flex items-center h-9 gap-3">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={editStackAutoDeploy}
-                    onClick={() => setEditStackAutoDeploy(!editStackAutoDeploy)}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${editStackAutoDeploy ? "bg-info" : "bg-border-strong"}`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${editStackAutoDeploy ? "translate-x-4" : "translate-x-0"}`}
-                    />
-                  </button>
-                  <span className="text-sm text-secondary">
-                    {editStackAutoDeploy ? "Enabled" : "Disabled"}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                onClick={handleSaveStack}
-                disabled={savingStack || !editStackName.trim()}
-              >
-                {savingStack ? "Saving..." : "Save Changes"}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={handleCancelEditStack}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </div>
+        <StackEditForm
+          stack={stack}
+          workers={workers}
+          onSave={handleSaveStack}
+          onCancel={() => setEditingStack(false)}
+        />
       )}
 
       {/* ─── Stats Row ──────────────────────────────────────────── */}
@@ -1002,522 +741,78 @@ export default function StackDetailPage() {
         <div className="lg:col-span-2">
           {/* ─── Containers Tab ─────────────────────────── */}
           {activeTab === "containers" && (
-            <div className="space-y-4">
-              {/* Add container form */}
-              {showCreateContainer && canEdit(user) && (
-                <form onSubmit={handleCreateContainer} className="card p-4">
-                  <h3 className="text-xs font-medium text-secondary uppercase tracking-wider mb-3">
-                    New Container
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-                    <Input
-                      id="new-container-name"
-                      label="Name"
-                      placeholder="my-service"
-                      value={newContainerName}
-                      onChange={(e) => setNewContainerName(e.target.value)}
-                      required
-                    />
-                    <Input
-                      id="new-container-image"
-                      label="Image"
-                      placeholder="nginx"
-                      value={newContainerImage}
-                      onChange={(e) => setNewContainerImage(e.target.value)}
-                      required
-                    />
-                    <Input
-                      id="new-container-tag"
-                      label="Tag"
-                      placeholder="latest"
-                      value={newContainerTag}
-                      onChange={(e) => setNewContainerTag(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={
-                        creatingContainer ||
-                        !newContainerName.trim() ||
-                        !newContainerImage.trim()
-                      }
-                    >
-                      {creatingContainer ? "Creating..." : "Create"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowCreateContainer(false)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              )}
-
-              {/* Container cards */}
-              {containers.length === 0 ? (
-                <div className="card p-8 text-center">
-                  <p className="text-sm text-muted mb-3">
-                    No containers in this stack
-                  </p>
-                  {canEdit(user) && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setShowCreateContainer(true)}
-                    >
-                      Add Container
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <div className="stack-container-grid">
-                  {containers.map((container) => (
-                    <div key={container.id} className="stack-container-card">
-                      <div className="stack-container-card-header">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {containerStatusIcon(container.status)}
-                          <Link
-                            href={`/containers/${container.id}`}
-                            className="text-sm font-medium text-primary hover:text-info transition-colors truncate"
-                          >
-                            {container.name}
-                          </Link>
-                        </div>
-                        {canEdit(user) && (
-                          <div className="relative">
-                            <button
-                              onClick={() =>
-                                setOpenActionMenu(
-                                  openActionMenu === container.id
-                                    ? null
-                                    : container.id,
-                                )
-                              }
-                              className="p-1.5 rounded text-muted hover:text-primary hover:bg-surface-elevated transition-colors"
-                            >
-                              <FontAwesomeIcon
-                                icon={faEllipsisVertical}
-                                className="h-3.5 w-3.5"
-                              />
-                            </button>
-                            {openActionMenu === container.id && (
-                              <div
-                                className="stack-action-menu"
-                                onMouseLeave={() => setOpenActionMenu(null)}
-                              >
-                                {(container.status === "stopped" ||
-                                  container.status === "error") && (
-                                  <button
-                                    onClick={() => {
-                                      handleContainerAction(
-                                        container.id,
-                                        "start",
-                                      );
-                                      setOpenActionMenu(null);
-                                    }}
-                                    disabled={
-                                      !workerOnline ||
-                                      !!actionLoading[`${container.id}-start`]
-                                    }
-                                    className="stack-action-item text-healthy"
-                                  >
-                                    <FontAwesomeIcon
-                                      icon={faPlay}
-                                      className="h-3 w-3"
-                                    />
-                                    <span>
-                                      {actionLoading[`${container.id}-start`]
-                                        ? "Starting..."
-                                        : "Start"}
-                                    </span>
-                                  </button>
-                                )}
-                                {container.status === "paused" && (
-                                  <button
-                                    onClick={() => {
-                                      handleContainerAction(
-                                        container.id,
-                                        "unpause",
-                                      );
-                                      setOpenActionMenu(null);
-                                    }}
-                                    disabled={
-                                      !workerOnline ||
-                                      !!actionLoading[`${container.id}-unpause`]
-                                    }
-                                    className="stack-action-item text-healthy"
-                                  >
-                                    <FontAwesomeIcon
-                                      icon={faPlay}
-                                      className="h-3 w-3"
-                                    />
-                                    <span>
-                                      {actionLoading[`${container.id}-unpause`]
-                                        ? "Resuming..."
-                                        : "Resume"}
-                                    </span>
-                                  </button>
-                                )}
-                                {container.status === "running" && (
-                                  <>
-                                    <button
-                                      onClick={() => {
-                                        handleContainerAction(
-                                          container.id,
-                                          "restart",
-                                        );
-                                        setOpenActionMenu(null);
-                                      }}
-                                      disabled={
-                                        !workerOnline ||
-                                        !!actionLoading[
-                                          `${container.id}-restart`
-                                        ]
-                                      }
-                                      className="stack-action-item text-info"
-                                    >
-                                      <FontAwesomeIcon
-                                        icon={faRotateRight}
-                                        className="h-3 w-3"
-                                      />
-                                      <span>
-                                        {actionLoading[
-                                          `${container.id}-restart`
-                                        ]
-                                          ? "..."
-                                          : "Restart"}
-                                      </span>
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        handleContainerAction(
-                                          container.id,
-                                          "stop",
-                                        );
-                                        setOpenActionMenu(null);
-                                      }}
-                                      disabled={
-                                        !workerOnline ||
-                                        !!actionLoading[`${container.id}-stop`]
-                                      }
-                                      className="stack-action-item text-pending"
-                                    >
-                                      <FontAwesomeIcon
-                                        icon={faStop}
-                                        className="h-3 w-3"
-                                      />
-                                      <span>
-                                        {actionLoading[`${container.id}-stop`]
-                                          ? "..."
-                                          : "Stop"}
-                                      </span>
-                                    </button>
-                                  </>
-                                )}
-                                <button
-                                  onClick={() => {
-                                    handleContainerAction(
-                                      container.id,
-                                      "recreate",
-                                    );
-                                    setOpenActionMenu(null);
-                                  }}
-                                  disabled={
-                                    !workerOnline ||
-                                    !!actionLoading[`${container.id}-recreate`]
-                                  }
-                                  className="stack-action-item text-violet"
-                                >
-                                  <FontAwesomeIcon
-                                    icon={faRotateRight}
-                                    className="h-3 w-3"
-                                  />
-                                  <span>
-                                    {actionLoading[`${container.id}-recreate`]
-                                      ? "..."
-                                      : "Recreate"}
-                                  </span>
-                                </button>
-                                <div className="stack-action-divider" />
-                                <button
-                                  onClick={() => {
-                                    handleDeleteContainer(container.id);
-                                    setOpenActionMenu(null);
-                                  }}
-                                  className="stack-action-item text-failed"
-                                >
-                                  <FontAwesomeIcon
-                                    icon={faTrash}
-                                    className="h-3 w-3"
-                                  />
-                                  <span>Delete</span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="stack-container-card-body">
-                        <span className="text-xs font-mono text-muted truncate">
-                          {container.image}:{container.tag}
-                        </span>
-                        <StatusBadge status={container.status} />
-                      </div>
-                    </div>
-                  ))}
-                  {canEdit(user) && !showCreateContainer && (
-                    <button
-                      onClick={() => setShowCreateContainer(true)}
-                      className="stack-container-card stack-container-card-add"
-                    >
-                      <span className="text-2xl text-muted">+</span>
-                      <span className="text-xs text-muted">Add Container</span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+            <StackContainersList
+              containers={containers}
+              canEdit={canEdit(user)}
+              workerOnline={workerOnline}
+              actionLoading={actionLoading}
+              onAction={handleContainerAction}
+              onDelete={handleDeleteContainer}
+              onCreateContainer={handleCreateContainer}
+            />
           )}
 
           {/* ─── Compose Tab ────────────────────────────── */}
           {activeTab === "compose" && (
-            <div className="card p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-medium text-primary">
-                  Docker Compose
-                </h2>
-              </div>
-              <p className="text-xs text-muted mb-3">
-                Edit the compose YAML and save to replace all containers with
-                the updated definition.
-              </p>
-              <CodeEditor
-                rows={22}
-                value={composeYaml}
-                onChange={setComposeYaml}
-                language="yaml"
-                envVars={parsedEnvVars}
-                placeholder={`version: "3"\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"`}
-              />
-              {composeError && (
-                <div className="mt-2">
-                  <Alert variant="error" onDismiss={() => setComposeError("")}>
-                    {composeError}
-                  </Alert>
-                </div>
-              )}
-              {canEdit(user) && (
-                <div className="mt-3 flex justify-between items-center">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={handleSyncCompose}
-                    disabled={
-                      syncingCompose || savingCompose || !composeYaml.trim()
-                    }
-                    title="Re-read the stored compose YAML and patch existing containers without recreating them"
-                  >
-                    {syncingCompose ? "Syncing..." : "Sync Config"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveCompose}
-                    disabled={
-                      savingCompose || syncingCompose || !composeYaml.trim()
-                    }
-                  >
-                    {savingCompose ? "Saving..." : "Save & Sync Containers"}
-                  </Button>
-                </div>
-              )}
-            </div>
+            <StackComposeTab
+              composeYaml={composeYaml}
+              onChange={setComposeYaml}
+              onSave={handleSaveCompose}
+              onSync={handleSyncCompose}
+              savingCompose={savingCompose}
+              syncingCompose={syncingCompose}
+              composeError={composeError}
+              onDismissError={() => setComposeError("")}
+              canEdit={canEdit(user)}
+              parsedEnvVars={parsedEnvVars}
+            />
           )}
 
           {/* ─── Environment Tab ────────────────────────── */}
           {activeTab === "env" && (
-            <div className="card p-5">
-              <h2 className="text-sm font-medium text-primary mb-4">
-                Stack Environment Variables
-              </h2>
-              <EnvVarEditor value={stackEnvVars} onChange={setStackEnvVars} />
-              {canEdit(user) && (
-                <div className="mt-3 flex justify-end">
-                  <Button
-                    size="sm"
-                    onClick={handleSaveEnvVars}
-                    disabled={savingEnvVars}
-                  >
-                    {savingEnvVars ? "Saving..." : "Save"}
-                  </Button>
-                </div>
-              )}
-            </div>
+            <StackEnvTab
+              envVars={stackEnvVars}
+              onChange={setStackEnvVars}
+              onSave={handleSaveEnvVars}
+              saving={savingEnvVars}
+              canEdit={canEdit(user)}
+            />
           )}
 
           {/* ─── Logs Tab ───────────────────────────────── */}
           {activeTab === "logs" && (
-            <div className="panel">
-              <div className="panel-header">
-                <span>Container Logs</span>
-                <div className="panel-header-right">
-                  <select
-                    value={streamFilter}
-                    onChange={(e) => setStreamFilter(e.target.value)}
-                    className="bg-surface-elevated border border-border-strong text-foreground px-2 py-1 rounded-md text-xs cursor-pointer"
-                  >
-                    <option value="all">All streams</option>
-                    <option value="stdout">stdout</option>
-                    <option value="stderr">stderr</option>
-                  </select>
-                  <select
-                    value={selectedContainer ?? ""}
-                    onChange={(e) =>
-                      setSelectedContainer(
-                        e.target.value ? Number(e.target.value) : null,
-                      )
-                    }
-                    className="bg-surface-elevated border border-border-strong text-foreground px-2 py-1 rounded-md text-xs cursor-pointer"
-                  >
-                    <option value="">Select container...</option>
-                    {containers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  {selectedContainer && (
-                    <button
-                      onClick={() => loadLogs(selectedContainer, streamFilter)}
-                      className="text-xs text-info hover:text-info transition-colors cursor-pointer"
-                    >
-                      Refresh
-                    </button>
-                  )}
-                </div>
-              </div>
-              {!selectedContainer ? (
-                <div className="px-5 py-8 text-center text-sm text-muted">
-                  Select a container to view logs
-                </div>
-              ) : logsLoading ? (
-                <div className="px-5 py-8 text-center text-sm text-muted">
-                  Loading logs...
-                </div>
-              ) : (
-                <LogViewer
-                  logs={logs}
-                  logLimit={logLimit}
-                  onLimitChange={setLogLimit}
-                  onDownloadVisible={handleDownloadVisible}
-                  onDownloadLastRun={handleDownloadLastRun}
-                  onDownloadAll={handleDownloadAll}
-                  loading={logsLoading}
-                />
-              )}
-            </div>
+            <StackLogsTab
+              containers={containers}
+              selectedContainer={selectedContainer}
+              onSelectContainer={setSelectedContainer}
+              logs={logs}
+              logsLoading={logsLoading}
+              logLimit={logLimit}
+              onLimitChange={setLogLimit}
+              streamFilter={streamFilter}
+              onStreamFilterChange={setStreamFilter}
+              onRefresh={() =>
+                selectedContainer && loadLogs(selectedContainer, streamFilter)
+              }
+              onDownloadVisible={() => handleDownloadVisible(selectedContainerName)}
+              onDownloadLastRun={() => handleDownloadLastRun(selectedContainerName)}
+              onDownloadAll={() => {
+                if (selectedContainer) {
+                  handleDownloadAll(selectedContainer, selectedContainerName);
+                }
+              }}
+            />
           )}
         </div>
 
         {/* ─── Sidebar: Deployments ─────────────────────────────── */}
-        <div className="space-y-5">
-          <div className="panel">
-            <div className="panel-header">
-              <span>Deployment History</span>
-              <span className="muted">{deployments.length}</span>
-            </div>
-            <div className="p-3 space-y-1.5">
-              {deployments.length === 0 ? (
-                <p className="text-xs text-muted text-center py-4">
-                  No deployments yet
-                </p>
-              ) : (
-                deployments.slice(0, 10).map((d) => (
-                  <button
-                    key={d.id}
-                    onClick={() => loadDeploymentLogs(d.id)}
-                    className={`stack-deploy-item ${selectedDeployment === d.id ? "active" : ""}`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <FontAwesomeIcon
-                        icon={
-                          d.status === "deployed"
-                            ? faCircleCheck
-                            : d.status === "failed"
-                              ? faCircleXmark
-                              : faRotateRight
-                        }
-                        className={`h-3.5 w-3.5 ${d.status === "deployed" ? "text-healthy" : d.status === "failed" ? "text-failed" : "text-pending"}`}
-                      />
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-primary">
-                          {d.strategy}{" "}
-                          <span className="text-muted">#{d.id}</span>
-                        </p>
-                        <p className="text-[11px] text-muted">
-                          {timeAgo(d.inserted_at)}
-                        </p>
-                      </div>
-                    </div>
-                    <StatusBadge status={d.status} />
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Deployment Logs */}
-          {selectedDeployment && (
-            <div className="panel">
-              <div className="panel-header">
-                <span>Deploy #{selectedDeployment}</span>
-                <div className="panel-header-right">
-                  <button
-                    onClick={() => loadDeploymentLogs(selectedDeployment)}
-                    className="text-xs text-muted hover:text-secondary transition-colors"
-                  >
-                    Refresh
-                  </button>
-                </div>
-              </div>
-              <div className="p-3">
-                {deploymentLogsLoading ? (
-                  <p className="text-xs text-muted text-center py-4">
-                    Loading logs...
-                  </p>
-                ) : deploymentLogs.length === 0 ? (
-                  <p className="text-xs text-muted text-center py-4">
-                    No logs yet
-                  </p>
-                ) : (
-                  <div className="space-y-0.5 max-h-[500px] overflow-y-auto font-mono text-xs">
-                    {deploymentLogs.map((log) => (
-                      <div
-                        key={log.id}
-                        className={`flex gap-2 px-2 py-1 rounded ${log.level === "error" ? "bg-red-950/30 text-red-400" : "text-secondary"}`}
-                      >
-                        <span className="text-dimmed shrink-0 tabular-nums">
-                          {new Date(log.recorded_at).toLocaleTimeString()}
-                        </span>
-                        {log.stage && (
-                          <span className="text-muted shrink-0">
-                            [{log.stage}]
-                          </span>
-                        )}
-                        <span className="break-all">{log.message}</span>
-                      </div>
-                    ))}
-                    <div ref={deploymentLogsEndRef} />
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        <StackDeployments
+          deployments={deployments}
+          selectedDeployment={selectedDeployment}
+          deploymentLogs={deploymentLogs}
+          deploymentLogsLoading={deploymentLogsLoading}
+          onSelectDeployment={loadDeploymentLogs}
+        />
       </div>
     </div>
   );

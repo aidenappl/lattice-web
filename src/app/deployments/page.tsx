@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Deployment, Stack } from "@/types";
+import type { Deployment, Stack } from "@/types";
 import { reqGetDeployments } from "@/services/deployments.service";
 import { reqGetStacks } from "@/services/stacks.service";
 import { PageLoader } from "@/components/ui/loading";

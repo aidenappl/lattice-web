@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { User } from "@/types";
+import type { User } from "@/types";
 import {
   reqGetUsers,
   reqCreateUser,

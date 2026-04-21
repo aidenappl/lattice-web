@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { Registry } from "@/types";
+import type { Registry } from "@/types";
 import {
   reqGetRegistries,
   reqCreateRegistry,

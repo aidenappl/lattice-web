@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Worker, VersionInfo } from "@/types";
+import type { Worker, VersionInfo } from "@/types";
 import {
   reqGetWorkers,
   reqCreateWorker,

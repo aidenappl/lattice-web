@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { Stack, Container, Worker } from "@/types";
+import type { Stack, Container, Worker } from "@/types";
 import { reqGetStacks, reqGetAllContainers } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
