@@ -1,4 +1,4 @@
-import type { User, VersionInfo, OverviewData, FleetMetricsPoint, AuditLogEntry } from "@/types";
+import type { User, VersionInfo, OverviewData, FleetMetricsPoint, AuditLogEntry, WebhookConfig } from "@/types";
 import { fetchApi } from "./api.service";
 
 export const reqGetOverview = () =>
@@ -69,4 +69,37 @@ export const reqUpdateWeb = () =>
         method: "POST",
         url: "/admin/update/web",
         timeout: 120000,
+    });
+
+// Webhooks
+export const reqGetWebhooks = () =>
+    fetchApi<WebhookConfig[]>({
+        method: "GET",
+        url: "/admin/webhooks",
+    });
+
+export const reqCreateWebhook = (data: { name: string; url: string; events: string[]; secret?: string }) =>
+    fetchApi<WebhookConfig>({
+        method: "POST",
+        url: "/admin/webhooks",
+        data: { ...data, events: JSON.stringify(data.events) },
+    });
+
+export const reqUpdateWebhook = (id: number, data: Partial<{ name: string; url: string; events: string; active: boolean; secret: string }>) =>
+    fetchApi<WebhookConfig>({
+        method: "PUT",
+        url: `/admin/webhooks/${id}`,
+        data,
+    });
+
+export const reqDeleteWebhook = (id: number) =>
+    fetchApi<null>({
+        method: "DELETE",
+        url: `/admin/webhooks/${id}`,
+    });
+
+export const reqTestWebhook = (id: number) =>
+    fetchApi<null>({
+        method: "POST",
+        url: `/admin/webhooks/${id}/test`,
     });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { User } from "@/types";
+import type { User, WebhookConfig } from "@/types";
 import {
   reqGetUsers,
   reqCreateUser,
@@ -10,6 +10,11 @@ import {
   reqUpdateAPI,
   reqUpdateWeb,
   reqRefreshVersions,
+  reqGetWebhooks,
+  reqCreateWebhook,
+  reqUpdateWebhook,
+  reqDeleteWebhook,
+  reqTestWebhook,
 } from "@/services/admin.service";
 import { useUser } from "@/store/hooks";
 import { isAdmin, formatDate, isNewerVersion } from "@/lib/utils";
@@ -312,6 +317,348 @@ function VersionCheckSection({ adminUser }: { adminUser: boolean }) {
   );
 }
 
+const WEBHOOK_EVENTS = [
+  { value: "*", label: "All events" },
+  { value: "container.status", label: "Container status change" },
+  { value: "container.unhealthy", label: "Container unhealthy" },
+  { value: "deployment.failed", label: "Deployment failed" },
+  { value: "deployment.success", label: "Deployment success" },
+  { value: "worker.disconnected", label: "Worker disconnected" },
+  { value: "worker.crash", label: "Worker crash" },
+];
+
+function WebhookSection({ adminUser }: { adminUser: boolean }) {
+  const showConfirm = useConfirm();
+  const [webhooks, setWebhooks] = useState<WebhookConfig[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
+  const [secret, setSecret] = useState("");
+  const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const loadWebhooks = async () => {
+    const res = await reqGetWebhooks();
+    if (res.success) setWebhooks(res.data ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadWebhooks();
+  }, []);
+
+  const resetForm = () => {
+    setName("");
+    setUrl("");
+    setSecret("");
+    setSelectedEvents([]);
+    setEditingId(null);
+    setShowForm(false);
+    setError("");
+  };
+
+  const handleEventToggle = (event: string) => {
+    if (event === "*") {
+      setSelectedEvents((prev) => prev.includes("*") ? [] : ["*"]);
+      return;
+    }
+    setSelectedEvents((prev) => {
+      const filtered = prev.filter((e) => e !== "*");
+      return filtered.includes(event)
+        ? filtered.filter((e) => e !== event)
+        : [...filtered, event];
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+
+    if (editingId) {
+      const res = await reqUpdateWebhook(editingId, {
+        name,
+        url,
+        events: JSON.stringify(selectedEvents),
+        secret: secret || undefined,
+      });
+      if (res.success) {
+        toast.success("Webhook updated");
+        await loadWebhooks();
+        resetForm();
+      } else {
+        setError("error_message" in res ? res.error_message : "Failed to update webhook");
+      }
+    } else {
+      const res = await reqCreateWebhook({
+        name,
+        url,
+        events: selectedEvents,
+        secret: secret || undefined,
+      });
+      if (res.success) {
+        toast.success("Webhook created");
+        await loadWebhooks();
+        resetForm();
+      } else {
+        setError("error_message" in res ? res.error_message : "Failed to create webhook");
+      }
+    }
+    setSubmitting(false);
+  };
+
+  const handleEdit = (wh: WebhookConfig) => {
+    setEditingId(wh.id);
+    setName(wh.name);
+    setUrl(wh.url);
+    setSecret("");
+    try {
+      setSelectedEvents(JSON.parse(wh.events));
+    } catch {
+      setSelectedEvents([]);
+    }
+    setShowForm(true);
+  };
+
+  const handleDelete = async (wh: WebhookConfig) => {
+    const ok = await showConfirm({
+      title: "Delete webhook",
+      message: `Are you sure you want to delete the webhook "${wh.name}"? This action cannot be undone.`,
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
+    const res = await reqDeleteWebhook(wh.id);
+    if (res.success) {
+      toast.success("Webhook deleted");
+      await loadWebhooks();
+    } else {
+      toast.error("error_message" in res ? res.error_message : "Failed to delete webhook");
+    }
+  };
+
+  const handleTest = async (wh: WebhookConfig) => {
+    const res = await reqTestWebhook(wh.id);
+    if (res.success) {
+      toast.success(`Test webhook sent to ${wh.url}`);
+    } else {
+      toast.error("error_message" in res ? res.error_message : "Failed to send test webhook");
+    }
+  };
+
+  const handleToggleActive = async (wh: WebhookConfig) => {
+    const res = await reqUpdateWebhook(wh.id, { active: !wh.active });
+    if (res.success) {
+      await loadWebhooks();
+    } else {
+      toast.error("error_message" in res ? res.error_message : "Failed to update webhook");
+    }
+  };
+
+  const parseEvents = (eventsJson: string): string[] => {
+    try {
+      return JSON.parse(eventsJson);
+    } catch {
+      return [];
+    }
+  };
+
+  if (loading) return null;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-primary">Webhooks</h2>
+        {adminUser && (
+          <Button
+            onClick={() => {
+              if (showForm) resetForm();
+              else setShowForm(true);
+            }}
+          >
+            {showForm ? "Cancel" : "Add Webhook"}
+          </Button>
+        )}
+      </div>
+
+      {adminUser && showForm && (
+        <form onSubmit={handleSubmit} className="card p-6 mb-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              id="webhook-name"
+              label="Name"
+              placeholder="My Webhook"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+            <Input
+              id="webhook-url"
+              label="URL"
+              type="url"
+              placeholder="https://example.com/webhook"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              required
+            />
+            <Input
+              id="webhook-secret"
+              label="Secret (optional)"
+              type="password"
+              placeholder="Signing secret"
+              value={secret}
+              onChange={(e) => setSecret(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-secondary uppercase tracking-wider block mb-2">
+              Events
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {WEBHOOK_EVENTS.map((evt) => (
+                <label
+                  key={evt.value}
+                  className="inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedEvents.includes(evt.value)}
+                    onChange={() => handleEventToggle(evt.value)}
+                    className="rounded border-border-strong bg-surface-elevated text-primary focus:ring-1 focus:ring-[#444444]/50"
+                  />
+                  <span className="text-sm text-secondary">{evt.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          {error && (
+            <Alert variant="error" onDismiss={() => setError("")}>
+              {error}
+            </Alert>
+          )}
+          <Button
+            type="submit"
+            disabled={submitting || !name.trim() || !url.trim() || selectedEvents.length === 0}
+          >
+            {submitting
+              ? editingId ? "Updating..." : "Creating..."
+              : editingId ? "Update Webhook" : "Create Webhook"}
+          </Button>
+        </form>
+      )}
+
+      <div className="panel">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-border-subtle">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                Name
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                URL
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                Events
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-secondary uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {webhooks.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={5}
+                  className="px-4 py-12 text-center text-sm text-muted"
+                >
+                  No webhooks configured
+                </td>
+              </tr>
+            ) : (
+              webhooks.map((wh) => (
+                <tr
+                  key={wh.id}
+                  className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors"
+                >
+                  <td className="px-4 py-3 text-sm font-medium text-primary">
+                    {wh.name}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-secondary truncate max-w-[200px]">
+                    {wh.url}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {parseEvents(wh.events).map((evt) => (
+                        <span
+                          key={evt}
+                          className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-surface-elevated text-secondary"
+                        >
+                          {evt}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge variant={wh.active ? "success" : "default"}>
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${wh.active ? "bg-healthy" : "bg-[#888888]"}`}
+                      />
+                      {wh.active ? "active" : "inactive"}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      {adminUser && (
+                        <>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleTest(wh)}
+                          >
+                            Test
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleEdit(wh)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant={wh.active ? "destructive" : "secondary"}
+                            size="sm"
+                            onClick={() => handleToggleActive(wh)}
+                          >
+                            {wh.active ? "Disable" : "Enable"}
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDelete(wh)}
+                          >
+                            Delete
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const currentUser = useUser();
   const showConfirm = useConfirm();
@@ -579,6 +926,11 @@ export default function SettingsPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Webhooks Section */}
+      <div className="mt-8 mb-8">
+        <WebhookSection adminUser={admin} />
       </div>
       </div>
     </div>
