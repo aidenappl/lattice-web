@@ -10,6 +10,7 @@ export type Worker = {
     runner_version: string | null;
     last_heartbeat_at: string | null;
     labels: string | null;
+    pending_action: string | null;
     active: boolean;
     inserted_at: string;
     updated_at: string;

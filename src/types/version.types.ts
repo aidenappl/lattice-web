@@ -4,6 +4,7 @@ export type WorkerVersionInfo = {
     runner_version: string | null;
     status: string;
     outdated: boolean;
+    pending_action: string | null;
 };
 
 export type VersionInfo = {

@@ -86,14 +86,31 @@ export function RunnerUpgradePanel({
   latestVersion,
 }: RunnerUpgradePanelProps) {
   const [statuses, setStatuses] = useState<RunnerStatusEntry[]>(() =>
-    workers.map((w) => ({
-      worker_id: w.worker_id,
-      name: w.name,
-      current_version: w.runner_version,
-      worker_status: w.status,
-      outdated: w.outdated,
-      upgrade_status: "idle",
-    })),
+    workers.map((w) => {
+      // Restore upgrade status from persisted pending_action if present
+      let upgradeStatus: RunnerUpgradeStatus = "idle";
+      let message: string | undefined;
+      if (w.pending_action) {
+        try {
+          const pa = JSON.parse(w.pending_action) as { action?: string; status?: string; message?: string };
+          if (pa.action === "upgrade_runner") {
+            if (pa.status === "accepted" || pa.status === "deploying") upgradeStatus = "accepted";
+            else if (pa.status === "success") upgradeStatus = "success";
+            else if (pa.status === "failed" || pa.status === "error") upgradeStatus = "failed";
+            message = pa.message;
+          }
+        } catch { /* ignore parse errors */ }
+      }
+      return {
+        worker_id: w.worker_id,
+        name: w.name,
+        current_version: w.runner_version,
+        worker_status: w.status,
+        outdated: w.outdated,
+        upgrade_status: upgradeStatus,
+        message,
+      };
+    }),
   );
 
   const handleSocketEvent = useCallback((event: AdminSocketEvent) => {
