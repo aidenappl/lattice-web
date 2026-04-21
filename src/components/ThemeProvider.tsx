@@ -30,9 +30,20 @@ function getCookie(name: string): string | undefined {
   return match?.split("=")[1];
 }
 
+function getCookieDomain(): string {
+  if (typeof window === "undefined") return "";
+  const host = window.location.hostname;
+  // For IP addresses or localhost, don't set a domain
+  if (host === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return "";
+  // Extract root domain (e.g. "lattice.appleby.cloud" → ".appleby.cloud")
+  const parts = host.split(".");
+  if (parts.length <= 2) return `.${host}`;
+  return `.${parts.slice(-2).join(".")}`;
+}
+
 function setCookie(name: string, value: string) {
-  const domain = typeof window !== "undefined" ? window.location.hostname : "";
-  const domainPart = domain ? `;domain=${domain.startsWith(".") ? domain : `.${domain}`}` : "";
+  const domain = getCookieDomain();
+  const domainPart = domain ? `;domain=${domain}` : "";
   const securePart = typeof window !== "undefined" && window.location.protocol === "https:" ? ";Secure" : "";
   document.cookie = `${name}=${value};path=/${domainPart};max-age=${60 * 60 * 24 * 365};SameSite=Lax${securePart}`;
 }
