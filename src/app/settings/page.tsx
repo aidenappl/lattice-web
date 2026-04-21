@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { User, WebhookConfig, GlobalEnvVar } from "@/types";
+import type { User, WebhookConfig, GlobalEnvVar, Template } from "@/types";
 import {
   reqGetUsers,
   reqCreateUser,
@@ -44,6 +44,10 @@ import { APP_VERSION } from "@/lib/version";
 import toast from "react-hot-toast";
 import { RunnerUpgradePanel } from "@/components/layout/RunnerUpgradePanel";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
+import {
+  reqGetTemplates,
+  reqDeleteTemplate,
+} from "@/services/templates.service";
 
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 
@@ -941,6 +945,107 @@ function GlobalEnvVarsSection({ adminUser }: { adminUser: boolean }) {
   );
 }
 
+function TemplatesSection() {
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [loading, setLoading] = useState(true);
+  const showConfirm = useConfirm();
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const load = async () => {
+    const res = await reqGetTemplates();
+    if (res.success) setTemplates(res.data ?? []);
+    setLoading(false);
+  };
+
+  const handleDelete = async (t: Template) => {
+    const ok = await showConfirm({
+      title: "Delete template",
+      message: `Are you sure you want to delete the template "${t.name}"? This action cannot be undone.`,
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
+    const res = await reqDeleteTemplate(t.id);
+    if (res.success) {
+      toast.success("Template deleted");
+      await load();
+    } else {
+      toast.error("error_message" in res ? res.error_message : "Failed to delete template");
+    }
+  };
+
+  if (loading) return null;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-primary">Templates</h2>
+      </div>
+      <div className="panel">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-border-subtle">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                Name
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                Description
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                Created
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-secondary uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {templates.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={4}
+                  className="px-4 py-12 text-center text-sm text-muted"
+                >
+                  No templates found
+                </td>
+              </tr>
+            ) : (
+              templates.map((t) => (
+                <tr
+                  key={t.id}
+                  className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors"
+                >
+                  <td className="px-4 py-3 text-sm font-medium text-primary">
+                    {t.name}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-secondary">
+                    {t.description || "—"}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-muted">
+                    {formatDate(t.inserted_at)}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDelete(t)}
+                    >
+                      Delete
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const currentUser = useUser();
   const showConfirm = useConfirm();
@@ -1218,6 +1323,11 @@ export default function SettingsPage() {
       {/* Webhooks Section */}
       <div className="mt-8 mb-8">
         <WebhookSection adminUser={admin} />
+      </div>
+
+      {/* Templates Section */}
+      <div className="mt-8 mb-8">
+        <TemplatesSection />
       </div>
       </div>
     </div>

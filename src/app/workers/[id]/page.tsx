@@ -61,6 +61,7 @@ import WorkerStacksPanel from "@/components/workers/WorkerStacksPanel";
 import WorkerInfraPanel from "@/components/workers/WorkerInfraPanel";
 import WorkerTokensPanel from "@/components/workers/WorkerTokensPanel";
 import WorkerEditForm from "@/components/workers/WorkerEditForm";
+import { WorkerContainerStats } from "@/components/workers/WorkerContainerStats";
 
 export default function WorkerDetailPage() {
   const params = useParams();
@@ -86,6 +87,9 @@ export default function WorkerDetailPage() {
 
   // Edit state
   const [editing, setEditing] = useState(false);
+
+  // Container stats from heartbeat
+  const [containerStats, setContainerStats] = useState<any[]>([]);
 
   // Volume & Network state (driven by WebSocket)
   const [volumes, setVolumes] = useState<DockerVolume[]>([]);
@@ -177,6 +181,9 @@ export default function WorkerDetailPage() {
           recorded_at: now,
         };
         dispatch(pushMetricsSnapshot(snapshot));
+        if (p.container_stats) {
+          setContainerStats(p.container_stats as any[]);
+        }
         setLastUpdated(new Date());
       }
 
@@ -486,6 +493,9 @@ export default function WorkerDetailPage() {
         metrics={metrics}
         lastUpdated={lastUpdated}
       />
+
+      {/* ─── Container Resource Stats ─── */}
+      <WorkerContainerStats stats={containerStats} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ─── Left column: Info + Stacks ─── */}

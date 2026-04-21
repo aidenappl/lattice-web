@@ -1658,15 +1658,48 @@ html {
     border-right: none;
   }
   .kpi {
-    padding-right: 80px;
+    padding: 14px 16px;
+    padding-right: 16px;
+    min-height: 80px;
   }
   .kpi-spark {
-    width: 56px;
-    height: 24px;
-    right: 12px;
+    display: none;
   }
   .kpi-value {
-    font-size: 26px;
+    font-size: 24px;
+  }
+  .kpi-label {
+    font-size: 9.5px;
+  }
+  .kpi-sub {
+    font-size: 11px;
+  }
+  /* Bottom grid: 2 rows */
+  .dash-bottom-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    height: auto;
+  }
+  .dash-bottom-grid > :nth-child(2) {
+    grid-column: span 1;
+  }
+  .dash-bottom-grid > * {
+    min-height: 300px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RESPONSIVE: Topology stacking (≤1200px)
+   ═══════════════════════════════════════════════════════════════════ */
+@media (max-width: 1200px) {
+  .dash-topology-split {
+    display: none;
+  }
+  .dash-topology-stacked {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 16px;
   }
 }
 
@@ -1679,6 +1712,35 @@ html {
   }
   .app-grid.sidebar-collapsed {
     --sidebar-w: 56px;
+  }
+
+  /* Force sidebar into icon-only collapsed state */
+  .sidebar-brand span {
+    display: none;
+  }
+  .sidebar-section-label {
+    display: none;
+  }
+  .nav-item span,
+  .nav-item .nav-badge {
+    display: none;
+  }
+  .nav-item {
+    justify-content: center;
+    padding: 10px;
+  }
+  .sidebar-section {
+    padding: 8px 6px 4px;
+  }
+  .sidebar-footer {
+    padding: 10px 6px;
+  }
+  .sidebar-footer > * {
+    justify-content: center;
+  }
+  .sidebar-footer span,
+  .sidebar-footer p {
+    display: none;
   }
 
   .topbar-search {

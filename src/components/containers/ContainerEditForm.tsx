@@ -51,6 +51,7 @@ export function ContainerEditForm({
   const [editRegistryId, setEditRegistryId] = useState(
     container.registry_id != null ? String(container.registry_id) : "",
   );
+  const [editDependsOn, setEditDependsOn] = useState(container.depends_on ?? "");
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -71,6 +72,7 @@ export function ContainerEditForm({
       volumes: editVolumes || null,
       health_check: editHealthCheck || null,
       registry_id: editRegistryId ? Number(editRegistryId) : null,
+      depends_on: editDependsOn || null,
     } as Partial<Container>);
     setSaving(false);
     if (res.success) {
@@ -210,6 +212,17 @@ export function ContainerEditForm({
               value={editRegistryId}
               onChange={(e) => setEditRegistryId(e.target.value)}
               placeholder="e.g. 1"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+              Depends On
+            </label>
+            <input
+              value={editDependsOn}
+              onChange={(e) => setEditDependsOn(e.target.value)}
+              placeholder='e.g. ["db", "redis"]'
               className={inputClass}
             />
           </div>
