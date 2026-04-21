@@ -20,7 +20,7 @@ export const reqCreateStack = (data: { name: string; description?: string; worke
         data,
     });
 
-export const reqUpdateStack = (id: number, data: Partial<{ name: string; description: string; worker_id: number; deployment_strategy: string; auto_deploy: boolean; env_vars: string; active: boolean }>) =>
+export const reqUpdateStack = (id: number, data: Partial<{ name: string; description: string; worker_id: number; deployment_strategy: string; auto_deploy: boolean; env_vars: string; active: boolean; placement_constraints: string }>) =>
     fetchApi<Stack>({
         method: "PUT",
         url: `/admin/stacks/${id}`,
@@ -166,4 +166,35 @@ export const reqGetAllNetworks = () =>
     fetchApi<ComposeNetwork[]>({
         method: "GET",
         url: "/admin/networks",
+    });
+
+export const reqRestartStack = (stackId: number) =>
+    fetchApi<{ restarted: number }>({
+        method: "POST",
+        url: `/admin/stacks/${stackId}/restart-all`,
+    });
+
+export const reqStopStack = (stackId: number) =>
+    fetchApi<{ stopped: number }>({
+        method: "POST",
+        url: `/admin/stacks/${stackId}/stop-all`,
+    });
+
+export const reqStartStack = (stackId: number) =>
+    fetchApi<{ started: number }>({
+        method: "POST",
+        url: `/admin/stacks/${stackId}/start-all`,
+    });
+
+export const reqExportStack = (stackId: number) =>
+    fetchApi<any>({
+        method: "GET",
+        url: `/admin/stacks/${stackId}/export`,
+    });
+
+export const reqImportStackExport = (data: any) =>
+    fetchApi<any>({
+        method: "POST",
+        url: `/admin/stacks/import-export`,
+        data,
     });

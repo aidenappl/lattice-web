@@ -85,8 +85,14 @@ const overviewSlice = createSlice({
             .addCase(fetchFleetMetrics.fulfilled, (state, action) => {
                 state.fleetHistory = action.payload;
             })
+            .addCase(fetchFleetMetrics.rejected, () => {
+                // Fleet metrics are supplementary — fail silently
+            })
             .addCase(fetchAuditLog.fulfilled, (state, action) => {
                 state.auditLog = action.payload;
+            })
+            .addCase(fetchAuditLog.rejected, () => {
+                // Audit log is supplementary — fail silently
             });
     },
 });

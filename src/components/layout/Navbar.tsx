@@ -142,17 +142,21 @@ export function Navbar() {
                     {user?.email}
                   </p>
                 </div>
-                <a
-                  href={`${API_URL}/auth/logout`}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive-soft hover:bg-surface-active transition-colors cursor-pointer"
-                  onClick={() => setMenuOpen(false)}
+                <button
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive-soft hover:bg-surface-active transition-colors cursor-pointer w-full"
+                  onClick={async () => {
+                    setMenuOpen(false);
+                    const { reqLogout } = await import("@/services/auth.service");
+                    await reqLogout();
+                    window.location.replace("/login");
+                  }}
                 >
                   <FontAwesomeIcon
                     icon={faRightFromBracket}
                     className="h-4 w-4"
                   />
                   Sign Out
-                </a>
+                </button>
                 <div className="border-t border-border-subtle mt-1 pt-1 px-3 py-1.5">
                   <p className="text-[10px] text-muted font-mono">
                     {APP_VERSION}

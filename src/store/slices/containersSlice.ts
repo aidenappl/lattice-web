@@ -62,6 +62,10 @@ const containersSlice = createSlice({
             .addCase(fetchContainersByStack.fulfilled, (state, action) => {
                 state.stackContainers = action.payload;
                 state.loading = false;
+            })
+            .addCase(fetchContainersByStack.rejected, (state, action) => {
+                state.error = action.error.message ?? "Failed to load containers";
+                state.loading = false;
             });
     },
 });

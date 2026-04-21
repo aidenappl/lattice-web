@@ -32,6 +32,10 @@ import {
   reqRemoveContainer,
   reqRecreateContainer,
   reqUnpauseContainer,
+  reqRestartStack,
+  reqStopStack,
+  reqStartStack,
+  reqExportStack,
 } from "@/services/stacks.service";
 import {
   reqGetDeployments,
@@ -359,6 +363,7 @@ export default function StackDetailPage() {
     worker_id: string;
     strategy: string;
     auto_deploy: boolean;
+    placement_constraints: string;
   }) => {
     const res = await reqUpdateStack(id, {
       name: data.name,
@@ -366,6 +371,7 @@ export default function StackDetailPage() {
       worker_id: data.worker_id ? Number(data.worker_id) : 0,
       deployment_strategy: data.strategy,
       auto_deploy: data.auto_deploy,
+      placement_constraints: data.placement_constraints || undefined,
     });
     if (res.success) {
       setStack(res.data);
@@ -662,6 +668,79 @@ export default function StackDetailPage() {
                   </Button>
                 );
               })()}
+            {canEdit(user) && (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={async () => {
+                    const ok = await showConfirm({
+                      title: "Restart all containers",
+                      message: `Restart all running containers in "${stack.name}"?`,
+                      confirmLabel: "Restart All",
+                      variant: "warning",
+                    });
+                    if (!ok) return;
+                    const res = await reqRestartStack(id);
+                    if (res.success) toast.success(`Restarted ${res.data.restarted} containers`);
+                    else toast.error(res.error_message || "Failed");
+                  }}
+                  disabled={!workerOnline || containers.filter(c => c.status === "running").length === 0}
+                >
+                  Restart All
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={async () => {
+                    const ok = await showConfirm({
+                      title: "Stop all containers",
+                      message: `Stop all running containers in "${stack.name}"?`,
+                      confirmLabel: "Stop All",
+                      variant: "warning",
+                    });
+                    if (!ok) return;
+                    const res = await reqStopStack(id);
+                    if (res.success) toast.success(`Stopped ${res.data.stopped} containers`);
+                    else toast.error(res.error_message || "Failed");
+                  }}
+                  disabled={!workerOnline || containers.filter(c => c.status === "running").length === 0}
+                >
+                  Stop All
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={async () => {
+                    const res = await reqStartStack(id);
+                    if (res.success) toast.success(`Started ${res.data.started} containers`);
+                    else toast.error(res.error_message || "Failed");
+                  }}
+                  disabled={!workerOnline || containers.filter(c => c.status === "stopped").length === 0}
+                >
+                  Start All
+                </Button>
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                const res = await reqExportStack(id);
+                if (res.success) {
+                  const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${stack.name}-export.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast.success("Stack exported");
+                }
+              }}
+            >
+              Export
+            </Button>
             {canEdit(user) && (
               <Button
                 variant="ghost"

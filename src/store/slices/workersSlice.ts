@@ -106,8 +106,14 @@ const workersSlice = createSlice({
             .addCase(fetchWorkerMetrics.fulfilled, (state, action) => {
                 state.metrics = action.payload;
             })
+            .addCase(fetchWorkerMetrics.rejected, () => {
+                // Metrics are supplementary — fail silently
+            })
             .addCase(fetchWorkerTokens.fulfilled, (state, action) => {
                 state.tokens = action.payload;
+            })
+            .addCase(fetchWorkerTokens.rejected, () => {
+                // Tokens list failure is non-critical
             });
     },
 });

@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
+import toast from "react-hot-toast";
 import type { Stack, Container, Worker } from "@/types";
-import { reqGetStacks, reqGetAllContainers } from "@/services/stacks.service";
+import { reqGetStacks, reqGetAllContainers, reqImportStackExport } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCube, faHeart, faCircle } from "@fortawesome/free-solid-svg-icons";
@@ -17,8 +19,9 @@ export default function StacksPage() {
   const [containers, setContainers] = useState<Container[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
+  const importRef = useRef<HTMLInputElement>(null);
 
-  const refresh = useCallback(async () => {
+  const load = useCallback(async () => {
     const [sRes, cRes, wRes] = await Promise.all([
       reqGetStacks(),
       reqGetAllContainers(),
@@ -34,8 +37,8 @@ export default function StacksPage() {
   }, []);
 
   useEffect(() => {
-    refresh().then(() => setLoading(false));
-  }, [refresh]);
+    load().then(() => setLoading(false));
+  }, [load]);
 
   const handleSocketEvent = useCallback(
     (event: AdminSocketEvent) => {
@@ -44,10 +47,10 @@ export default function StacksPage() {
         event.type === "container_sync" ||
         event.type === "deployment_progress"
       ) {
-        refresh();
+        load();
       }
     },
-    [refresh],
+    [load],
   );
   useAdminSocket(handleSocketEvent);
 
@@ -76,9 +79,38 @@ export default function StacksPage() {
           <div className="page-title">Stacks</div>
           <div className="page-subtitle">Manage your container stacks</div>
         </div>
-        <Link href="/stacks/new" className="btn btn-primary">
-          New Stack
-        </Link>
+        <div className="flex items-center gap-2">
+          <input
+            ref={importRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const text = await file.text();
+              try {
+                const data = JSON.parse(text);
+                const res = await reqImportStackExport(data);
+                if (res.success) {
+                  toast.success("Stack imported successfully");
+                  load();
+                } else {
+                  toast.error(res.error_message || "Import failed");
+                }
+              } catch {
+                toast.error("Invalid JSON file");
+              }
+              e.target.value = "";
+            }}
+          />
+          <Button variant="secondary" onClick={() => importRef.current?.click()}>
+            Import
+          </Button>
+          <Link href="/stacks/new" className="btn btn-primary">
+            New Stack
+          </Link>
+        </div>
       </div>
 
       <div className="p-6">

@@ -14,6 +14,7 @@ interface StackEditFormProps {
     worker_id: string;
     strategy: string;
     auto_deploy: boolean;
+    placement_constraints: string;
   }) => Promise<void>;
   onCancel: () => void;
 }
@@ -37,6 +38,7 @@ export function StackEditForm({
   const [editStackAutoDeploy, setEditStackAutoDeploy] = useState(
     stack.auto_deploy,
   );
+  const [editPlacementConstraints, setEditPlacementConstraints] = useState(stack.placement_constraints ?? "");
   const [savingStack, setSavingStack] = useState(false);
 
   const handleSave = async () => {
@@ -47,6 +49,7 @@ export function StackEditForm({
       worker_id: editStackWorkerId,
       strategy: editStackStrategy,
       auto_deploy: editStackAutoDeploy,
+      placement_constraints: editPlacementConstraints.trim(),
     });
     setSavingStack(false);
   };
@@ -129,6 +132,18 @@ export function StackEditForm({
               </span>
             </div>
           </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-secondary uppercase tracking-wider">
+            Placement Constraints
+          </label>
+          <input
+            value={editPlacementConstraints}
+            onChange={(e) => setEditPlacementConstraints(e.target.value)}
+            placeholder='e.g. {"env":"production","gpu":"true"}'
+            className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary placeholder:text-muted focus:border-border-emphasis focus:outline-none font-mono"
+          />
+          <p className="text-[10px] text-muted">JSON key-value pairs that the target worker&apos;s labels must match</p>
         </div>
         <div className="flex gap-2">
           <Button

@@ -6,6 +6,7 @@ export type Stack = {
     status: "active" | "stopped" | "deploying" | "deployed" | "failed" | "error";
     deployment_strategy: "rolling" | "blue-green" | "canary";
     auto_deploy: boolean;
+    placement_constraints: string | null;
     env_vars: string | null;
     compose_yaml: string | null;
     active: boolean;
@@ -31,6 +32,7 @@ export type Container = {
     entrypoint: string | null;
     health_check: string | null;
     health_status: "healthy" | "unhealthy" | "starting" | "none";
+    depends_on: string | null;
     registry_id: number | null;
     active: boolean;
     inserted_at: string;
