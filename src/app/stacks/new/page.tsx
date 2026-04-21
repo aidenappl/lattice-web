@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useMemo, DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark, faPlus } from "@fortawesome/free-solid-svg-icons";
-import { Worker } from "@/types";
+import { Worker, Template } from "@/types";
 import { reqGetWorkers } from "@/services/workers.service";
 import {
   reqImportCompose,
@@ -12,6 +12,7 @@ import {
   reqGetContainers,
   reqUpdateContainer,
 } from "@/services/stacks.service";
+import { reqGetTemplates } from "@/services/templates.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CodeEditor } from "@/components/ui/code-editor";
@@ -45,6 +46,8 @@ export default function NewStackPage() {
   const envIdCounter = useRef(0);
 
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [workerId, setWorkerId] = useState<string>("");
@@ -62,6 +65,9 @@ export default function NewStackPage() {
   useEffect(() => {
     reqGetWorkers().then((res) => {
       if (res.success) setWorkers(res.data ?? []);
+    });
+    reqGetTemplates().then((res) => {
+      if (res.success) setTemplates(res.data ?? []);
     });
   }, []);
 
@@ -99,6 +105,37 @@ export default function NewStackPage() {
     (k) => k in envVarMap && envVarMap[k].trim() !== "",
   ).length;
   const missingCount = referencedKeys.length - definedCount;
+
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplate(templateId);
+    if (!templateId) return;
+    const tmpl = templates.find((t) => String(t.id) === templateId);
+    if (!tmpl) return;
+    try {
+      const config = JSON.parse(tmpl.config);
+      const stackCfg = config.stack;
+      if (stackCfg) {
+        if (stackCfg.name && !name) setName(stackCfg.name);
+        if (stackCfg.description) setDescription(stackCfg.description);
+        if (stackCfg.deployment_strategy) setStrategy(stackCfg.deployment_strategy);
+        if (stackCfg.compose_yaml) setComposeYaml(stackCfg.compose_yaml);
+        if (stackCfg.env_vars) {
+          try {
+            const envObj: Record<string, string> = JSON.parse(stackCfg.env_vars);
+            const rows: EnvRow[] = Object.entries(envObj).map(([key, value]) => {
+              envIdCounter.current += 1;
+              return { id: envIdCounter.current, key, value };
+            });
+            setEnvRows(rows);
+          } catch {
+            // env_vars not valid JSON, skip
+          }
+        }
+      }
+    } catch {
+      // config not valid JSON
+    }
+  };
 
   const hasChanges =
     name.trim() !== "" ||
@@ -254,6 +291,38 @@ export default function NewStackPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="max-w-3xl space-y-6">
+        {/* Template selector */}
+        {templates.length > 0 && (
+          <div className="card p-6">
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="template"
+                className="text-xs font-medium text-secondary uppercase tracking-wider"
+              >
+                Start from Template
+              </label>
+              <select
+                id="template"
+                value={selectedTemplate}
+                onChange={(e) => handleTemplateSelect(e.target.value)}
+                className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none"
+              >
+                <option value="">Blank stack...</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                    {t.description ? ` — ${t.description}` : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted">
+                Select a template to pre-fill the form with a saved stack
+                configuration.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Stack info */}
         <div className="card p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

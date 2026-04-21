@@ -80,3 +80,24 @@ export type LifecycleLog = {
     message: string;
     recorded_at: string;
 };
+
+export type DeployToken = {
+    id: number;
+    stack_id: number;
+    name: string;
+    last_used_at: string | null;
+    active: boolean;
+    updated_at: string;
+    inserted_at: string;
+};
+
+export type Template = {
+    id: number;
+    name: string;
+    description: string | null;
+    config: string;
+    created_by: number | null;
+    active: boolean;
+    updated_at: string;
+    inserted_at: string;
+};

@@ -37,6 +37,7 @@ import {
   reqStartStack,
   reqExportStack,
 } from "@/services/stacks.service";
+import { reqCreateTemplateFromStack } from "@/services/templates.service";
 import {
   reqGetDeployments,
   reqGetDeploymentLogs,
@@ -61,6 +62,7 @@ import { StackComposeTab } from "@/components/stacks/StackComposeTab";
 import { StackEnvTab } from "@/components/stacks/StackEnvTab";
 import { StackLogsTab } from "@/components/stacks/StackLogsTab";
 import { StackDeployments } from "@/components/stacks/StackDeployments";
+import StackDeployTokensPanel from "@/components/stacks/StackDeployTokensPanel";
 
 export default function StackDetailPage() {
   const params = useParams();
@@ -745,6 +747,29 @@ export default function StackDetailPage() {
               <Button
                 variant="ghost"
                 size="sm"
+                onClick={async () => {
+                  const templateName = window.prompt(
+                    "Template name:",
+                    `${stack.name} template`,
+                  );
+                  if (!templateName) return;
+                  const res = await reqCreateTemplateFromStack(id, {
+                    name: templateName,
+                  });
+                  if (res.success) {
+                    toast.success("Saved as template");
+                  } else {
+                    toast.error(res.error_message || "Failed to save template");
+                  }
+                }}
+              >
+                Save as Template
+              </Button>
+            )}
+            {canEdit(user) && (
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setEditingStack(true)}
               >
                 Edit
@@ -884,14 +909,17 @@ export default function StackDetailPage() {
           )}
         </div>
 
-        {/* ─── Sidebar: Deployments ─────────────────────────────── */}
-        <StackDeployments
-          deployments={deployments}
-          selectedDeployment={selectedDeployment}
-          deploymentLogs={deploymentLogs}
-          deploymentLogsLoading={deploymentLogsLoading}
-          onSelectDeployment={loadDeploymentLogs}
-        />
+        {/* ─── Sidebar: Deployments + Deploy Tokens ────────────── */}
+        <div className="space-y-5">
+          <StackDeployments
+            deployments={deployments}
+            selectedDeployment={selectedDeployment}
+            deploymentLogs={deploymentLogs}
+            deploymentLogsLoading={deploymentLogsLoading}
+            onSelectDeployment={loadDeploymentLogs}
+          />
+          <StackDeployTokensPanel stackId={id} />
+        </div>
       </div>
     </div>
   );

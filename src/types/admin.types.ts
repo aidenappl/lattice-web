@@ -52,3 +52,12 @@ export type FleetMetricsPoint = {
     container_count: number;
     running_count: number;
 };
+
+export type GlobalEnvVar = {
+    id: number;
+    key: string;
+    value: string;
+    is_secret: boolean;
+    updated_at: string;
+    inserted_at: string;
+};

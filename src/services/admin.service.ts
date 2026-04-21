@@ -1,4 +1,4 @@
-import type { User, VersionInfo, OverviewData, FleetMetricsPoint, AuditLogEntry, WebhookConfig } from "@/types";
+import type { User, VersionInfo, OverviewData, FleetMetricsPoint, AuditLogEntry, WebhookConfig, GlobalEnvVar } from "@/types";
 import { fetchApi } from "./api.service";
 
 export const reqGetOverview = () =>
@@ -102,4 +102,31 @@ export const reqTestWebhook = (id: number) =>
     fetchApi<null>({
         method: "POST",
         url: `/admin/webhooks/${id}/test`,
+    });
+
+// Global Environment Variables
+export const reqGetGlobalEnvVars = () =>
+    fetchApi<GlobalEnvVar[]>({
+        method: "GET",
+        url: "/admin/env-vars",
+    });
+
+export const reqCreateGlobalEnvVar = (data: { key: string; value: string; is_secret: boolean }) =>
+    fetchApi<GlobalEnvVar>({
+        method: "POST",
+        url: "/admin/env-vars",
+        data,
+    });
+
+export const reqUpdateGlobalEnvVar = (id: number, data: { value?: string; is_secret?: boolean }) =>
+    fetchApi<null>({
+        method: "PUT",
+        url: `/admin/env-vars/${id}`,
+        data,
+    });
+
+export const reqDeleteGlobalEnvVar = (id: number) =>
+    fetchApi<null>({
+        method: "DELETE",
+        url: `/admin/env-vars/${id}`,
     });

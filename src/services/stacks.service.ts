@@ -1,4 +1,4 @@
-import { Stack, Container, ContainerLog, LifecycleLog, ComposeNetwork } from "@/types";
+import { Stack, Container, ContainerLog, LifecycleLog, ComposeNetwork, DeployToken } from "@/types";
 import { fetchApi } from "./api.service";
 
 export const reqGetStacks = () =>
@@ -197,4 +197,25 @@ export const reqImportStackExport = (data: any) =>
         method: "POST",
         url: `/admin/stacks/import-export`,
         data,
+    });
+
+// --- Deploy Tokens ---
+
+export const reqGetDeployTokens = (stackId: number) =>
+    fetchApi<DeployToken[]>({
+        method: "GET",
+        url: `/admin/stacks/${stackId}/deploy-tokens`,
+    });
+
+export const reqCreateDeployToken = (stackId: number, name: string) =>
+    fetchApi<DeployToken & { token: string }>({
+        method: "POST",
+        url: `/admin/stacks/${stackId}/deploy-tokens`,
+        data: { name },
+    });
+
+export const reqDeleteDeployToken = (id: number) =>
+    fetchApi<null>({
+        method: "DELETE",
+        url: `/admin/deploy-tokens/${id}`,
     });
