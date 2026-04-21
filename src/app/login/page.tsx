@@ -9,11 +9,16 @@ import { Logo } from "@/components/ui/logo";
 
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_BASE_MS = 2000; // 2s base, doubles each time
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState(0);
 
   useEffect(() => {
     document.title = "Lattice - Login";
@@ -21,14 +26,35 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Enforce client-side rate limiting
+    const now = Date.now();
+    if (lockedUntil > now) {
+      const secsLeft = Math.ceil((lockedUntil - now) / 1000);
+      setError(`Too many attempts. Try again in ${secsLeft}s.`);
+      return;
+    }
+
     setError("");
     setLoading(true);
 
     const res = await reqLogin(email, password);
+    // Clear password from state immediately after submission
+    setPassword("");
+
     if (res.success) {
-      window.location.href = "/";
+      window.location.replace("/");
     } else {
-      setError(res.error_message || "Login failed");
+      const attempts = failedAttempts + 1;
+      setFailedAttempts(attempts);
+      if (attempts >= MAX_ATTEMPTS) {
+        const lockoutMs = LOCKOUT_BASE_MS * Math.pow(2, Math.min(attempts - MAX_ATTEMPTS, 5));
+        setLockedUntil(Date.now() + lockoutMs);
+        setError(`Too many failed attempts. Try again in ${Math.ceil(lockoutMs / 1000)}s.`);
+      } else {
+        // Generic message to prevent user enumeration
+        setError("Invalid email or password");
+      }
     }
     setLoading(false);
   };

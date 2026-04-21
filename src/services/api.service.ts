@@ -54,22 +54,48 @@ export const fetchApi = async <T>(
     }
 };
 
-const handle401Response = async <T>(
-    originalConfig: AxiosRequestConfig,
-): Promise<ApiResponse<T> | null> => {
+// Singleton promise to deduplicate concurrent refresh requests.
+// Without this, multiple 401s fire parallel refresh calls — a race condition
+// that can corrupt token state.
+let refreshPromise: Promise<string | null> | null = null;
+
+const doRefresh = async (): Promise<string | null> => {
     try {
         const refreshResponse = await axios.post(
             `${BASE_API_URL}/auth/refresh`,
             {},
             { withCredentials: true },
         );
-
         if (refreshResponse.status === 200 && refreshResponse.data.success) {
-            const newToken = refreshResponse.data.data.token;
-            return await executeRequest<T>(originalConfig, newToken);
+            return refreshResponse.data.data.token as string;
         }
     } catch {
-        // Refresh failed — fall through and return null
+        // Refresh failed
+    }
+    return null;
+};
+
+const handle401Response = async <T>(
+    originalConfig: AxiosRequestConfig,
+): Promise<ApiResponse<T> | null> => {
+    // Deduplicate: if a refresh is already in flight, wait for it
+    if (!refreshPromise) {
+        refreshPromise = doRefresh().finally(() => {
+            refreshPromise = null;
+        });
+    }
+
+    const newToken = await refreshPromise;
+    if (newToken) {
+        // Only retry safe methods automatically; state-changing methods
+        // could cause unintended side effects on retry
+        const method = (originalConfig.method ?? "GET").toUpperCase();
+        if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+            return await executeRequest<T>(originalConfig, newToken);
+        }
+        // For mutations, retry with the new token — the caller already
+        // intends this action and the alternative is a hard redirect to /login
+        return await executeRequest<T>(originalConfig, newToken);
     }
     return null;
 };

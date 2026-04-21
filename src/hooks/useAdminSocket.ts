@@ -20,6 +20,8 @@ function getWsUrl(): string {
 // A single shared connection is maintained for the lifetime of the page.
 // All useAdminSocket() consumers register a subscriber and share it.
 
+const isDev = process.env.NODE_ENV === "development";
+
 const subscribers = new Set<EventHandler>();
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -32,12 +34,12 @@ function connect() {
 
     intentionalClose = false;
     const url = getWsUrl();
-    console.log("[AdminSocket] connecting to", url);
+    if (isDev) console.log("[AdminSocket] connecting to", url);
 
     ws = new WebSocket(url);
 
     ws.onopen = () => {
-        console.log("[AdminSocket] connected");
+        if (isDev) console.log("[AdminSocket] connected");
     };
 
     ws.onmessage = (e) => {
@@ -45,10 +47,10 @@ function connect() {
         try {
             data = JSON.parse(e.data as string) as AdminSocketEvent;
         } catch (err) {
-            console.warn("[AdminSocket] unparseable message:", e.data, err);
+            if (isDev) console.warn("[AdminSocket] unparseable message:", e.data, err);
             return;
         }
-        console.debug("[AdminSocket] ←", data.type, data);
+        if (isDev) console.debug("[AdminSocket] ←", data.type);
         subscribers.forEach((fn) => fn(data));
     };
 
@@ -58,9 +60,7 @@ function connect() {
 
     ws.onclose = (e) => {
         if (intentionalClose) return;
-        console.log(
-            `[AdminSocket] closed (code=${e.code}), reconnecting in 3s…`,
-        );
+        if (isDev) console.log(`[AdminSocket] closed (code=${e.code}), reconnecting in 3s…`);
         if (subscribers.size > 0) {
             reconnectTimer = setTimeout(connect, 3000);
         }

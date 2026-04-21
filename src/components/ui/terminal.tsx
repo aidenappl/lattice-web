@@ -27,7 +27,7 @@ export function Terminal({
   const termRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
-  const commandIdRef = useRef<string>(`exec-${containerId}-${Date.now()}`);
+  const commandIdRef = useRef<string>(`exec-${containerId}-${crypto.randomUUID()}`);
   const startedRef = useRef(false);
 
   // Handle incoming exec output from WebSocket

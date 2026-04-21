@@ -61,13 +61,13 @@ export function useWorkerLiveness(workers: Worker[]): LivenessMap {
             lastSeenRef.current[wId] = Date.now();
             setLiveness((prev) => {
                 if (prev[wId] === true) return prev;
-                console.log(`[WorkerLiveness] worker ${wId} → online (${event.type})`);
+                if (process.env.NODE_ENV === "development") console.log(`[WorkerLiveness] worker ${wId} → online (${event.type})`);
                 return { ...prev, [wId]: true };
             });
         } else if (event.type === "worker_disconnected") {
             setLiveness((prev) => {
                 if (prev[wId] === false) return prev;
-                console.log(`[WorkerLiveness] worker ${wId} → offline`);
+                if (process.env.NODE_ENV === "development") console.log(`[WorkerLiveness] worker ${wId} → offline`);
                 return { ...prev, [wId]: false };
             });
         }
@@ -87,7 +87,7 @@ export function useWorkerLiveness(workers: Worker[]): LivenessMap {
                     const id = Number(idStr);
                     const lastSeen = lastSeenRef.current[id] ?? 0;
                     if (Date.now() - lastSeen > STALE_MS) {
-                        console.warn(`[WorkerLiveness] worker ${id} → stale (no heartbeat for 90s)`);
+                        if (process.env.NODE_ENV === "development") console.warn(`[WorkerLiveness] worker ${id} → stale (no heartbeat for 90s)`);
                         next[id] = false;
                         changed = true;
                     }

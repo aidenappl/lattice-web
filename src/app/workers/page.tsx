@@ -261,6 +261,7 @@ WORKER_NAME=${createdWorker.name}`}
                       <Link
                         href={`http://${worker.hostname}:9100`}
                         target="_blank"
+                        rel="noopener noreferrer"
                         className="text-primary hover:text-info transition-colors"
                       >
                         {worker.hostname}

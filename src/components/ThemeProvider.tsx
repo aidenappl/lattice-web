@@ -31,7 +31,10 @@ function getCookie(name: string): string | undefined {
 }
 
 function setCookie(name: string, value: string) {
-  document.cookie = `${name}=${value};path=/;domain=.appleby.cloud;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
+  const domain = typeof window !== "undefined" ? window.location.hostname : "";
+  const domainPart = domain ? `;domain=${domain.startsWith(".") ? domain : `.${domain}`}` : "";
+  const securePart = typeof window !== "undefined" && window.location.protocol === "https:" ? ";Secure" : "";
+  document.cookie = `${name}=${value};path=/${domainPart};max-age=${60 * 60 * 24 * 365};SameSite=Lax${securePart}`;
 }
 
 function getStoredTheme(): Theme {
