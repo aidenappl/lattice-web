@@ -18,6 +18,7 @@ import {
   reqUpgradeRunner,
   reqStopAllContainers,
   reqStartAllContainers,
+  reqForceRemoveContainer,
 } from "@/services/workers.service";
 import { reqListVolumes } from "@/services/volumes.service";
 import { reqListNetworks } from "@/services/networks.service";
@@ -33,6 +34,7 @@ import {
   faArrowLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 import { isAdmin, canEdit } from "@/lib/utils";
 import { useUser } from "@/store/hooks";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -95,6 +97,9 @@ export default function WorkerDetailPage() {
   // Volume & Network state (driven by WebSocket)
   const [volumes, setVolumes] = useState<DockerVolume[]>([]);
   const [networks, setNetworks] = useState<DockerNetwork[]>([]);
+
+  // Orphaned containers from failed deploys
+  const [orphanedContainers, setOrphanedContainers] = useState<string[]>([]);
 
   // Worker action state
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -242,6 +247,25 @@ export default function WorkerDetailPage() {
           setNetworks(p.networks as DockerNetwork[]);
         }
       }
+
+      if (event.type === "orphaned_container" && event.worker_id === id) {
+        const name = event.payload?.container_name as string;
+        if (name) {
+          setOrphanedContainers((prev) =>
+            prev.includes(name) ? prev : [...prev, name],
+          );
+        }
+      }
+
+      // Remove orphan from list when force_remove succeeds
+      if (event.type === "worker_action_status" && event.worker_id === id) {
+        const p = event.payload ?? {};
+        if (p.action === "force_remove" && p.status === "success" && p.container_name) {
+          setOrphanedContainers((prev) =>
+            prev.filter((n) => n !== p.container_name),
+          );
+        }
+      }
     },
     [id, worker?.name, dispatch],
   );
@@ -291,6 +315,20 @@ export default function WorkerDetailPage() {
     const fn = actionMap[action];
     if (fn) await fn(id);
     setActionLoading(null);
+  };
+
+  const handleForceRemove = async (containerName: string) => {
+    const confirmed = await showConfirm({
+      title: "Force remove container",
+      message: `Are you sure you want to force remove "${containerName}"? This is an orphaned container from a failed deployment.`,
+      confirmLabel: "Remove",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+    const res = await reqForceRemoveContainer(id, containerName);
+    if (res.success) {
+      toast.success(`Force remove command sent for ${containerName}`);
+    }
   };
 
   const handleDeleteWorker = async () => {
@@ -478,6 +516,38 @@ export default function WorkerDetailPage() {
         )}
       </div>
 
+      {/* ─── Orphaned Containers Alert ─── */}
+      {orphanedContainers.length > 0 && (
+        <Alert variant="warning">
+          <div>
+            <strong>Orphaned containers detected</strong>
+            <p className="text-xs text-muted mt-1">
+              These containers are leftovers from failed deployments and should
+              be removed.
+            </p>
+            <div className="mt-2 space-y-1">
+              {orphanedContainers.map((name) => (
+                <div
+                  key={name}
+                  className="flex items-center justify-between gap-2"
+                >
+                  <span className="text-xs font-mono truncate">{name}</span>
+                  {canEdit(user) && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleForceRemove(name)}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </Alert>
+      )}
+
       {/* ─── Edit Form ─── */}
       {editing && canEdit(user) && (
         <WorkerEditForm
@@ -496,7 +566,7 @@ export default function WorkerDetailPage() {
       />
 
       {/* ─── Container Resource Stats ─── */}
-      <WorkerContainerStats stats={containerStats} />
+      <WorkerContainerStats stats={containerStats} onForceRemove={handleForceRemove} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ─── Left column: Info + Stacks ─── */}

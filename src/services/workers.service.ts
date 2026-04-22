@@ -82,3 +82,10 @@ export const reqStartAllContainers = (id: number) =>
         method: "POST",
         url: `/admin/workers/${id}/start-all`,
     });
+
+export const reqForceRemoveContainer = (workerId: number, containerName: string) =>
+    fetchApi<null>({
+        method: "POST",
+        url: `/admin/workers/${workerId}/force-remove`,
+        data: { container_name: containerName },
+    });
