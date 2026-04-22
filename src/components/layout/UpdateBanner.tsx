@@ -80,8 +80,20 @@ export function UpdateBanner() {
 
   if (loading || dismissed || !info) return null;
 
+  // Workers relevant to the upgrade panel: outdated+online, or mid-upgrade
+  const upgradeWorkers = info.runner.workers.filter((w) => {
+    if (w.outdated && w.status === "online") return true;
+    if (w.pending_action) {
+      try {
+        const pa = JSON.parse(w.pending_action) as { action?: string };
+        if (pa.action === "upgrade_runner") return true;
+      } catch { /* ignore */ }
+    }
+    return false;
+  });
+
   const hasUpdates =
-    apiUpdateAvailable || webUpdateAvailable || runnerUpdatesAvailable > 0;
+    apiUpdateAvailable || webUpdateAvailable || runnerUpdatesAvailable > 0 || upgradeWorkers.length > 0;
   if (!hasUpdates) return null;
 
   const handleUpdateWeb = async () => {
@@ -139,11 +151,6 @@ export function UpdateBanner() {
     }
     waitForRestart("API", toastId);
   };
-
-  // Outdated online workers — passed to the dropdown panel
-  const outdatedWorkers = info.runner.workers.filter(
-    (w) => w.outdated && w.status === "online",
-  );
 
   return (
     <div className="sticky top-16 z-30 border-b border-[#3b82f6]/30 bg-[#3b82f6]/10 backdrop-blur-sm">
@@ -211,7 +218,7 @@ export function UpdateBanner() {
           )}
 
           {/* Runner upgrade dropdown */}
-          {runnerUpdatesAvailable > 0 && (
+          {(runnerUpdatesAvailable > 0 || upgradeWorkers.length > 0) && (
             <div className="relative" ref={panelRef}>
               <button
                 onClick={() => setRunnerPanelOpen((v) => !v)}
@@ -247,7 +254,7 @@ export function UpdateBanner() {
                   {/* Panel body */}
                   <div className="px-4 py-3">
                     <RunnerUpgradePanel
-                      workers={outdatedWorkers}
+                      workers={upgradeWorkers}
                       latestVersion={info.runner.latest}
                     />
                   </div>

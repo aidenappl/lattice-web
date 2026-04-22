@@ -8,6 +8,7 @@ import {
   faArrowUp,
 } from "@fortawesome/free-solid-svg-icons";
 import { useAdminSocket, type AdminSocketEvent } from "@/hooks/useAdminSocket";
+import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { reqUpgradeRunner } from "@/services/workers.service";
 import type { WorkerVersionInfo } from "@/types/version.types";
 
@@ -17,6 +18,7 @@ export type RunnerUpgradeStatus =
   | "idle"
   | "sending"
   | "accepted"
+  | "restarting"
   | "success"
   | "failed";
 
@@ -64,17 +66,19 @@ function Spinner({ className }: { className?: string }) {
 }
 
 function statusLabel(r: RunnerStatusEntry): string {
-  if (r.worker_status !== "online") return "offline";
   switch (r.upgrade_status) {
     case "sending":
       return "sending command…";
     case "accepted":
       return "installing…";
+    case "restarting":
+      return "restarting…";
     case "success":
-      return "upgraded ✓";
+      return r.message ?? "upgraded ✓";
     case "failed":
       return r.message ?? "failed";
     default:
+      if (r.worker_status !== "online") return "offline";
       return r.current_version ?? "unknown";
   }
 }
@@ -85,6 +89,8 @@ export function RunnerUpgradePanel({
   workers,
   latestVersion,
 }: RunnerUpgradePanelProps) {
+  const { refresh: refreshVersions } = useVersionCheck();
+
   const [statuses, setStatuses] = useState<RunnerStatusEntry[]>(() =>
     workers.map((w) => {
       // Restore upgrade status from persisted pending_action if present
@@ -94,8 +100,10 @@ export function RunnerUpgradePanel({
         try {
           const pa = JSON.parse(w.pending_action) as { action?: string; status?: string; message?: string };
           if (pa.action === "upgrade_runner") {
-            if (pa.status === "accepted" || pa.status === "deploying") upgradeStatus = "accepted";
-            else if (pa.status === "success") upgradeStatus = "success";
+            if (pa.status === "accepted" || pa.status === "deploying") {
+              // Worker offline during upgrade means it's restarting
+              upgradeStatus = w.status !== "online" ? "restarting" : "accepted";
+            } else if (pa.status === "success") upgradeStatus = "success";
             else if (pa.status === "failed" || pa.status === "error") upgradeStatus = "failed";
             message = pa.message;
           }
@@ -114,6 +122,30 @@ export function RunnerUpgradePanel({
   );
 
   const handleSocketEvent = useCallback((event: AdminSocketEvent) => {
+    // Worker disconnected — if mid-upgrade, show "restarting"
+    if (event.type === "worker_disconnected") {
+      setStatuses((prev) =>
+        prev.map((r) => {
+          if (r.worker_id !== event.worker_id) return r;
+          if (r.upgrade_status === "accepted" || r.upgrade_status === "sending") {
+            return { ...r, upgrade_status: "restarting", worker_status: "offline" };
+          }
+          return { ...r, worker_status: "offline" };
+        }),
+      );
+      return;
+    }
+
+    // Worker reconnected — update online status
+    if (event.type === "worker_connected") {
+      setStatuses((prev) =>
+        prev.map((r) =>
+          r.worker_id === event.worker_id ? { ...r, worker_status: "online" } : r,
+        ),
+      );
+      return;
+    }
+
     if (event.type !== "worker_action_status") return;
     const p = event.payload ?? {};
     if ((p.action as string) !== "upgrade_runner") return;
@@ -132,7 +164,12 @@ export function RunnerUpgradePanel({
         return { ...r, upgrade_status: next, message };
       }),
     );
-  }, []);
+
+    // Refresh version info after terminal states so the banner updates
+    if (rawStatus === "success" || rawStatus === "failed" || rawStatus === "error") {
+      setTimeout(() => refreshVersions(), 2000);
+    }
+  }, [refreshVersions]);
   useAdminSocket(handleSocketEvent);
 
   const handleUpgradeOne = useCallback(async (workerId: number) => {
@@ -192,7 +229,7 @@ export function RunnerUpgradePanel({
       r.outdated && r.worker_status === "online" && r.upgrade_status === "idle",
   );
   const anyBusy = statuses.some(
-    (r) => r.upgrade_status === "sending" || r.upgrade_status === "accepted",
+    (r) => r.upgrade_status === "sending" || r.upgrade_status === "accepted" || r.upgrade_status === "restarting",
   );
   const allSettled =
     statuses.filter((r) => r.outdated && r.worker_status === "online").length >
@@ -213,39 +250,32 @@ export function RunnerUpgradePanel({
             r.worker_status === "online" &&
             r.upgrade_status === "idle";
           const isBusy =
-            r.upgrade_status === "sending" || r.upgrade_status === "accepted";
+            r.upgrade_status === "sending" || r.upgrade_status === "accepted" || r.upgrade_status === "restarting";
 
           return (
             <div key={r.worker_id} className="flex items-center gap-3 py-2.5">
-              {/* Status icon */}
+              {/* Status icon — mutually exclusive by upgrade state */}
               <div className="flex h-5 w-5 shrink-0 items-center justify-center">
-                {r.worker_status !== "online" && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-muted opacity-40" />
-                )}
-                {r.worker_status === "online" &&
-                  !r.outdated &&
-                  r.upgrade_status === "idle" && (
-                    <FontAwesomeIcon
-                      icon={faCheck}
-                      className="h-3 w-3 text-green-400"
-                    />
-                  )}
-                {r.worker_status === "online" &&
-                  r.upgrade_status === "idle" &&
-                  r.outdated && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#eab308]/60" />
-                  )}
-                {isBusy && <Spinner className="h-3.5 w-3.5 text-info" />}
-                {r.upgrade_status === "success" && (
+                {isBusy ? (
+                  <Spinner className="h-3.5 w-3.5 text-info" />
+                ) : r.upgrade_status === "success" ? (
                   <FontAwesomeIcon
                     icon={faCheck}
                     className="h-3 w-3 text-green-400"
                   />
-                )}
-                {r.upgrade_status === "failed" && (
+                ) : r.upgrade_status === "failed" ? (
                   <FontAwesomeIcon
                     icon={faTriangleExclamation}
                     className="h-3 w-3 text-red-400"
+                  />
+                ) : r.worker_status !== "online" ? (
+                  <span className="h-1.5 w-1.5 rounded-full bg-muted opacity-40" />
+                ) : r.outdated ? (
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#eab308]/60" />
+                ) : (
+                  <FontAwesomeIcon
+                    icon={faCheck}
+                    className="h-3 w-3 text-green-400"
                   />
                 )}
               </div>
