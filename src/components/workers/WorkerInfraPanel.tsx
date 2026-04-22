@@ -22,12 +22,14 @@ export interface WorkerInfraPanelProps {
   workerId: number;
   volumes: DockerVolume[];
   networks: DockerNetwork[];
+  loading?: boolean;
 }
 
 export default function WorkerInfraPanel({
   workerId,
   volumes,
   networks,
+  loading,
 }: WorkerInfraPanelProps) {
   const [infraTab, setInfraTab] = useState<"volumes" | "networks">("volumes");
   const [newVolumeName, setNewVolumeName] = useState("");
@@ -83,7 +85,12 @@ export default function WorkerInfraPanel({
               </div>
             )}
             <div className="space-y-1.5">
-              {volumes.length === 0 ? (
+              {loading ? (
+                <div className="flex items-center justify-center py-6 gap-2 text-xs text-muted">
+                  <span className="h-3.5 w-3.5 border-2 border-muted/30 border-t-muted rounded-full animate-spin" />
+                  Loading...
+                </div>
+              ) : volumes.length === 0 ? (
                 <p className="text-xs text-muted py-4 text-center">
                   No volumes
                 </p>
@@ -151,7 +158,12 @@ export default function WorkerInfraPanel({
               </div>
             )}
             <div className="space-y-1.5">
-              {networks.length === 0 ? (
+              {loading ? (
+                <div className="flex items-center justify-center py-6 gap-2 text-xs text-muted">
+                  <span className="h-3.5 w-3.5 border-2 border-muted/30 border-t-muted rounded-full animate-spin" />
+                  Loading...
+                </div>
+              ) : networks.length === 0 ? (
                 <p className="text-xs text-muted py-4 text-center">
                   No networks
                 </p>

@@ -18,8 +18,8 @@ const TAB = "  ";
 
 // ─── Shared typography for pixel-perfect overlay alignment ───────────────────
 
-const SHARED_STYLES =
-  "px-3 py-2 text-sm font-mono leading-5 whitespace-pre-wrap break-words";
+const SHARED_STYLES_BASE =
+  "px-3 py-2 text-sm font-mono leading-5";
 
 // ─── Syntax highlighting ─────────────────────────────────────────────────────
 
@@ -124,6 +124,8 @@ interface CodeEditorProps {
   className?: string;
   language?: "json" | "yaml" | "text";
   envVars?: Record<string, string>;
+  wordWrap?: boolean;
+  onEnvVarClick?: () => void;
 }
 
 export function CodeEditor({
@@ -134,6 +136,8 @@ export function CodeEditor({
   className,
   language = "json",
   envVars,
+  wordWrap = false,
+  onEnvVarClick,
 }: CodeEditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const preRef = useRef<HTMLPreElement>(null);
@@ -160,12 +164,13 @@ export function CodeEditor({
       html = html.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, key) => {
         const defined = key in envVars && envVars[key].trim() !== "";
         const cls = defined ? "env-var-defined" : "env-var-missing";
-        return `<span class="${cls}">${match}</span>`;
+        const clickable = onEnvVarClick ? " env-var-clickable" : "";
+        return `<span class="${cls}${clickable}" data-envvar="${key}">${match}</span>`;
       });
     }
 
     return html;
-  }, [value, language, envVars]);
+  }, [value, language, envVars, onEnvVarClick]);
 
   // Insert text via execCommand to preserve the browser's native undo stack.
   // Falls back to direct value manipulation if execCommand is unavailable.
@@ -349,6 +354,30 @@ export function CodeEditor({
     [nativeInsert, insert, language],
   );
 
+  const wrapClass = wordWrap ? "whitespace-pre-wrap break-words" : "whitespace-pre";
+  const sharedStyles = `${SHARED_STYLES_BASE} ${wrapClass}`;
+
+  // Detect if the user clicked on an env var reference in the textarea
+  const handleTextareaClick = useCallback(() => {
+    if (!onEnvVarClick || !ref.current) return;
+    const ta = ref.current;
+    const pos = ta.selectionStart;
+    // Check a window around the cursor for ${...} pattern
+    const start = Math.max(0, pos - 50);
+    const end = Math.min(ta.value.length, pos + 50);
+    const snippet = ta.value.slice(start, end);
+    const regex = /\$\{[A-Za-z_][A-Za-z0-9_]*\}/g;
+    let match;
+    while ((match = regex.exec(snippet)) !== null) {
+      const absStart = start + match.index;
+      const absEnd = absStart + match[0].length;
+      if (pos >= absStart && pos <= absEnd) {
+        onEnvVarClick();
+        return;
+      }
+    }
+  }, [onEnvVarClick]);
+
   return (
     <div
       className={cn(
@@ -360,7 +389,7 @@ export function CodeEditor({
       <pre
         ref={preRef}
         aria-hidden
-        className={`absolute inset-0 ${SHARED_STYLES} overflow-hidden pointer-events-none m-0 [&_.json-key]:text-[#7aa2f7] [&_.json-string]:text-[#9ece6a] [&_.json-number]:text-[#ff9e64] [&_.json-bool]:text-[#ff9e64] [&_.yaml-key]:text-[#7aa2f7] [&_.yaml-colon]:text-muted [&_.yaml-comment]:text-muted [&_.yaml-string]:text-[#9ece6a] [&_.yaml-bool]:text-[#ff9e64] [&_.yaml-number]:text-[#ff9e64] [&_.env-var-defined]:text-healthy [&_.env-var-defined]:font-semibold [&_.env-var-missing]:text-failed [&_.env-var-missing]:font-semibold`}
+        className={`absolute inset-0 ${sharedStyles} overflow-hidden pointer-events-none m-0 [&_.json-key]:text-[#7aa2f7] [&_.json-string]:text-[#9ece6a] [&_.json-number]:text-[#ff9e64] [&_.json-bool]:text-[#ff9e64] [&_.yaml-key]:text-[#7aa2f7] [&_.yaml-colon]:text-muted [&_.yaml-comment]:text-muted [&_.yaml-string]:text-[#9ece6a] [&_.yaml-bool]:text-[#ff9e64] [&_.yaml-number]:text-[#ff9e64] [&_.env-var-defined]:text-healthy [&_.env-var-defined]:font-semibold [&_.env-var-missing]:text-failed [&_.env-var-missing]:font-semibold [&_.env-var-clickable]:underline [&_.env-var-clickable]:decoration-dotted`}
         style={{ tabSize: 2 }}
         dangerouslySetInnerHTML={{ __html: highlighted + "\n" }}
       />
@@ -371,11 +400,12 @@ export function CodeEditor({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
+        onClick={handleTextareaClick}
         onScroll={syncScroll}
         placeholder={placeholder}
         spellCheck={false}
         style={{ tabSize: 2 }}
-        className={`relative w-full bg-transparent ${SHARED_STYLES} text-transparent caret-white placeholder:text-muted focus:outline-none resize-none selection:bg-[#264f78] selection:text-[#e4e4e7]`}
+        className={`relative w-full bg-transparent ${sharedStyles} text-transparent caret-white placeholder:text-muted focus:outline-none resize-none selection:bg-[#264f78] selection:text-[#e4e4e7]`}
       />
     </div>
   );

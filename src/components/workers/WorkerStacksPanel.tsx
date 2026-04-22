@@ -10,9 +10,10 @@ import { StatusBadge } from "@/components/ui/badge";
 export interface WorkerStacksPanelProps {
   stacks: Stack[];
   containers: Container[];
+  loading?: boolean;
 }
 
-export default function WorkerStacksPanel({ stacks, containers }: WorkerStacksPanelProps) {
+export default function WorkerStacksPanel({ stacks, containers, loading }: WorkerStacksPanelProps) {
   const [expandedStacks, setExpandedStacks] = useState<Set<number>>(new Set());
 
   return (
@@ -26,7 +27,12 @@ export default function WorkerStacksPanel({ stacks, containers }: WorkerStacksPa
         <span className="badge badge-neutral ml-2">{stacks.length}</span>
       </div>
       <div className="p-4 space-y-1">
-        {stacks.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-8 gap-2 text-sm text-muted">
+            <span className="h-4 w-4 border-2 border-muted/30 border-t-muted rounded-full animate-spin" />
+            Loading stacks...
+          </div>
+        ) : stacks.length === 0 ? (
           <p className="text-xs text-muted py-6 text-center">
             No stacks assigned to this worker
           </p>

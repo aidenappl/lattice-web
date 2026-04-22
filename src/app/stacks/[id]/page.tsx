@@ -878,6 +878,7 @@ export default function StackDetailPage() {
               onDismissError={() => setComposeError("")}
               canEdit={canEdit(user)}
               parsedEnvVars={parsedEnvVars}
+              onSwitchToEnv={() => setActiveTab("env")}
             />
           )}
 

@@ -11,7 +11,7 @@ import {
 import { useUser } from "@/store/hooks";
 import { isAdmin, formatDate } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm-modal";
-import { PageLoader } from "@/components/ui/loading";
+import { PageLoader, LoadingSpinner } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -35,15 +35,19 @@ export default function EnvVarsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [revealedIds, setRevealedIds] = useState<Set<number>>(new Set());
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [reloading, setReloading] = useState(false);
 
   useEffect(() => {
     document.title = "Lattice - Environment Variables";
   }, []);
 
-  const loadEnvVars = async () => {
+  const loadEnvVars = async (isReload = false) => {
+    if (isReload) setReloading(true);
     const res = await reqGetGlobalEnvVars();
     if (res.success) setEnvVars(res.data ?? []);
     setLoading(false);
+    setReloading(false);
   };
 
   useEffect(() => {
@@ -71,7 +75,7 @@ export default function EnvVarsPage() {
       });
       if (res.success) {
         toast.success("Variable updated");
-        await loadEnvVars();
+        await loadEnvVars(true);
         resetForm();
       } else {
         setError("error_message" in res ? res.error_message : "Failed to update");
@@ -80,7 +84,7 @@ export default function EnvVarsPage() {
       const res = await reqCreateGlobalEnvVar({ key, value, is_secret: isSecret });
       if (res.success) {
         toast.success("Variable created");
-        await loadEnvVars();
+        await loadEnvVars(true);
         resetForm();
       } else {
         setError("error_message" in res ? res.error_message : "Failed to create");
@@ -105,11 +109,13 @@ export default function EnvVarsPage() {
       variant: "danger",
     });
     if (!ok) return;
+    setDeletingId(ev.id);
     const res = await reqDeleteGlobalEnvVar(ev.id);
     if (res.success) {
       toast.success("Variable deleted");
-      await loadEnvVars();
+      await loadEnvVars(true);
     }
+    setDeletingId(null);
   };
 
   const toggleReveal = (id: number) => {
@@ -204,7 +210,12 @@ export default function EnvVarsPage() {
           </form>
         )}
 
-        <div className="panel">
+        <div className="panel relative">
+          {reloading && (
+            <div className="absolute top-3 right-3 z-10">
+              <LoadingSpinner size="sm" />
+            </div>
+          )}
           <table className="data-table">
             <thead>
               <tr>
@@ -286,8 +297,9 @@ export default function EnvVarsPage() {
                               variant="destructive"
                               size="sm"
                               onClick={() => handleDelete(ev)}
+                              disabled={deletingId === ev.id}
                             >
-                              Delete
+                              {deletingId === ev.id ? "Deleting..." : "Delete"}
                             </Button>
                           </div>
                         </td>

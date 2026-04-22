@@ -54,7 +54,7 @@ import {
   addToken,
   removeToken,
 } from "@/store/slices/workersSlice";
-import { fetchStacks, selectStacks } from "@/store/slices/stacksSlice";
+import { fetchStacks, selectStacks, selectStacksLoading } from "@/store/slices/stacksSlice";
 import { fetchAllContainers, selectAllContainers } from "@/store/slices/containersSlice";
 
 // Extracted components
@@ -78,6 +78,7 @@ export default function WorkerDetailPage() {
   const tokens = useAppSelector(selectWorkerTokens);
   const loading = useAppSelector(selectWorkersLoading);
   const allStacks = useAppSelector(selectStacks);
+  const stacksLoading = useAppSelector(selectStacksLoading);
   const containers = useAppSelector(selectAllContainers);
 
   // Derived: stacks for this worker
@@ -97,6 +98,7 @@ export default function WorkerDetailPage() {
   // Volume & Network state (driven by WebSocket)
   const [volumes, setVolumes] = useState<DockerVolume[]>([]);
   const [networks, setNetworks] = useState<DockerNetwork[]>([]);
+  const [infraLoaded, setInfraLoaded] = useState(false);
 
   // Orphaned containers from failed deploys
   const [orphanedContainers, setOrphanedContainers] = useState<string[]>([]);
@@ -238,6 +240,7 @@ export default function WorkerDetailPage() {
         const p = event.payload ?? {};
         if (p.status === "success" && Array.isArray(p.volumes)) {
           setVolumes(p.volumes as DockerVolume[]);
+          setInfraLoaded(true);
         }
       }
 
@@ -245,6 +248,7 @@ export default function WorkerDetailPage() {
         const p = event.payload ?? {};
         if (p.status === "success" && Array.isArray(p.networks)) {
           setNetworks(p.networks as DockerNetwork[]);
+          setInfraLoaded(true);
         }
       }
 
@@ -566,13 +570,13 @@ export default function WorkerDetailPage() {
       />
 
       {/* ─── Container Resource Stats ─── */}
-      <WorkerContainerStats stats={containerStats} onForceRemove={handleForceRemove} />
+      <WorkerContainerStats stats={containerStats} onForceRemove={handleForceRemove} workerOnline={worker.status === "online"} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ─── Left column: Info + Stacks ─── */}
         <div className="lg:col-span-2 space-y-6">
           <WorkerInfoPanel worker={worker} />
-          <WorkerStacksPanel stacks={stacks} containers={containers} />
+          <WorkerStacksPanel stacks={stacks} containers={containers} loading={stacksLoading} />
         </div>
 
         {/* ─── Sidebar ─── */}
@@ -582,6 +586,7 @@ export default function WorkerDetailPage() {
               workerId={worker.id}
               volumes={volumes}
               networks={networks}
+              loading={!infraLoaded}
             />
           )}
           <WorkerTokensPanel

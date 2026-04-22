@@ -112,7 +112,25 @@ export default function WorkerMetricsPanel({
   lastUpdated,
 }: WorkerMetricsPanelProps) {
   const latestMetric = metrics.length > 0 ? metrics[0] : null;
-  if (!latestMetric) return null;
+  if (!latestMetric) {
+    return (
+      <div className="panel">
+        <div className="panel-header">
+          <span>Metrics</span>
+        </div>
+        <div className="flex items-center justify-center py-12 text-sm text-muted gap-2">
+          {workerStatus === "online" ? (
+            <>
+              <span className="h-4 w-4 border-2 border-muted/30 border-t-muted rounded-full animate-spin" />
+              Waiting for metrics...
+            </>
+          ) : (
+            "Worker is offline"
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // Sparkline history (oldest -> newest, up to last 20 heartbeats)
   const cpuHistory = metrics

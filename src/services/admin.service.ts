@@ -158,6 +158,29 @@ export const reqUpdateSMTPConfig = (data: Partial<SMTPConfigData>) =>
 export const reqTestSMTP = () =>
     fetchApi<null>({ method: "POST", url: "/admin/smtp-config/test" });
 
+// Notification Preferences
+export type EventNotifConfig = {
+    enabled: boolean;
+    grace_seconds?: number;
+    threshold?: number;
+    cooldown_minutes?: number;
+};
+
+export type NotificationPrefs = Record<string, EventNotifConfig>;
+
+export const reqGetNotificationPrefs = () =>
+    fetchApi<NotificationPrefs>({
+        method: "GET",
+        url: "/admin/notification-prefs",
+    });
+
+export const reqUpdateNotificationPrefs = (prefs: NotificationPrefs) =>
+    fetchApi<NotificationPrefs>({
+        method: "PUT",
+        url: "/admin/notification-prefs",
+        data: prefs,
+    });
+
 // SSO Configuration
 export type SSOConfigData = {
     enabled: boolean;

@@ -1523,11 +1523,12 @@ html {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 14px 16px;
-  transition: border-color 0.15s;
+  padding: 12px 14px;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 .stack-container-card:hover {
   border-color: var(--border-strong);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 .stack-container-card-add {
   display: flex;
@@ -1541,19 +1542,6 @@ html {
 }
 .stack-container-card-add:hover {
   border-color: var(--info);
-}
-.stack-container-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.stack-container-card-body {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
 }
 
 /* Action dropdown menu */
