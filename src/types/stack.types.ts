@@ -35,6 +35,7 @@ export type Container = {
     depends_on: string | null;
     registry_id: number | null;
     active: boolean;
+    started_at: string | null;
     inserted_at: string;
     updated_at: string;
 };

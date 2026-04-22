@@ -2,7 +2,7 @@
 
 import type { Container, HealthCheckConfig } from "@/types";
 import { StatusBadge } from "@/components/ui/badge";
-import { formatDate, timeAgo, formatTestCommand } from "@/lib/utils";
+import { formatDate, timeAgo, formatUptime, formatTestCommand } from "@/lib/utils";
 import { InfoRow } from "./ContainerDetailsTab";
 
 export interface ContainerInfoPanelsProps {
@@ -36,6 +36,14 @@ export function ContainerInfoPanels({
             <InfoRow
               label="Restart Policy"
               value={container.restart_policy ?? "none"}
+            />
+            <InfoRow
+              label="Uptime"
+              value={
+                container.status === "running" && container.started_at
+                  ? formatUptime(Math.floor((Date.now() - new Date(container.started_at).getTime()) / 1000))
+                  : <span className="text-muted">—</span>
+              }
             />
             <InfoRow
               label="Created"

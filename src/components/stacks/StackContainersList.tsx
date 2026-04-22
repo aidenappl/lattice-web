@@ -13,6 +13,7 @@ import {
 import { Container } from "@/types";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatUptime } from "@/lib/utils";
 import { CreateContainerForm } from "./CreateContainerForm";
 
 interface StackContainersListProps {
@@ -248,6 +249,11 @@ export function StackContainersList({
                   {container.image}:{container.tag}
                 </span>
                 <StatusBadge status={container.status} />
+                {container.status === "running" && container.started_at && (
+                  <span className="text-[10px] text-muted font-mono">
+                    up {formatUptime(Math.floor((Date.now() - new Date(container.started_at).getTime()) / 1000))}
+                  </span>
+                )}
                 {container.registry_id && (
                   <span className="text-[10px] text-info bg-info/10 px-1.5 py-0.5 rounded font-mono">
                     watching
