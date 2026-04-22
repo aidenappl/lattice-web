@@ -198,19 +198,31 @@ export function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProps) {
       {/* Footer */}
       {!collapsed && (
         <div className="sidebar-footer">
-          <div className="flex items-center gap-2.5">
-            <div
-              className="shrink-0 flex items-center justify-center rounded-full text-[11px] font-semibold"
-              style={{
-                width: 28,
-                height: 28,
-                background:
-                  "linear-gradient(135deg, var(--brand), var(--violet))",
-                color: "#000",
-              }}
-            >
-              {initials}
-            </div>
+          <Link
+            href="/profile"
+            className="flex items-center gap-2.5 rounded-md -mx-1 px-1 py-1 hover:bg-surface-elevated transition-colors"
+          >
+            {user?.profile_image_url ? (
+              <img
+                src={user.profile_image_url}
+                alt=""
+                className="shrink-0 rounded-full object-cover"
+                style={{ width: 28, height: 28 }}
+              />
+            ) : (
+              <div
+                className="shrink-0 flex items-center justify-center rounded-full text-[11px] font-semibold"
+                style={{
+                  width: 28,
+                  height: 28,
+                  background:
+                    "linear-gradient(135deg, var(--brand), var(--violet))",
+                  color: "#000",
+                }}
+              >
+                {initials}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <div className="text-[12px] font-medium truncate">
                 {user?.name || user?.email || "User"}
@@ -219,7 +231,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProps) {
                 {user?.role || "viewer"}
               </div>
             </div>
-          </div>
+          </Link>
           <div className="mt-2 pt-2 border-t border-border-subtle">
             <p className="mono text-[10px] text-muted">{APP_VERSION}</p>
           </div>

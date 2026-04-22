@@ -161,10 +161,14 @@ export default function StackDeployTokensPanel({
         )}
 
         {!loading && tokens.length > 0 && (
-          <div className="mt-3 rounded-lg bg-surface-elevated p-2.5">
+          <div className="mt-3 rounded-lg bg-surface-elevated p-2.5 space-y-1.5">
             <p className="text-[10px] text-dimmed">
-              Trigger a deploy from CI/CD:{" "}
+              <span className="text-secondary font-medium">Full stack:</span>{" "}
               <code className="text-[10px]">curl -X POST https://YOUR_API/api/deploy/TOKEN</code>
+            </p>
+            <p className="text-[10px] text-dimmed">
+              <span className="text-secondary font-medium">Single container:</span>{" "}
+              <code className="text-[10px]">curl -X POST &quot;https://YOUR_API/api/deploy/TOKEN?container=NAME&quot;</code>
             </p>
           </div>
         )}

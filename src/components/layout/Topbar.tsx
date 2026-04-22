@@ -13,6 +13,7 @@ import {
   faMoon,
   faDesktop,
   faRightFromBracket,
+  faUser,
 } from "@fortawesome/free-solid-svg-icons";
 import { cn } from "@/lib/utils";
 import { useTheme, type Theme } from "@/components/ThemeProvider";
@@ -218,17 +219,26 @@ function UserMenu() {
         title="Account"
         style={{ width: 32, height: 32 }}
       >
-        <div
-          className="flex items-center justify-center rounded-full text-[10px] font-semibold"
-          style={{
-            width: 24,
-            height: 24,
-            background: "var(--surface-elevated)",
-            color: "var(--text-primary)",
-          }}
-        >
-          {initials}
-        </div>
+        {user?.profile_image_url ? (
+          <img
+            src={user.profile_image_url}
+            alt=""
+            className="rounded-full object-cover"
+            style={{ width: 24, height: 24 }}
+          />
+        ) : (
+          <div
+            className="flex items-center justify-center rounded-full text-[10px] font-semibold"
+            style={{
+              width: 24,
+              height: 24,
+              background: "var(--surface-elevated)",
+              color: "var(--text-primary)",
+            }}
+          >
+            {initials}
+          </div>
+        )}
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-52 rounded-lg border border-border-strong bg-background-alt p-1 shadow-lg z-50">
@@ -238,6 +248,14 @@ function UserMenu() {
             </p>
             <p className="text-xs text-secondary truncate">{user?.email}</p>
           </div>
+          <Link
+            href="/profile"
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-secondary hover:bg-surface hover:text-primary cursor-pointer w-full"
+            onClick={() => setOpen(false)}
+          >
+            <FontAwesomeIcon icon={faUser} className="h-3.5 w-3.5" />
+            Profile
+          </Link>
           <button
             className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-failed hover:bg-surface cursor-pointer w-full"
             onClick={async () => {

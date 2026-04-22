@@ -19,3 +19,10 @@ export const reqLogout = () =>
         method: "POST",
         url: "/auth/logout",
     });
+
+export const reqUpdateSelf = (data: { name?: string; current_password?: string; new_password?: string; profile_image_url?: string }) =>
+    fetchApi<User>({
+        method: "PUT",
+        url: "/auth/self",
+        data,
+    });

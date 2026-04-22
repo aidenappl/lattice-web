@@ -192,8 +192,19 @@ function UsersTab({ admin }: { admin: boolean }) {
               users.map((u) => (
                 <tr key={u.id}>
                   <td>
-                    <p className="text-sm font-medium text-primary">{u.name || u.email}</p>
-                    {u.name && <p className="text-xs text-muted">{u.email}</p>}
+                    <div className="flex items-center gap-2.5">
+                      {u.profile_image_url ? (
+                        <img src={u.profile_image_url} alt="" className="h-7 w-7 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <div className="h-7 w-7 rounded-full bg-surface-active flex items-center justify-center text-[10px] font-semibold text-muted shrink-0">
+                          {(u.name || u.email)[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-medium text-primary">{u.name || u.email}</p>
+                        {u.name && <p className="text-xs text-muted">{u.email}</p>}
+                      </div>
+                    </div>
                   </td>
                   <td className="text-secondary">{u.auth_type}</td>
                   <td>
