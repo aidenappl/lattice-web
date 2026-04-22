@@ -51,6 +51,7 @@ export type FleetMetricsPoint = {
     network_tx_total: number;
     container_count: number;
     running_count: number;
+    online_workers?: number;
 };
 
 export type HealthAnomaly = {

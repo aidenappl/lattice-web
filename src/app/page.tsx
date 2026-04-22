@@ -85,6 +85,7 @@ export default function DashboardPage() {
   // Per-worker latest metrics for proper fleet aggregation (avoids sawtooth)
   const workerMetricsRef = useRef<Map<number, WorkerLatestMetrics>>(new Map());
   const workerHeartbeatCount = useRef<Map<number, number>>(new Map());
+  const lastHistoryPush = useRef<number>(0);
 
   // Seed per-worker metrics from overview when it loads
   useEffect(() => {
@@ -128,6 +129,7 @@ export default function DashboardPage() {
       network_tx_total: netTxSum,
       container_count: containerSum,
       running_count: runningSum,
+      online_workers: workers.size,
     };
   }, []);
 
@@ -185,7 +187,7 @@ export default function DashboardPage() {
         // Compute fleet aggregate
         const aggregate = computeFleetAggregate();
 
-        // Update overview with fleet averages
+        // Update overview with fleet averages (always, for KPI numbers)
         dispatch(
           updateOverviewField({
             fleet_cpu_avg: aggregate.cpu_avg,
@@ -195,8 +197,12 @@ export default function DashboardPage() {
           }),
         );
 
-        // Push to fleet history for near-real-time updates
-        dispatch(pushFleetHistoryPoint(aggregate));
+        // Throttle fleet history pushes to every 10s to reduce sparkline jitter
+        const now = Date.now();
+        if (now - lastHistoryPush.current >= 10_000) {
+          lastHistoryPush.current = now;
+          dispatch(pushFleetHistoryPoint(aggregate));
+        }
       }
 
       if (event.type === "worker_connected") {
@@ -204,6 +210,10 @@ export default function DashboardPage() {
         if (event.worker_id != null) {
           workerHeartbeatCount.current.set(event.worker_id, 0);
         }
+        // Push a history point immediately for worker count change
+        const connectAggregate = computeFleetAggregate();
+        connectAggregate.online_workers = (connectAggregate.online_workers ?? 0) + 1;
+        dispatch(pushFleetHistoryPoint(connectAggregate));
       }
 
       if (event.type === "worker_disconnected") {
@@ -212,6 +222,9 @@ export default function DashboardPage() {
           workerMetricsRef.current.delete(event.worker_id as number);
           workerHeartbeatCount.current.delete(event.worker_id);
         }
+        // Push a history point immediately for worker count change
+        const disconnectAggregate = computeFleetAggregate();
+        dispatch(pushFleetHistoryPoint(disconnectAggregate));
       }
 
       if (event.type === "container_status" && event.payload) {
@@ -260,6 +273,10 @@ export default function DashboardPage() {
     () => extractHistory(fleetHistory, "running_count"),
     [fleetHistory],
   );
+  const workerHistory = useMemo(() => {
+    if (fleetHistory.length === 0) return [];
+    return fleetHistory.map((p) => p.online_workers ?? 0);
+  }, [fleetHistory]);
 
   return (
     <div className="dash-page">
@@ -279,6 +296,7 @@ export default function DashboardPage() {
         memHistory={memHistory}
         netHistory={netHistory}
         containerHistory={containerHistory}
+        workerHistory={workerHistory}
       />
 
       {/* Topology + Event Stream (resizable) */}

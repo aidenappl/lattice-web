@@ -10,12 +10,14 @@ export function DashboardKPIRow({
   memHistory,
   netHistory,
   containerHistory,
+  workerHistory,
 }: {
   overview: OverviewData | null;
   cpuHistory: number[];
   memHistory: number[];
   netHistory: number[];
   containerHistory: number[];
+  workerHistory: number[];
 }) {
   return (
     <div className="card dash-kpi-row">
@@ -43,7 +45,7 @@ export function DashboardKPIRow({
           )}
         </div>
         <div className="kpi-spark">
-          <Sparkline data={cpuHistory} color="var(--healthy)" />
+          <Sparkline data={workerHistory} color="var(--healthy)" />
         </div>
       </div>
 
