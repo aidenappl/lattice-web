@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useMemo, useRef } from "react";
+import { useEffect, useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -87,6 +87,10 @@ export default function DashboardPage() {
   const workerHeartbeatCount = useRef<Map<number, number>>(new Map());
   const lastHistoryPush = useRef<number>(0);
 
+  // Worker health history — tracked independently from fleet metrics
+  const [workerHealthHistory, setWorkerHealthHistory] = useState<number[]>([]);
+  const workerHealthSeeded = useRef(false);
+
   // Seed per-worker metrics from overview when it loads
   useEffect(() => {
     if (overview?.worker_metrics && workerMetricsRef.current.size === 0) {
@@ -100,6 +104,12 @@ export default function DashboardPage() {
           running: w.running ?? 0,
         });
       });
+    }
+    // Seed worker health history with a flat line at the current online count
+    if (overview && !workerHealthSeeded.current) {
+      workerHealthSeeded.current = true;
+      const count = overview.online_workers;
+      setWorkerHealthHistory(new Array(20).fill(count));
     }
   }, [overview]);
 
@@ -197,9 +207,10 @@ export default function DashboardPage() {
           }),
         );
 
-        // Throttle fleet history pushes to every 10s to reduce sparkline jitter
+        // Throttle fleet history pushes to once per heartbeat cycle (~15s)
+        // This ensures one clean data point per cycle instead of 5 overlapping ones
         const now = Date.now();
-        if (now - lastHistoryPush.current >= 10_000) {
+        if (now - lastHistoryPush.current >= 14_000) {
           lastHistoryPush.current = now;
           dispatch(pushFleetHistoryPoint(aggregate));
         }
@@ -210,10 +221,10 @@ export default function DashboardPage() {
         if (event.worker_id != null) {
           workerHeartbeatCount.current.set(event.worker_id, 0);
         }
-        // Push a history point immediately for worker count change
-        const connectAggregate = computeFleetAggregate();
-        connectAggregate.online_workers = (connectAggregate.online_workers ?? 0) + 1;
-        dispatch(pushFleetHistoryPoint(connectAggregate));
+        setWorkerHealthHistory((prev) => {
+          const count = workerMetricsRef.current.size + 1;
+          return [...prev.slice(-59), count];
+        });
       }
 
       if (event.type === "worker_disconnected") {
@@ -222,9 +233,10 @@ export default function DashboardPage() {
           workerMetricsRef.current.delete(event.worker_id as number);
           workerHeartbeatCount.current.delete(event.worker_id);
         }
-        // Push a history point immediately for worker count change
-        const disconnectAggregate = computeFleetAggregate();
-        dispatch(pushFleetHistoryPoint(disconnectAggregate));
+        setWorkerHealthHistory((prev) => {
+          const count = workerMetricsRef.current.size;
+          return [...prev.slice(-59), count];
+        });
       }
 
       if (event.type === "container_status" && event.payload) {
@@ -273,10 +285,6 @@ export default function DashboardPage() {
     () => extractHistory(fleetHistory, "running_count"),
     [fleetHistory],
   );
-  const workerHistory = useMemo(() => {
-    if (fleetHistory.length === 0) return [];
-    return fleetHistory.map((p) => p.online_workers ?? 0);
-  }, [fleetHistory]);
 
   return (
     <div className="dash-page">
@@ -296,7 +304,7 @@ export default function DashboardPage() {
         memHistory={memHistory}
         netHistory={netHistory}
         containerHistory={containerHistory}
-        workerHistory={workerHistory}
+        workerHistory={workerHealthHistory}
       />
 
       {/* Topology + Event Stream (resizable) */}

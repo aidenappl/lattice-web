@@ -194,11 +194,9 @@ export function FleetResourcePanel({
             color={colors[metric]}
             fill
             maxValue={
-              metric === "cpu" || metric === "mem"
-                ? 100
-                : metric === "req"
-                  ? Math.max(overview?.total_containers ?? 1, 1)
-                  : undefined
+              metric === "req"
+                ? Math.max(overview?.total_containers ?? 1, 1)
+                : undefined
             }
           />
         </div>
