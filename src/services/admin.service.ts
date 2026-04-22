@@ -1,4 +1,4 @@
-import type { User, VersionInfo, OverviewData, FleetMetricsPoint, AuditLogEntry, WebhookConfig, GlobalEnvVar } from "@/types";
+import type { User, VersionInfo, OverviewData, FleetMetricsPoint, AuditLogEntry, WebhookConfig, GlobalEnvVar, HealthAnomaly } from "@/types";
 import { fetchApi } from "./api.service";
 
 export const reqGetOverview = () =>
@@ -11,6 +11,12 @@ export const reqGetFleetMetrics = (range?: string) =>
     fetchApi<FleetMetricsPoint[]>({
         method: "GET",
         url: `/admin/fleet-metrics${range ? `?range=${range}` : ""}`,
+    });
+
+export const reqGetAnomalies = () =>
+    fetchApi<HealthAnomaly[]>({
+        method: "GET",
+        url: "/admin/anomalies",
     });
 
 export const reqGetAuditLog = () =>

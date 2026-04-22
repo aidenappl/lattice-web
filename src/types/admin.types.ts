@@ -53,6 +53,17 @@ export type FleetMetricsPoint = {
     running_count: number;
 };
 
+export type HealthAnomaly = {
+    id: string;
+    type: "orphaned_container" | "missing_container" | "status_mismatch" | "unmanaged_container" | "stale_state";
+    worker_id: number;
+    worker_name: string;
+    container_name?: string;
+    message: string;
+    detected_at: string;
+    details?: Record<string, unknown>;
+};
+
 export type GlobalEnvVar = {
     id: number;
     key: string;

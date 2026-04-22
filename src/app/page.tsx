@@ -24,6 +24,7 @@ import { DeploymentTimelineMini } from "@/components/dashboard/DeploymentTimelin
 import { FleetResourcePanel } from "@/components/dashboard/FleetResourcePanel";
 import { RecentActivityPanel } from "@/components/dashboard/RecentActivityPanel";
 import { FailingStacksBanner } from "@/components/dashboard/FailingStacksBanner";
+import AnomalyBanner from "@/components/dashboard/AnomalyBanner";
 import { ResizableSplit } from "@/components/ui/ResizableSplit";
 import type {
   WorkerLatestMetrics,
@@ -262,6 +263,9 @@ export default function DashboardPage() {
 
   return (
     <div className="dash-page">
+      {/* Health anomaly banner */}
+      <AnomalyBanner />
+
       {/* Failing stacks banner */}
       <FailingStacksBanner
         count={overview?.failed_stacks ?? 0}
