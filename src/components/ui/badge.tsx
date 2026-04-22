@@ -49,6 +49,7 @@ type StatusType =
   | "healthy"
   | "unhealthy"
   | "starting"
+  | "restarting"
   | "none";
 
 const statusVariantMap: Record<
@@ -68,6 +69,7 @@ const statusVariantMap: Record<
   deploying: "warning",
   pending: "warning",
   starting: "warning",
+  restarting: "error",
   stopped: "default",
   maintenance: "default",
   rolled_back: "default",
@@ -89,6 +91,7 @@ const statusDotMap: Record<StatusType, string> = {
   deploying: "bg-[#eab308]",
   pending: "bg-[#eab308]",
   starting: "bg-[#eab308]",
+  restarting: "bg-[#ef4444]",
   stopped: "bg-[#888888]",
   maintenance: "bg-[#888888]",
   rolled_back: "bg-[#888888]",
