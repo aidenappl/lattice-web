@@ -9,6 +9,12 @@ export * from "./network.types";
 export * from "./dashboard.types";
 export * from "./webhook.types";
 
+export type SearchResults = {
+    workers: { id: number; name: string; hostname: string; status: string }[];
+    stacks: { id: number; name: string; description: string | null; status: string }[];
+    containers: { id: number; stack_id: number; name: string; image: string; tag: string; status: string }[];
+};
+
 export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 
 export type ApiSuccess<T> = {

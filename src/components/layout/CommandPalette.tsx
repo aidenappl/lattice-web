@@ -16,8 +16,11 @@ import {
   faGear,
   faPlus,
   faArrowRight,
+  faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import type { SearchResults } from "@/types";
+import { reqSearch } from "@/services/admin.service";
 
 interface Command {
   group: string;
@@ -49,15 +52,64 @@ interface CommandPaletteProps {
   onClose: () => void;
 }
 
+interface ResultItem {
+  group: string;
+  label: string;
+  hint: string;
+  icon: IconDefinition;
+  path: string;
+}
+
+function buildSearchItems(data: SearchResults): ResultItem[] {
+  const items: ResultItem[] = [];
+
+  for (const w of data.workers) {
+    items.push({
+      group: "Workers",
+      label: w.name,
+      hint: w.hostname,
+      icon: faServer,
+      path: `/workers/${w.id}`,
+    });
+  }
+
+  for (const s of data.stacks) {
+    items.push({
+      group: "Stacks",
+      label: s.name,
+      hint: s.status,
+      icon: faLayerGroup,
+      path: `/stacks/${s.id}`,
+    });
+  }
+
+  for (const c of data.containers) {
+    items.push({
+      group: "Containers",
+      label: c.name,
+      hint: `${c.image}:${c.tag}`,
+      icon: faCubes,
+      path: `/containers/${c.id}`,
+    });
+  }
+
+  return items;
+}
+
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
+  const [searchResults, setSearchResults] = useState<ResultItem[]>([]);
+  const [searching, setSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const allCommands = useMemo(() => [...NAV_COMMANDS, ...ACTION_COMMANDS], []);
 
-  const filtered = useMemo(() => {
+  // Filter static commands by query
+  const filteredCommands = useMemo(() => {
     if (!query) return allCommands;
     const q = query.toLowerCase();
     return allCommands.filter(
@@ -67,9 +119,50 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     );
   }, [query, allCommands]);
 
+  // Combined list: search results first, then matching commands
+  const items: ResultItem[] = useMemo(() => {
+    if (!query) return allCommands;
+    return [...searchResults, ...filteredCommands];
+  }, [query, searchResults, filteredCommands, allCommands]);
+
+  // Debounced API search
+  useEffect(() => {
+    if (!open) return;
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (abortRef.current) abortRef.current.abort();
+
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      const res = await reqSearch(trimmed);
+      if (controller.signal.aborted) return;
+
+      if (res.success) {
+        setSearchResults(buildSearchItems(res.data));
+      } else {
+        setSearchResults([]);
+      }
+      setSearching(false);
+    }, 200);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, open]);
+
   const execute = useCallback(
-    (cmd: Command) => {
-      router.push(cmd.path);
+    (item: ResultItem) => {
+      router.push(item.path);
       onClose();
     },
     [router, onClose],
@@ -79,7 +172,13 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     if (open) {
       setQuery("");
       setSelected(0);
+      setSearchResults([]);
+      setSearching(false);
       setTimeout(() => inputRef.current?.focus(), 50);
+    } else {
+      // Cleanup on close
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (abortRef.current) abortRef.current.abort();
     }
   }, [open]);
 
@@ -90,35 +189,44 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         onClose();
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelected((s) => Math.min(s + 1, filtered.length - 1));
+        setSelected((s) => Math.min(s + 1, items.length - 1));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelected((s) => Math.max(s - 1, 0));
       } else if (e.key === "Enter") {
         e.preventDefault();
-        if (filtered[selected]) execute(filtered[selected]);
+        if (items[selected]) execute(items[selected]);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, filtered, selected, execute, onClose]);
-
-  // Global ⌘K listener is handled by the parent
+  }, [open, items, selected, execute, onClose]);
 
   if (!open) return null;
+
+  // Group items for rendering with section headers
+  const grouped: { group: string; items: (ResultItem & { index: number })[] }[] = [];
+  let currentGroup = "";
+  items.forEach((item, i) => {
+    if (item.group !== currentGroup) {
+      currentGroup = item.group;
+      grouped.push({ group: currentGroup, items: [] });
+    }
+    grouped[grouped.length - 1].items.push({ ...item, index: i });
+  });
 
   return (
     <div className="cmdk-overlay" onClick={onClose}>
       <div className="cmdk" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
           <FontAwesomeIcon
-            icon={faMagnifyingGlass}
-            className="h-3.5 w-3.5 text-muted shrink-0"
+            icon={searching ? faSpinner : faMagnifyingGlass}
+            className={`h-3.5 w-3.5 text-muted shrink-0 ${searching ? "animate-spin" : ""}`}
           />
           <input
             ref={inputRef}
             autoFocus
-            placeholder="Type to search, or a command..."
+            placeholder="Search containers, stacks, workers..."
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -130,27 +238,32 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         </div>
 
         <div className="cmdk-results">
-          {filtered.length === 0 && (
+          {items.length === 0 && !searching && (
             <div className="px-4 py-5 text-center text-[13px] text-muted">
               No matches for &ldquo;{query}&rdquo;
             </div>
           )}
-          {filtered.map((cmd, i) => (
-            <div
-              key={cmd.label + i}
-              className={`cmdk-item ${i === selected ? "selected" : ""}`}
-              onClick={() => execute(cmd)}
-              onMouseEnter={() => setSelected(i)}
-            >
-              <FontAwesomeIcon
-                icon={cmd.icon}
-                className="h-3.5 w-3.5 text-muted shrink-0"
-              />
-              <span className="flex-1 text-[13px]">{cmd.label}</span>
-              <span className="mono text-[10px] text-dimmed uppercase tracking-wider">
-                {cmd.hint}
-              </span>
-              {i === selected && <span className="kbd text-[10px]">&crarr;</span>}
+          {grouped.map((section) => (
+            <div key={section.group}>
+              <div className="cmdk-group-label">{section.group}</div>
+              {section.items.map((item) => (
+                <div
+                  key={item.path + item.index}
+                  className={`cmdk-item ${item.index === selected ? "selected" : ""}`}
+                  onClick={() => execute(item)}
+                  onMouseEnter={() => setSelected(item.index)}
+                >
+                  <FontAwesomeIcon
+                    icon={item.icon}
+                    className="h-3.5 w-3.5 text-muted shrink-0"
+                  />
+                  <span className="flex-1 text-[13px]">{item.label}</span>
+                  <span className="mono text-[10px] text-dimmed uppercase tracking-wider">
+                    {item.hint}
+                  </span>
+                  {item.index === selected && <span className="kbd text-[10px]">&crarr;</span>}
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -166,7 +279,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           <span className="flex items-center gap-1">
             <span className="kbd">esc</span> close
           </span>
-          <span className="ml-auto">{filtered.length} results</span>
+          <span className="ml-auto">{items.length} results</span>
         </div>
       </div>
     </div>

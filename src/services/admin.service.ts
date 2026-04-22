@@ -1,4 +1,4 @@
-import type { User, VersionInfo, OverviewData, FleetMetricsPoint, AuditLogEntry, WebhookConfig, GlobalEnvVar, HealthAnomaly } from "@/types";
+import type { User, VersionInfo, OverviewData, FleetMetricsPoint, AuditLogEntry, WebhookConfig, GlobalEnvVar, HealthAnomaly, SearchResults } from "@/types";
 import { fetchApi } from "./api.service";
 
 export const reqGetOverview = () =>
@@ -203,3 +203,10 @@ export const reqGetSSOConfig = () =>
 
 export const reqUpdateSSOConfig = (data: Partial<SSOConfigData>) =>
     fetchApi<null>({ method: "PUT", url: "/admin/sso-config", data });
+
+// Search
+export const reqSearch = (q: string) =>
+    fetchApi<SearchResults>({
+        method: "GET",
+        url: `/admin/search?q=${encodeURIComponent(q)}`,
+    });
