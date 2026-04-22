@@ -1,15 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Logo } from "@/components/ui/logo";
-import { useUser } from "@/store/hooks";
+import { reqGetSelf } from "@/services/auth.service";
+import { reqLogout } from "@/services/auth.service";
 
 export default function PendingApprovalPage() {
+  const [email, setEmail] = useState("");
+
   useEffect(() => {
     document.title = "Lattice - Pending Approval";
+    reqGetSelf().then((res) => {
+      if (res.success) {
+        setEmail(res.data.email);
+      }
+    });
   }, []);
-
-  const user = useUser();
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-background gap-6 p-8">
@@ -19,15 +25,19 @@ export default function PendingApprovalPage() {
           Account Pending Approval
         </h1>
         <p className="text-sm text-muted mb-4">
-          Your account ({user?.email}) has been created but requires admin
-          approval before you can access the dashboard.
+          {email
+            ? `Your account (${email}) has been created but requires admin approval before you can access the dashboard.`
+            : "Your account has been created but requires admin approval before you can access the dashboard."}
         </p>
         <p className="text-xs text-dimmed">
           Please contact your administrator to approve your account.
         </p>
       </div>
       <button
-        onClick={() => window.location.replace("/login")}
+        onClick={async () => {
+          await reqLogout();
+          window.location.replace("/login");
+        }}
         className="btn btn-secondary mt-4"
       >
         Sign Out
