@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { Avatar } from "@/components/ui/avatar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faGauge,
@@ -204,27 +205,12 @@ export function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProps) {
             href="/profile"
             className="flex items-center gap-2.5 rounded-md -mx-1 px-1 py-1 hover:bg-surface-elevated transition-colors"
           >
-            {user?.profile_image_url ? (
-              <img
-                src={user.profile_image_url}
-                alt=""
-                className="shrink-0 rounded-full object-cover"
-                style={{ width: 28, height: 28 }}
-              />
-            ) : (
-              <div
-                className="shrink-0 flex items-center justify-center rounded-full text-[11px] font-semibold"
-                style={{
-                  width: 28,
-                  height: 28,
-                  background:
-                    "linear-gradient(135deg, var(--brand), var(--violet))",
-                  color: "#000",
-                }}
-              >
-                {initials}
-              </div>
-            )}
+            <Avatar
+              src={user?.profile_image_url}
+              name={user?.name}
+              email={user?.email}
+              size={28}
+            />
             <div className="flex-1 min-w-0">
               <div className="text-[12px] font-medium truncate">
                 {user?.name || user?.email || "User"}

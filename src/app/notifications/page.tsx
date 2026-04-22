@@ -108,8 +108,14 @@ function EmailTab() {
             setTesting(false);
             return;
         }
-        // For now, just confirm config was saved -- actual test email would require a backend endpoint
-        toast.success("Configuration saved. A test email will be sent if SMTP is properly configured.");
+        // Send actual test email via backend
+        const { reqTestSMTP } = await import("@/services/admin.service");
+        const testRes = await reqTestSMTP();
+        if (testRes.success) {
+            toast.success("Test email sent! Check your inbox.");
+        } else {
+            toast.error("error_message" in testRes ? testRes.error_message : "Failed to send test email");
+        }
         await loadConfig();
         setTesting(false);
     };

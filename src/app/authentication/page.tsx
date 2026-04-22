@@ -18,6 +18,7 @@ import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
 import { Alert } from "@/components/ui/alert";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -193,13 +194,7 @@ function UsersTab({ admin }: { admin: boolean }) {
                 <tr key={u.id}>
                   <td>
                     <div className="flex items-center gap-2.5">
-                      {u.profile_image_url ? (
-                        <img src={u.profile_image_url} alt="" className="h-7 w-7 rounded-full object-cover shrink-0" />
-                      ) : (
-                        <div className="h-7 w-7 rounded-full bg-surface-active flex items-center justify-center text-[10px] font-semibold text-muted shrink-0">
-                          {(u.name || u.email)[0].toUpperCase()}
-                        </div>
-                      )}
+                      <Avatar src={u.profile_image_url} name={u.name} email={u.email} size={28} />
                       <div>
                         <p className="text-sm font-medium text-primary">{u.name || u.email}</p>
                         {u.name && <p className="text-xs text-muted">{u.email}</p>}

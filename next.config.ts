@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://kit.fontawesome.com https://ka-p.fontawesome.com",
               "style-src 'self' 'unsafe-inline' https://ka-p.fontawesome.com",
               "font-src 'self' https://ka-p.fontawesome.com",
-              "img-src 'self' data: blob:",
+              "img-src 'self' data: blob: https:",
               "connect-src 'self' wss: ws: https:",
               "frame-ancestors 'none'",
             ].join("; "),

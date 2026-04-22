@@ -5,6 +5,7 @@ import { useAuth } from "@/store/hooks";
 import { reqGetSelf, reqUpdateSelf } from "@/services/auth.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { formatDate } from "@/lib/utils";
@@ -33,6 +34,8 @@ export default function ProfilePage() {
   const dispatch = useAppDispatch();
 
   const [name, setName] = useState("");
+  const [profileImageUrl, setProfileImageUrl] = useState("");
+  const [editingAvatar, setEditingAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
   const [nameChanged, setNameChanged] = useState(false);
 
@@ -46,6 +49,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (user) {
       setName(user.name || "");
+      setProfileImageUrl(user.profile_image_url || "");
     }
   }, [user]);
 
@@ -118,31 +122,74 @@ export default function ProfilePage() {
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
       <div className="flex flex-col items-center gap-3">
-        {user.profile_image_url ? (
-          <img
-            src={user.profile_image_url}
-            alt=""
-            className="rounded-full object-cover"
-            style={{ width: 72, height: 72 }}
-          />
-        ) : (
-          <div
-            className="flex items-center justify-center rounded-full text-xl font-semibold"
-            style={{
-              width: 72,
-              height: 72,
-              background: "linear-gradient(135deg, var(--brand), var(--violet))",
-              color: "#000",
-            }}
-          >
-            {(user.name || user.email)
-              .split(" ")
-              .map((n) => n[0])
-              .join("")
-              .toUpperCase()
-              .slice(0, 2)}
+        <button
+          type="button"
+          onClick={() => setEditingAvatar(!editingAvatar)}
+          className="relative group cursor-pointer rounded-full"
+          title="Change profile picture"
+        >
+          <Avatar src={user.profile_image_url} name={user.name} email={user.email} size={72} />
+          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="text-white text-[10px] font-medium">Edit</span>
+          </div>
+        </button>
+
+        {editingAvatar && (
+          <div className="w-full max-w-sm space-y-2">
+            <Input
+              id="profile-image-url"
+              label="Profile Image URL"
+              type="url"
+              placeholder="https://example.com/photo.jpg"
+              value={profileImageUrl}
+              onChange={(e) => setProfileImageUrl(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                disabled={saving}
+                onClick={async () => {
+                  setSaving(true);
+                  const res = await reqUpdateSelf({ profile_image_url: profileImageUrl || undefined });
+                  setSaving(false);
+                  if (res.success) {
+                    toast.success("Profile picture updated");
+                    dispatch(setUser(res.data as User));
+                    setEditingAvatar(false);
+                  } else {
+                    toast.error("Failed to update picture");
+                  }
+                }}
+              >
+                {saving ? "Saving..." : "Save"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditingAvatar(false)}>
+                Cancel
+              </Button>
+              {user.profile_image_url && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={saving}
+                  onClick={async () => {
+                    setSaving(true);
+                    const res = await reqUpdateSelf({ profile_image_url: "" });
+                    setSaving(false);
+                    if (res.success) {
+                      toast.success("Profile picture removed");
+                      dispatch(setUser(res.data as User));
+                      setProfileImageUrl("");
+                      setEditingAvatar(false);
+                    }
+                  }}
+                >
+                  Remove
+                </Button>
+              )}
+            </div>
           </div>
         )}
+
         <div className="text-center">
           <h1 className="text-lg font-semibold text-primary">Profile</h1>
           <p className="text-sm text-secondary mt-1">

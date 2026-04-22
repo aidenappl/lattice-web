@@ -149,6 +149,9 @@ export const reqGetSMTPConfig = () =>
 export const reqUpdateSMTPConfig = (data: Partial<SMTPConfigData>) =>
     fetchApi<null>({ method: "PUT", url: "/admin/smtp-config", data });
 
+export const reqTestSMTP = () =>
+    fetchApi<null>({ method: "POST", url: "/admin/smtp-config/test" });
+
 // SSO Configuration
 export type SSOConfigData = {
     enabled: boolean;

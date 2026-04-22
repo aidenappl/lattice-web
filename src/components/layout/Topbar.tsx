@@ -16,6 +16,7 @@ import {
   faUser,
 } from "@fortawesome/free-solid-svg-icons";
 import { cn } from "@/lib/utils";
+import { Avatar } from "@/components/ui/avatar";
 import { useTheme, type Theme } from "@/components/ThemeProvider";
 import { useAuth } from "@/store/hooks";
 import {
@@ -219,26 +220,7 @@ function UserMenu() {
         title="Account"
         style={{ width: 32, height: 32 }}
       >
-        {user?.profile_image_url ? (
-          <img
-            src={user.profile_image_url}
-            alt=""
-            className="rounded-full object-cover"
-            style={{ width: 24, height: 24 }}
-          />
-        ) : (
-          <div
-            className="flex items-center justify-center rounded-full text-[10px] font-semibold"
-            style={{
-              width: 24,
-              height: 24,
-              background: "var(--surface-elevated)",
-              color: "var(--text-primary)",
-            }}
-          >
-            {initials}
-          </div>
-        )}
+        <Avatar src={user?.profile_image_url} name={user?.name} email={user?.email} size={24} />
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-52 rounded-lg border border-border-strong bg-background-alt p-1 shadow-lg z-50">
