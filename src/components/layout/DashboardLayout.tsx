@@ -10,6 +10,7 @@ import { Toaster } from "react-hot-toast";
 import { ConfirmProvider } from "@/components/ui/confirm-modal";
 import { VersionCheckProvider } from "@/hooks/useVersionCheck";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useDesktopNotifications } from "@/hooks/useDesktopNotifications";
 import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
@@ -26,6 +27,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   useNotifications();
+  useDesktopNotifications();
 
   // Load collapsed state from localStorage
   useEffect(() => {

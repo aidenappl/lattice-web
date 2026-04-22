@@ -131,6 +131,24 @@ export const reqDeleteGlobalEnvVar = (id: number) =>
         url: `/admin/env-vars/${id}`,
     });
 
+// SMTP Configuration
+export type SMTPConfigData = {
+    enabled: boolean;
+    host: string;
+    port: string;
+    username: string;
+    password: string;
+    from_email: string;
+    from_name: string;
+    recipients: string;
+};
+
+export const reqGetSMTPConfig = () =>
+    fetchApi<SMTPConfigData>({ method: "GET", url: "/admin/smtp-config" });
+
+export const reqUpdateSMTPConfig = (data: Partial<SMTPConfigData>) =>
+    fetchApi<null>({ method: "PUT", url: "/admin/smtp-config", data });
+
 // SSO Configuration
 export type SSOConfigData = {
     enabled: boolean;
