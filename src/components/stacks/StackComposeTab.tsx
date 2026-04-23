@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
+import yaml from "js-yaml";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,31 @@ export function StackComposeTab({
   ).length;
   const missingCount = envVarRefs.size - definedCount;
 
+  const [formatError, setFormatError] = useState("");
+
+  const handleFormat = useCallback(() => {
+    if (!composeYaml.trim()) return;
+    try {
+      const docs = yaml.loadAll(composeYaml);
+      const formatted = docs
+        .map((doc) =>
+          yaml.dump(doc, {
+            indent: 2,
+            lineWidth: -1,
+            noRefs: true,
+            sortKeys: false,
+            quotingType: '"',
+            forceQuotes: false,
+          })
+        )
+        .join("---\n");
+      onChange(formatted.trimEnd() + "\n");
+      setFormatError("");
+    } catch (err) {
+      setFormatError(err instanceof Error ? err.message : "Invalid YAML");
+    }
+  }, [composeYaml, onChange]);
+
   const lineCount = composeYaml.split("\n").length;
 
   return (
@@ -68,6 +94,14 @@ export function StackComposeTab({
             <span className="text-[10px] text-muted font-mono">
               {lineCount} lines
             </span>
+            <button
+              onClick={handleFormat}
+              disabled={!composeYaml.trim() || !userCanEdit}
+              className="text-[10px] px-2 py-0.5 rounded transition-colors text-muted hover:text-primary hover:bg-surface-elevated disabled:opacity-40 disabled:pointer-events-none"
+              title="Auto-format YAML"
+            >
+              Format
+            </button>
             <button
               onClick={() => setWordWrap(!wordWrap)}
               className={`text-[10px] px-2 py-0.5 rounded transition-colors ${
@@ -124,6 +158,12 @@ export function StackComposeTab({
       {composeError && (
         <Alert variant="error" onDismiss={onDismissError}>
           {composeError}
+        </Alert>
+      )}
+
+      {formatError && (
+        <Alert variant="error" onDismiss={() => setFormatError("")}>
+          Format failed: {formatError}
         </Alert>
       )}
 

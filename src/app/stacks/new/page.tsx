@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo, DragEvent } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback, DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark, faPlus } from "@fortawesome/free-solid-svg-icons";
@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { Alert } from "@/components/ui/alert";
 import { useConfirm } from "@/components/ui/confirm-modal";
+import yaml from "js-yaml";
 
 type EnvRow = { id: number; key: string; value: string };
 
@@ -261,6 +262,28 @@ export default function NewStackPage() {
 
   const handleDragLeave = () => setDragOver(false);
 
+  const handleFormat = useCallback(() => {
+    if (!composeYaml.trim()) return;
+    try {
+      const docs = yaml.loadAll(composeYaml);
+      const formatted = docs
+        .map((doc) =>
+          yaml.dump(doc, {
+            indent: 2,
+            lineWidth: -1,
+            noRefs: true,
+            sortKeys: false,
+            quotingType: '"',
+            forceQuotes: false,
+          })
+        )
+        .join("---\n");
+      setComposeYaml(formatted.trimEnd() + "\n");
+    } catch (err) {
+      setError(err instanceof Error ? `Format failed: ${err.message}` : "Invalid YAML");
+    }
+  }, [composeYaml]);
+
   // ── Env row handlers ────────────────────────────────────────────────────────
 
   const updateEnvRow = (id: number, field: "key" | "value", val: string) => {
@@ -436,14 +459,24 @@ export default function NewStackPage() {
                 Browse file
               </Button>
               {composeYaml && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setComposeYaml("")}
-                >
-                  Clear
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleFormat}
+                  >
+                    Format
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setComposeYaml("")}
+                  >
+                    Clear
+                  </Button>
+                </>
               )}
             </div>
           </div>

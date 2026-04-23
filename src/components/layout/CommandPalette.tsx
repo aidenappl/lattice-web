@@ -30,6 +30,20 @@ interface Command {
   path: string;
 }
 
+/** Highlight matching substring in text. Returns JSX fragments. */
+function Highlight({ text, query: q }: { text: string; query: string }) {
+  if (!q) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx === -1) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span className="text-info font-semibold">{text.slice(idx, idx + q.length)}</span>
+      {text.slice(idx + q.length)}
+    </>
+  );
+}
+
 const NAV_COMMANDS: Command[] = [
   { group: "Navigation", label: "Dashboard", hint: "overview", icon: faGauge, path: "/" },
   { group: "Navigation", label: "Workers", hint: "infrastructure", icon: faServer, path: "/workers" },
@@ -133,7 +147,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     if (abortRef.current) abortRef.current.abort();
 
     const trimmed = query.trim();
-    if (trimmed.length < 2) {
+    if (trimmed.length < 1) {
       setSearchResults([]);
       setSearching(false);
       return;
@@ -153,7 +167,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         setSearchResults([]);
       }
       setSearching(false);
-    }, 200);
+    }, 80);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -257,9 +271,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                     icon={item.icon}
                     className="h-3.5 w-3.5 text-muted shrink-0"
                   />
-                  <span className="flex-1 text-[13px]">{item.label}</span>
+                  <span className="flex-1 text-[13px]">
+                    <Highlight text={item.label} query={query} />
+                  </span>
                   <span className="mono text-[10px] text-dimmed uppercase tracking-wider">
-                    {item.hint}
+                    <Highlight text={item.hint} query={query} />
                   </span>
                   {item.index === selected && <span className="kbd text-[10px]">&crarr;</span>}
                 </div>

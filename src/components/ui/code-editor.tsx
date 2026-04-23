@@ -232,10 +232,52 @@ export function CodeEditor({
       const { selectionStart: start, selectionEnd: end, value: val } = ta;
       const hasSelection = start !== end;
 
-      // Tab / Shift+Tab
+      // Tab / Shift+Tab — multi-line indent/dedent when selection spans lines
       if (e.key === "Tab") {
         e.preventDefault();
-        if (e.shiftKey) {
+        const selText = val.slice(start, end);
+        const multiLine = hasSelection && selText.includes("\n");
+
+        if (multiLine) {
+          // Find the full range of lines touched by the selection
+          const blockStart = val.lastIndexOf("\n", start - 1) + 1;
+          const blockEnd = val.indexOf("\n", end - 1);
+          const blockEndFinal = blockEnd === -1 ? val.length : blockEnd;
+          const block = val.slice(blockStart, blockEndFinal);
+          const lines = block.split("\n");
+
+          let newLines: string[];
+          let startDelta = 0;
+          let totalDelta = 0;
+
+          if (e.shiftKey) {
+            // Dedent each line
+            newLines = lines.map((line, i) => {
+              if (line.startsWith(TAB)) {
+                if (i === 0) startDelta = -TAB.length;
+                totalDelta -= TAB.length;
+                return line.slice(TAB.length);
+              }
+              return line;
+            });
+          } else {
+            // Indent each line
+            newLines = lines.map((line, i) => {
+              if (i === 0) startDelta = TAB.length;
+              totalDelta += TAB.length;
+              return TAB + line;
+            });
+          }
+
+          const replacement = newLines.join("\n");
+          ta.setSelectionRange(blockStart, blockEndFinal);
+          nativeInsert(ta, replacement);
+          requestAnimationFrame(() => {
+            ta.selectionStart = Math.max(blockStart, start + startDelta);
+            ta.selectionEnd = end + totalDelta;
+          });
+        } else if (e.shiftKey) {
+          // Single line dedent
           const lineStart = val.lastIndexOf("\n", start - 1) + 1;
           const linePrefix = val.slice(lineStart, lineStart + TAB.length);
           if (linePrefix === TAB) {
@@ -247,6 +289,7 @@ export function CodeEditor({
             });
           }
         } else {
+          // Single cursor indent
           ta.setSelectionRange(start, end);
           nativeInsert(ta, TAB);
           requestAnimationFrame(() => {
