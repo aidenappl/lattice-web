@@ -20,6 +20,8 @@ const TAB = "  ";
 
 const SHARED_STYLES_BASE =
   "px-3 py-2 text-sm font-mono leading-5";
+const LINE_HEIGHT_PX = 20; // must match leading-5 (1.25rem)
+const PADDING_Y_PX = 8;    // must match py-2 (0.5rem)
 
 // ─── Syntax highlighting ─────────────────────────────────────────────────────
 
@@ -269,12 +271,14 @@ export function CodeEditor({
 }: CodeEditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const preRef = useRef<HTMLPreElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
 
   const syncScroll = useCallback(() => {
     if (preRef.current && ref.current) {
       preRef.current.scrollTop = ref.current.scrollTop;
       preRef.current.scrollLeft = ref.current.scrollLeft;
     }
+    if (tooltipRef.current) tooltipRef.current.style.display = "none";
   }, []);
 
   // Re-sync scroll whenever value changes (content reflow can shift positions)
@@ -557,6 +561,46 @@ export function CodeEditor({
     }
   }, [onEnvVarClick]);
 
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLTextAreaElement>) => {
+      const tooltip = tooltipRef.current;
+      const ta = ref.current;
+      if (!tooltip || !ta) return;
+
+      if (errors.length === 0) {
+        tooltip.style.display = "none";
+        return;
+      }
+
+      const rect = ta.getBoundingClientRect();
+      const y = e.clientY - rect.top + ta.scrollTop;
+      const lineIndex = Math.floor((y - PADDING_Y_PX) / LINE_HEIGHT_PX);
+
+      const error = errors.find((err) => err.line === lineIndex);
+      if (error) {
+        tooltip.textContent = error.message;
+        tooltip.style.display = "block";
+
+        const lineTop =
+          PADDING_Y_PX + error.line * LINE_HEIGHT_PX - ta.scrollTop;
+        const tooltipH = tooltip.offsetHeight;
+
+        tooltip.style.top =
+          lineTop - tooltipH - 4 >= 0
+            ? `${lineTop - tooltipH - 4}px`
+            : `${lineTop + LINE_HEIGHT_PX + 4}px`;
+        tooltip.style.left = "12px";
+      } else {
+        tooltip.style.display = "none";
+      }
+    },
+    [errors],
+  );
+
+  const handleMouseLeave = useCallback(() => {
+    if (tooltipRef.current) tooltipRef.current.style.display = "none";
+  }, []);
+
   return (
     <div
       className={cn(
@@ -581,6 +625,8 @@ export function CodeEditor({
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
         onClick={handleTextareaClick}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
         onScroll={syncScroll}
         placeholder={placeholder}
         spellCheck={false}
@@ -596,6 +642,12 @@ export function CodeEditor({
           {errors.length} {errors.length === 1 ? "error" : "errors"}
         </div>
       )}
+      {/* Error tooltip — shown imperatively via ref on mouse hover */}
+      <div
+        ref={tooltipRef}
+        className="absolute z-20 rounded border border-red-500/30 bg-surface-elevated px-2 py-1 text-xs text-red-300 shadow-lg whitespace-nowrap pointer-events-none"
+        style={{ display: "none" }}
+      />
     </div>
   );
 }
