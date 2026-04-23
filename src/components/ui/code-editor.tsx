@@ -114,6 +114,134 @@ function highlightYAMLValue(text: string): string {
   return result;
 }
 
+// ─── Validation ─────────────────────────────────────────────────────────────
+
+interface LineError {
+  line: number;
+  message: string;
+}
+
+function validateJSON(text: string): LineError[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  const errors: LineError[] = [];
+  const lines = text.split("\n");
+
+  lines.forEach((line, i) => {
+    if (/\t/.test(line)) {
+      errors.push({ line: i, message: "Use spaces instead of tabs" });
+    }
+  });
+
+  // Trailing commas: comma followed by closing bracket on a later line
+  lines.forEach((line, i) => {
+    const stripped = line.replace(/"(?:[^"\\]|\\.)*"/g, "").trimEnd();
+    if (!stripped.endsWith(",")) return;
+    for (let j = i + 1; j < lines.length; j++) {
+      const next = lines[j].trim();
+      if (!next) continue;
+      if (next[0] === "}" || next[0] === "]") {
+        errors.push({ line: i, message: "Trailing comma before closing bracket" });
+      }
+      break;
+    }
+  });
+
+  // Overall parse check — locate the error line
+  try {
+    JSON.parse(text);
+  } catch (e) {
+    if (e instanceof SyntaxError) {
+      const posMatch = e.message.match(/position\s+(\d+)/i);
+      const colMatch = e.message.match(/column\s+(\d+)/i);
+      const lineMatch = e.message.match(/line\s+(\d+)/i);
+      let errorLine = lines.length - 1;
+
+      if (lineMatch) {
+        errorLine = Math.max(0, parseInt(lineMatch[1]) - 1);
+      } else if (posMatch) {
+        const pos = parseInt(posMatch[1]);
+        let count = 0;
+        for (let i = 0; i < lines.length; i++) {
+          count += lines[i].length + 1;
+          if (count > pos) { errorLine = i; break; }
+        }
+      } else if (colMatch) {
+        // If only column is available, error is likely on last non-empty line
+        for (let i = lines.length - 1; i >= 0; i--) {
+          if (lines[i].trim()) { errorLine = i; break; }
+        }
+      }
+
+      const msg = e.message.replace(/\s+at position \d+.*$/i, "").replace(/\s+in JSON.*$/i, "");
+      if (!errors.some((err) => err.line === errorLine)) {
+        errors.push({ line: errorLine, message: msg });
+      }
+    }
+  }
+
+  return errors;
+}
+
+function validateYAML(text: string): LineError[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  const errors: LineError[] = [];
+  const lines = text.split("\n");
+
+  // Detect the base indent unit from the first indented line
+  let indentUnit = 2;
+  for (const line of lines) {
+    if (!line.trim() || line.trim().startsWith("#")) continue;
+    const indent = line.match(/^( +)/)?.[1]?.length ?? 0;
+    if (indent > 0) { indentUnit = indent; break; }
+  }
+
+  lines.forEach((line, i) => {
+    if (!line.trim() || line.trim().startsWith("#")) return;
+
+    // Tabs
+    if (/\t/.test(line)) {
+      errors.push({ line: i, message: "YAML forbids tab characters — use spaces" });
+      return;
+    }
+
+    // Indentation must be a multiple of the detected unit
+    const indent = line.match(/^( *)/)?.[1]?.length ?? 0;
+    if (indent > 0 && indent % indentUnit !== 0) {
+      errors.push({ line: i, message: `Indentation (${indent}) is not a multiple of ${indentUnit}` });
+    }
+
+    // Duplicate colon on the same key line (e.g. "key: value: extra")
+    const stripped = line.trim();
+    if (!stripped.startsWith("-") && !stripped.startsWith("#")) {
+      const colonParts = stripped.split(":");
+      if (colonParts.length > 2) {
+        // Allow if value part looks like a time or URL (contains :// or digit:digit)
+        const afterFirst = colonParts.slice(1).join(":");
+        if (!/\d:\d|:\/\//.test(afterFirst)) {
+          errors.push({ line: i, message: "Multiple colons — possible formatting error" });
+        }
+      }
+    }
+  });
+
+  return errors;
+}
+
+function applyLineErrors(html: string, errors: LineError[]): string {
+  if (errors.length === 0) return html;
+  const errorSet = new Set(errors.map((e) => e.line));
+  return html
+    .split("\n")
+    .map((line, i) =>
+      errorSet.has(i) ? `<span class="code-error-line">${line}</span>` : line,
+    )
+    .join("\n");
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 interface CodeEditorProps {
@@ -154,6 +282,12 @@ export function CodeEditor({
     syncScroll();
   }, [value, syncScroll]);
 
+  const errors = useMemo(() => {
+    if (language === "json") return validateJSON(value);
+    if (language === "yaml") return validateYAML(value);
+    return [];
+  }, [value, language]);
+
   const highlighted = useMemo(() => {
     let html: string;
     if (language === "json") html = highlightJSON(value);
@@ -169,8 +303,10 @@ export function CodeEditor({
       });
     }
 
+    html = applyLineErrors(html, errors);
+
     return html;
-  }, [value, language, envVars, onEnvVarClick]);
+  }, [value, language, envVars, onEnvVarClick, errors]);
 
   // Insert text via execCommand to preserve the browser's native undo stack.
   // Falls back to direct value manipulation if execCommand is unavailable.
@@ -424,7 +560,8 @@ export function CodeEditor({
   return (
     <div
       className={cn(
-        "relative rounded-lg border border-border-strong bg-background-alt overflow-hidden focus-within:border-border-emphasis",
+        "relative rounded-lg border bg-background-alt overflow-hidden focus-within:border-border-emphasis",
+        errors.length > 0 ? "border-red-500/40" : "border-border-strong",
         className,
       )}
     >
@@ -432,7 +569,7 @@ export function CodeEditor({
       <pre
         ref={preRef}
         aria-hidden
-        className={`absolute inset-0 ${sharedStyles} overflow-hidden pointer-events-none m-0 [&_.json-key]:text-[#7aa2f7] [&_.json-string]:text-[#9ece6a] [&_.json-number]:text-[#ff9e64] [&_.json-bool]:text-[#ff9e64] [&_.yaml-key]:text-[#7aa2f7] [&_.yaml-colon]:text-muted [&_.yaml-comment]:text-muted [&_.yaml-string]:text-[#9ece6a] [&_.yaml-bool]:text-[#ff9e64] [&_.yaml-number]:text-[#ff9e64] [&_.env-var-defined]:text-healthy [&_.env-var-defined]:font-semibold [&_.env-var-missing]:text-failed [&_.env-var-missing]:font-semibold [&_.env-var-clickable]:underline [&_.env-var-clickable]:decoration-dotted`}
+        className={`absolute inset-0 ${sharedStyles} overflow-hidden pointer-events-none m-0 [&_.json-key]:text-[#7aa2f7] [&_.json-string]:text-[#9ece6a] [&_.json-number]:text-[#ff9e64] [&_.json-bool]:text-[#ff9e64] [&_.yaml-key]:text-[#7aa2f7] [&_.yaml-colon]:text-muted [&_.yaml-comment]:text-muted [&_.yaml-string]:text-[#9ece6a] [&_.yaml-bool]:text-[#ff9e64] [&_.yaml-number]:text-[#ff9e64] [&_.env-var-defined]:text-healthy [&_.env-var-defined]:font-semibold [&_.env-var-missing]:text-failed [&_.env-var-missing]:font-semibold [&_.env-var-clickable]:underline [&_.env-var-clickable]:decoration-dotted [&_.code-error-line]:bg-[rgba(239,68,68,0.1)] [&_.code-error-line]:inline-block [&_.code-error-line]:min-w-full [&_.code-error-line]:underline [&_.code-error-line]:decoration-wavy [&_.code-error-line]:decoration-[rgba(239,68,68,0.5)] [&_.code-error-line]:underline-offset-[3px]`}
         style={{ tabSize: 2 }}
         dangerouslySetInnerHTML={{ __html: highlighted + "\n" }}
       />
@@ -450,6 +587,15 @@ export function CodeEditor({
         style={{ tabSize: 2 }}
         className={`relative w-full bg-transparent ${sharedStyles} text-transparent caret-white placeholder:text-muted focus:outline-none resize-none selection:bg-[#264f78] selection:text-[#e4e4e7]`}
       />
+      {/* Error badge */}
+      {errors.length > 0 && (
+        <div
+          className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1 rounded bg-red-500/15 border border-red-500/30 px-1.5 py-0.5 text-[10px] font-medium text-red-400 select-none"
+          title={errors.map((e) => `Line ${e.line + 1}: ${e.message}`).join("\n")}
+        >
+          {errors.length} {errors.length === 1 ? "error" : "errors"}
+        </div>
+      )}
     </div>
   );
 }
