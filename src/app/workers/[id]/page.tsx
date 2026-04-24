@@ -398,7 +398,7 @@ export default function WorkerDetailPage() {
     );
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="py-6 space-y-6">
       {/* ─── Page Header ─── */}
       <div className="page-header !p-0 !border-0 flex-col sm:flex-row gap-4">
         <div className="flex-1 min-w-0">
@@ -427,7 +427,7 @@ export default function WorkerDetailPage() {
               )}
           </div>
           {/* Compact system info */}
-          <div className="flex items-center gap-4 mt-2 text-xs text-muted flex-wrap">
+          <div className="flex items-center gap-2 sm:gap-4 mt-2 text-xs text-muted flex-wrap">
             {worker.hostname && (
               <span className="font-mono">{worker.hostname}</span>
             )}
@@ -511,15 +511,15 @@ export default function WorkerDetailPage() {
       {/* ─── Container Resource Stats ─── */}
       <WorkerContainerStats stats={containerStats} onForceRemove={handleForceRemove} workerOnline={worker.status === "online"} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
         {/* ─── Left column: Info + Stacks ─── */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="md:col-span-1 lg:col-span-2 space-y-4 lg:space-y-6">
           <WorkerInfoPanel worker={worker} />
           <WorkerStacksPanel stacks={stacks} containers={containers} loading={stacksLoading} />
         </div>
 
         {/* ─── Sidebar ─── */}
-        <div className="space-y-6">
+        <div className="space-y-4 lg:space-y-6">
           {worker.status === "online" && (
             <WorkerInfraPanel
               workerId={worker.id}

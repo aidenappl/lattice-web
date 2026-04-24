@@ -503,7 +503,7 @@ export default function AuthenticationPage() {
             <div className="page-subtitle">Admin access required</div>
           </div>
         </div>
-        <div className="p-6">
+        <div className="py-6">
           <Alert variant="warning">You need admin privileges to manage authentication settings.</Alert>
         </div>
       </div>
@@ -519,7 +519,7 @@ export default function AuthenticationPage() {
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="py-6">
         {/* Sub-tabs */}
         <div className="tabs-bar mb-6 !px-0">
           <button onClick={() => setTab("sso")} className={`tab-item ${tab === "sso" ? "active" : ""}`}>

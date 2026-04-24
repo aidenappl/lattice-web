@@ -98,7 +98,7 @@ export default function WorkerMetricsPage() {
   const tickFormatter = range === "7d" ? formatDateTime : formatTime;
 
   return (
-    <div className="p-6">
+    <div className="py-6">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-2 text-sm text-secondary mb-2">
@@ -115,11 +115,11 @@ export default function WorkerMetricsPage() {
           <span>/</span>
           <span className="text-primary">Metrics</span>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h1 className="page-title text-xl">
             {worker?.name} Metrics
           </h1>
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-shrink-0">
             {ranges.map((r) => (
               <Button
                 key={r.value}

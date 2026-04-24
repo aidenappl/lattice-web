@@ -148,7 +148,7 @@ export default function WorkersPage() {
         </Button>
       </div>
 
-      <div className="p-6">
+      <div className="py-6">
         {/* Create form */}
         {showForm && (
           <form
@@ -233,12 +233,12 @@ WORKER_NAME=${createdWorker.name}`}
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Hostname</th>
+                <th className="hidden sm:table-cell">Hostname</th>
                 <th>Status</th>
-                <th>OS / Arch</th>
-                <th>Docker</th>
-                <th>Runner</th>
-                <th>Last Heartbeat</th>
+                <th className="hidden lg:table-cell">OS / Arch</th>
+                <th className="hidden xl:table-cell">Docker</th>
+                <th className="hidden md:table-cell">Runner</th>
+                <th className="hidden sm:table-cell">Last Heartbeat</th>
               </tr>
             </thead>
             <tbody>
@@ -257,12 +257,12 @@ WORKER_NAME=${createdWorker.name}`}
                     <td>
                       <WorkerBadge id={worker.id} name={worker.name} />
                     </td>
-                    <td className="mono">
+                    <td className="mono hidden sm:table-cell">
                       <Link
                         href={`http://${worker.hostname}:9100`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-primary hover:text-info transition-colors"
+                        className="text-primary hover:text-info transition-colors truncate max-w-[200px] inline-block"
                       >
                         {worker.hostname}
                       </Link>
@@ -270,13 +270,13 @@ WORKER_NAME=${createdWorker.name}`}
                     <td>
                       <StatusBadge status={worker.status} />
                     </td>
-                    <td className="text-secondary">
+                    <td className="text-secondary hidden lg:table-cell">
                       {worker.os ?? "-"} / {worker.arch ?? "-"}
                     </td>
-                    <td className="mono text-secondary">
+                    <td className="mono text-secondary hidden xl:table-cell">
                       {worker.docker_version ?? "-"}
                     </td>
-                    <td>
+                    <td className="hidden md:table-cell">
                       {worker.runner_version ? (
                         <div className="flex items-center gap-2">
                           <span className="mono text-secondary">
@@ -323,7 +323,7 @@ WORKER_NAME=${createdWorker.name}`}
                         <span className="text-muted">-</span>
                       )}
                     </td>
-                    <td className="text-muted">
+                    <td className="text-muted hidden sm:table-cell">
                       {worker.last_heartbeat_at
                         ? timeAgo(worker.last_heartbeat_at)
                         : "Never"}

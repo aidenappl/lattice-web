@@ -745,7 +745,7 @@ export default function StackDetailPage() {
       </div>
 
       {/* ─── Main Content Grid ──────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 xl:gap-5">
         <div className="xl:col-span-2">
           {/* ─── Containers Tab ─────────────────────────── */}
           {activeTab === "containers" && (

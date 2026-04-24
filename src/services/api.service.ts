@@ -99,18 +99,42 @@ export const fetchApi = async <T>(
 // that can corrupt token state.
 let refreshPromise: Promise<string | null> | null = null;
 
+const MAX_REFRESH_ATTEMPTS = 2;
+
 const doRefresh = async (): Promise<string | null> => {
-    try {
-        const refreshResponse = await axios.post(
-            `${BASE_API_URL}/auth/refresh`,
-            {},
-            { withCredentials: true },
-        );
-        if (refreshResponse.status === 200 && refreshResponse.data.success) {
-            return refreshResponse.data.data.token as string;
+    for (let attempt = 1; attempt <= MAX_REFRESH_ATTEMPTS; attempt++) {
+        try {
+            const refreshResponse = await axios.post(
+                `${BASE_API_URL}/auth/refresh`,
+                {},
+                {
+                    withCredentials: true,
+                    validateStatus: () => true,
+                    timeout: 10000,
+                },
+            );
+
+            if (refreshResponse.status === 200 && refreshResponse.data?.success) {
+                return refreshResponse.data.data.token as string;
+            }
+
+            // Definitive auth failure — don't retry
+            if (refreshResponse.status === 401) {
+                return null;
+            }
+
+            // Transient error (429, 500, etc.) — retry once after a brief pause
+            if (attempt < MAX_REFRESH_ATTEMPTS) {
+                await new Promise((r) => setTimeout(r, 1000));
+                continue;
+            }
+        } catch {
+            // Network error — retry once
+            if (attempt < MAX_REFRESH_ATTEMPTS) {
+                await new Promise((r) => setTimeout(r, 1000));
+                continue;
+            }
         }
-    } catch {
-        // Refresh failed
     }
     return null;
 };

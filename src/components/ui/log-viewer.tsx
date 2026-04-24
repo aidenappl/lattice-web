@@ -196,11 +196,11 @@ export function LogViewer({
   return (
     <div className="flex flex-col">
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border-subtle bg-surface">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-border-subtle bg-surface">
         <span className="text-xs text-muted font-mono shrink-0">
           {logs.length} line{logs.length !== 1 ? "s" : ""}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Limit selector */}
           <select
             value={logLimit}
@@ -218,29 +218,29 @@ export function LogViewer({
             <button
               onClick={onDownloadVisible}
               title="Download visible logs as .txt"
-              className="text-xs text-muted hover:text-primary px-2 py-1 border border-border-subtle rounded hover:border-border-strong transition-colors cursor-pointer"
+              className="text-xs text-muted hover:text-primary px-1.5 sm:px-2 py-1 border border-border-subtle rounded hover:border-border-strong transition-colors cursor-pointer"
             >
-              ↓ Visible
+              <span className="hidden sm:inline">↓ </span>Visible
             </button>
             <button
               onClick={onDownloadLastRun}
               title="Download logs since last session start as .txt"
-              className="text-xs text-muted hover:text-primary px-2 py-1 border border-border-subtle rounded hover:border-border-strong transition-colors cursor-pointer"
+              className="text-xs text-muted hover:text-primary px-1.5 sm:px-2 py-1 border border-border-subtle rounded hover:border-border-strong transition-colors cursor-pointer hidden sm:inline-flex"
             >
               ↓ Last Run
             </button>
             <button
               onClick={onDownloadAll}
               title="Download all logs from the database as .txt"
-              className="text-xs text-muted hover:text-primary px-2 py-1 border border-border-subtle rounded hover:border-border-strong transition-colors cursor-pointer"
+              className="text-xs text-muted hover:text-primary px-1.5 sm:px-2 py-1 border border-border-subtle rounded hover:border-border-strong transition-colors cursor-pointer"
             >
-              ↓ All Time
+              <span className="hidden sm:inline">↓ </span>All
             </button>
           </div>
         </div>
       </div>
       {/* Log pane */}
-      <div ref={scrollRef} onScroll={handleScroll} className="bg-background-alt min-h-[320px] max-h-[520px] overflow-y-auto p-3">
+      <div ref={scrollRef} onScroll={handleScroll} className="bg-background-alt min-h-[200px] sm:min-h-[320px] max-h-[520px] overflow-y-auto p-2 sm:p-3">
         {logs.length === 0 ? (
           <p className="text-xs text-dimmed font-mono p-2">No logs available</p>
         ) : (

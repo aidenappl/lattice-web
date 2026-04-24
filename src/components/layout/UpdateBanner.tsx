@@ -195,7 +195,7 @@ export function UpdateBanner() {
         </div>
 
         {/* Right: action buttons */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           {apiUpdateAvailable && (
             <button
               onClick={handleUpdateAPI}
@@ -233,7 +233,7 @@ export function UpdateBanner() {
               </button>
 
               {runnerPanelOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 rounded-xl border border-border-subtle bg-surface shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-50">
+                <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-border-subtle bg-surface shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-50">
                   {/* Header */}
                   <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
                     <span className="text-sm font-semibold text-primary">

@@ -158,8 +158,8 @@ export function ContainerDetailsTab({ container }: ContainerDetailsTabProps) {
         {Object.keys(envVars).length === 0 ? (
           <p className="text-sm text-muted">No environment variables</p>
         ) : (
-          <div className="rounded-lg border border-border-subtle overflow-hidden">
-            <table className="w-full">
+          <div className="rounded-lg border border-border-subtle overflow-hidden overflow-x-auto">
+            <table className="w-full min-w-[300px]">
               <tbody className="divide-y divide-border-subtle">
                 {Object.entries(envVars).map(([k, v]) => (
                   <tr key={k}>

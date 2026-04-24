@@ -101,7 +101,7 @@ export function ContainerEditForm({
         <span>Edit Container</span>
       </div>
       <div className="p-4 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <div>
             <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
               Name
@@ -236,7 +236,7 @@ export function ContainerEditForm({
             />
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
           <div>
             <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
               Environment Variables (JSON)

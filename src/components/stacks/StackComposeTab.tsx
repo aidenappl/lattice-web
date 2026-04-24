@@ -83,15 +83,15 @@ export function StackComposeTab({
       {/* Editor card */}
       <div className="card">
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2.5 border-b border-border-subtle">
+          <div className="flex items-center gap-2 sm:gap-3">
             <h2 className="text-sm font-medium text-primary">Docker Compose</h2>
             <span className="text-[10px] font-mono text-muted px-1.5 py-0.5 rounded bg-surface-elevated">
               YAML
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted font-mono">
+            <span className="text-[10px] text-muted font-mono hidden sm:inline">
               {lineCount} lines
             </span>
             <button
@@ -132,7 +132,7 @@ export function StackComposeTab({
 
         {/* Footer bar */}
         {userCanEdit && (
-          <div className="flex items-center justify-between px-4 py-2.5 border-t border-border-subtle">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2.5 border-t border-border-subtle">
             <div className="flex items-center gap-3">
               <Button
                 size="sm"

@@ -46,19 +46,20 @@ export function WorkerContainerStats({
           )}
         </div>
       ) : (
+        <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border-subtle">
-              <th className="px-4 py-2 text-left text-xs font-medium text-muted uppercase">
+              <th className="px-3 sm:px-4 py-2 text-left text-xs font-medium text-muted uppercase">
                 Container
               </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-muted uppercase">
+              <th className="px-3 sm:px-4 py-2 text-left text-xs font-medium text-muted uppercase">
                 CPU %
               </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-muted uppercase">
+              <th className="px-3 sm:px-4 py-2 text-left text-xs font-medium text-muted uppercase hidden sm:table-cell">
                 Memory
               </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-muted uppercase">
+              <th className="px-3 sm:px-4 py-2 text-left text-xs font-medium text-muted uppercase">
                 Mem %
               </th>
               {onForceRemove && (
@@ -70,17 +71,17 @@ export function WorkerContainerStats({
           <tbody className="divide-y divide-border-subtle">
             {stats.map((s) => (
               <tr key={s.id || s.name} className="group">
-                <td className="px-4 py-2 text-sm font-mono text-primary">
+                <td className="px-3 sm:px-4 py-2 text-sm font-mono text-primary truncate max-w-[120px] sm:max-w-[200px]">
                   {s.name}
                 </td>
-                <td className="px-4 py-2 text-sm font-mono">
+                <td className="px-3 sm:px-4 py-2 text-sm font-mono whitespace-nowrap">
                   {s.cpu_percent?.toFixed(1) ?? "\u2014"}%
                 </td>
-                <td className="px-4 py-2 text-sm font-mono">
+                <td className="px-3 sm:px-4 py-2 text-sm font-mono whitespace-nowrap hidden sm:table-cell">
                   {s.mem_usage_mb?.toFixed(0) ?? "\u2014"} /{" "}
                   {s.mem_limit_mb?.toFixed(0) ?? "\u2014"} MB
                 </td>
-                <td className="px-4 py-2 text-sm font-mono">
+                <td className="px-3 sm:px-4 py-2 text-sm font-mono whitespace-nowrap">
                   {s.mem_percent?.toFixed(1) ?? "\u2014"}%
                 </td>
                 {onForceRemove && (
@@ -98,6 +99,7 @@ export function WorkerContainerStats({
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

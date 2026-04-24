@@ -38,8 +38,8 @@ export function ContainerHealthTab({
             <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
               Configuration
             </h3>
-            <div className="rounded-lg border border-border-subtle overflow-hidden">
-              <table className="w-full">
+            <div className="rounded-lg border border-border-subtle overflow-hidden overflow-x-auto">
+              <table className="w-full min-w-[280px]">
                 <tbody className="divide-y divide-border-subtle">
                   {healthConfig.interval && (
                     <tr>

@@ -58,7 +58,7 @@ export function StackEditForm({
     <div className="card p-5 mb-5">
       <h2 className="text-sm font-medium text-primary mb-4">Edit Stack</h2>
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
             id="edit-stack-name"
             label="Name"
@@ -96,7 +96,7 @@ export function StackEditForm({
             className="w-full rounded-lg border border-border-strong bg-surface-elevated px-3 py-2 text-sm text-primary placeholder:text-muted focus:border-border-emphasis focus:outline-none resize-none"
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-secondary uppercase tracking-wider">
               Deployment Strategy

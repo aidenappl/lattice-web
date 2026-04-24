@@ -101,7 +101,7 @@ export default function AuditLogPage() {
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="py-6">
         <div className="panel">
           <table className="data-table">
             <thead>
@@ -109,9 +109,9 @@ export default function AuditLogPage() {
                 <th>Time</th>
                 <th>User</th>
                 <th>Action</th>
-                <th>Resource</th>
-                <th>Details</th>
-                <th>IP</th>
+                <th className="hidden sm:table-cell">Resource</th>
+                <th className="hidden md:table-cell">Details</th>
+                <th className="hidden lg:table-cell">IP</th>
               </tr>
             </thead>
             <tbody>
@@ -143,7 +143,7 @@ export default function AuditLogPage() {
                         {entry.action}
                       </span>
                     </td>
-                    <td className="text-secondary">
+                    <td className="text-secondary hidden sm:table-cell">
                       {entry.resource_type}
                       {entry.resource_id != null && (
                         <span className="text-muted">
@@ -152,10 +152,10 @@ export default function AuditLogPage() {
                         </span>
                       )}
                     </td>
-                    <td className="text-muted max-w-xs truncate">
+                    <td className="text-muted max-w-xs truncate hidden md:table-cell">
                       {entry.details ?? "-"}
                     </td>
-                    <td className="text-muted mono">{entry.ip_address ?? "-"}</td>
+                    <td className="text-muted mono hidden lg:table-cell">{entry.ip_address ?? "-"}</td>
                   </tr>
                 ))
               )}

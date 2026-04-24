@@ -15,13 +15,13 @@ export function ContainerInfoPanels({
   healthConfig,
 }: ContainerInfoPanelsProps) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 panel">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+      <div className="md:col-span-1 lg:col-span-2 panel">
         <div className="panel-header">
           <span>Container Info</span>
         </div>
         <div className="p-4">
-          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-2 sm:gap-y-3">
             <InfoRow
               label="Container ID"
               value={

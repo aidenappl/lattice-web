@@ -133,7 +133,7 @@ export function Navbar() {
               />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-56 rounded-xl border border-border-strong bg-surface-alt p-1 shadow-lg">
+              <div className="absolute right-0 top-full mt-1 w-56 max-w-[calc(100vw-1rem)] rounded-xl border border-border-strong bg-surface-alt p-1 shadow-lg">
                 <div className="px-3 py-2 border-b border-border-strong mb-1">
                   <p className="text-sm font-medium text-primary truncate">
                     {user?.name || "User"}

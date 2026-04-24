@@ -305,7 +305,7 @@ export default function NewStackPage() {
   };
 
   return (
-    <div className="p-6">
+    <div className="py-6">
       <div className="mb-6">
         <h1 className="page-title text-xl">Create Stack</h1>
         <p className="text-sm text-secondary mt-1">

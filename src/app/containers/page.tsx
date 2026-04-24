@@ -181,7 +181,7 @@ export default function ContainersPage() {
           placeholder="Search by name or image..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="form-input w-56 !h-8 !text-sm"
+          className="form-input w-full sm:w-56 !h-8 !text-sm"
         />
         <select
           value={filterStatus}
@@ -225,7 +225,7 @@ export default function ContainersPage() {
         )}
       </div>
 
-      <div className="p-6">
+      <div className="py-6">
       {filtered.length === 0 ? (
         <div className="card p-12 text-center">
           <p className="text-sm text-muted">No containers found</p>

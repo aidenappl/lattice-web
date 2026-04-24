@@ -34,7 +34,7 @@ export default function WorkerEditForm({ worker, onSaved, onCancel }: WorkerEdit
   return (
     <div className="card p-5">
       <h2 className="text-sm font-medium text-primary mb-4">Edit Worker</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4">
         <Input
           id="edit-name"
           label="Name"

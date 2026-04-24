@@ -30,7 +30,7 @@ export function WorkerHeaderActions({
     const [actionsOpen, setActionsOpen] = useState(false);
 
     return (
-        <div className="flex items-center gap-2 flex-shrink-0 relative">
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap relative">
             <Link href={`/workers/${worker.id}/metrics`}>
                 <Button variant="secondary" size="sm">
                     Full Metrics

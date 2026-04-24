@@ -113,13 +113,13 @@ export default function StacksPage() {
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="py-6">
         {stacks.length === 0 ? (
           <div className="card p-12 text-center">
             <p className="text-sm text-muted">No stacks found</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 lg:gap-4">
             {stacks.map((stack) => {
               const stackContainers = containersByStack.get(stack.id) ?? [];
               const running = stackContainers.filter(

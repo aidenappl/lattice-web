@@ -38,7 +38,7 @@ export function StackLogsTab({
     <div className="panel">
       <div className="panel-header">
         <span>Container Logs</span>
-        <div className="panel-header-right">
+        <div className="panel-header-right flex-wrap">
           <select
             value={streamFilter}
             onChange={(e) => onStreamFilterChange(e.target.value)}

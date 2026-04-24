@@ -20,7 +20,7 @@ export default function WorkerInfoPanel({ worker }: WorkerInfoPanelProps) {
         <span>Worker Info</span>
       </div>
       <div className="p-4">
-        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-2 sm:gap-y-3 text-sm">
           <div className="flex justify-between sm:block">
             <dt className="text-[10px] text-muted uppercase tracking-wider font-mono">
               Hostname

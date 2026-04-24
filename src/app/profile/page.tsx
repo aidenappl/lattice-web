@@ -120,7 +120,7 @@ export default function ProfilePage() {
   const isLocalAuth = user.auth_type === "local";
 
   return (
-    <div className="p-6 max-w-2xl mx-auto space-y-6">
+    <div className="py-6 max-w-2xl mx-auto space-y-6">
       <div className="flex flex-col items-center gap-3">
         <button
           type="button"

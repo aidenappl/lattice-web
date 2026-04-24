@@ -222,7 +222,7 @@ export default function DeploymentDetailPage() {
   const percent = progressEntry?.percent ?? (deployment.status === "deployed" ? 100 : 0);
 
   return (
-    <div className="p-6">
+    <div className="py-6">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -268,7 +268,7 @@ export default function DeploymentDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
         {/* Timeline */}
         <div className="card p-5">
           <h2 className="text-sm font-medium text-primary mb-6">

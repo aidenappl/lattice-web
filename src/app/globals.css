@@ -250,6 +250,14 @@ html {
   overflow-y: auto;
   overflow-x: hidden;
   position: relative;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding-left: 40px;
+  padding-right: 40px;
+}
+.app-content > * {
+  width: 100%;
 }
 
 /* ── Sidebar ──────────────────────────────────────────────────── */
@@ -781,7 +789,7 @@ html {
 
 /* ── Page headers ─────────────────────────────────────────────── */
 .page-header {
-  padding: 24px 28px 20px;
+  padding: 24px 0 20px;
   display: flex;
   align-items: flex-start;
   gap: 18px;
@@ -1369,7 +1377,7 @@ html {
 
 /* ── Dashboard page layout ────────────────────────────────────────── */
 .dash-page {
-  padding: 28px;
+  padding: 28px 0;
 }
 .dash-kpi-row {
   display: grid;
@@ -1391,7 +1399,7 @@ html {
 
 /* ── Stack Inspector Page ────────────────────────────────────────── */
 .stack-page {
-  padding: 24px 28px;
+  padding: 24px 0;
 }
 .stack-header {
   margin-bottom: 20px;
@@ -1793,6 +1801,8 @@ html {
   }
   .app-content {
     overflow: visible;
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
   /* Sidebar: hidden by default, shown as overlay drawer */
@@ -1872,8 +1882,8 @@ html {
 
   /* Page headers */
   .page-header {
-    padding: 16px 16px 14px;
-    gap: 12px;
+    padding: 16px 0 14px;
+    gap: 10px;
     flex-wrap: wrap;
   }
   .page-header > .flex {
@@ -1892,7 +1902,8 @@ html {
   .filters-bar {
     padding: 10px 16px;
     overflow-x: auto;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   /* Tabs */
@@ -1952,7 +1963,7 @@ html {
 
   /* Dashboard */
   .dash-page {
-    padding: 16px;
+    padding: 16px 0;
   }
   .dash-topology-split {
     display: none;
@@ -1978,7 +1989,7 @@ html {
 
   /* Stack page */
   .stack-page {
-    padding: 16px;
+    padding: 16px 0;
   }
   .stack-header-main {
     flex-direction: column;
@@ -1992,17 +2003,30 @@ html {
   }
   .stack-stats-row {
     grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .stack-stat {
+    padding: 10px 12px;
+  }
+  .stack-stat-value {
+    font-size: 16px;
   }
   .stack-tabs {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .stack-tab {
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .stack-container-grid {
     grid-template-columns: 1fr;
   }
 
   /* Tighten page content padding */
-  .app-content > div > .p-6 {
-    padding: 14px !important;
+  .app-content > div > .py-6 {
+    padding-top: 14px !important;
+    padding-bottom: 14px !important;
   }
 
   /* ResizableSplit: not usable on mobile, hide the drag handle */
@@ -2024,6 +2048,14 @@ html {
   .kpi-value {
     font-size: 18px;
   }
+  .kpi {
+    padding: 10px 12px;
+    min-height: 66px;
+    gap: 4px;
+  }
+  .kpi-sub {
+    font-size: 10px;
+  }
   .btn {
     font-size: 12px;
     padding: 6px 10px;
@@ -2037,5 +2069,55 @@ html {
   .badge {
     font-size: 9.5px;
     padding: 2px 6px;
+  }
+  .page-header {
+    padding: 12px 0 10px;
+    gap: 8px;
+  }
+  .page-title {
+    font-size: 17px;
+  }
+  .dash-page {
+    padding: 12px 0;
+  }
+  .dash-bottom-grid > * {
+    min-height: 240px;
+  }
+  .stack-page {
+    padding: 12px 0;
+  }
+  .stack-stats-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .stack-stat {
+    padding: 8px 10px;
+  }
+  .stack-stat-value {
+    font-size: 15px;
+  }
+  .stack-stat-label {
+    font-size: 10px;
+  }
+  .panel-header {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+  .data-table th {
+    font-size: 10px;
+    padding: 6px 8px;
+  }
+  .data-table td {
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+  .app-content > div > .py-6 {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+  .form-input,
+  .form-select,
+  .form-textarea {
+    padding: 6px 8px;
   }
 }

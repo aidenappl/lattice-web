@@ -150,7 +150,7 @@ export default function EnvVarsPage() {
         )}
       </div>
 
-      <div className="p-6">
+      <div className="py-6">
         {admin && showForm && (
           <form onSubmit={handleSubmit} className="card p-6 mb-6 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -221,8 +221,8 @@ export default function EnvVarsPage() {
               <tr>
                 <th>Key</th>
                 <th>Value</th>
-                <th>Type</th>
-                <th>Updated</th>
+                <th className="hidden sm:table-cell">Type</th>
+                <th className="hidden md:table-cell">Updated</th>
                 {admin && <th className="text-right">Actions</th>}
               </tr>
             </thead>
@@ -267,7 +267,7 @@ export default function EnvVarsPage() {
                           )}
                         </div>
                       </td>
-                      <td>
+                      <td className="hidden sm:table-cell">
                         {ev.is_secret ? (
                           <Badge variant="warning">
                             <FontAwesomeIcon
@@ -280,7 +280,7 @@ export default function EnvVarsPage() {
                           <Badge variant="default">plain</Badge>
                         )}
                       </td>
-                      <td className="text-muted">
+                      <td className="text-muted hidden md:table-cell">
                         {formatDate(ev.updated_at)}
                       </td>
                       {admin && (

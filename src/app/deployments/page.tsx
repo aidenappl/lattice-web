@@ -63,7 +63,7 @@ export default function DeploymentsPage() {
             Track deployment history and status
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <select
             value={stackFilter}
             onChange={(e) => setStackFilter(e.target.value)}
@@ -92,7 +92,7 @@ export default function DeploymentsPage() {
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="py-6">
       <div className="panel">
         <table className="data-table">
           <thead>
@@ -100,9 +100,9 @@ export default function DeploymentsPage() {
               <th>ID</th>
               <th>Stack</th>
               <th>Status</th>
-              <th>Strategy</th>
-              <th>Started</th>
-              <th>Completed</th>
+              <th className="hidden sm:table-cell">Strategy</th>
+              <th className="hidden md:table-cell">Started</th>
+              <th className="hidden md:table-cell">Completed</th>
             </tr>
           </thead>
           <tbody>
@@ -137,11 +137,11 @@ export default function DeploymentsPage() {
                   <td>
                     <StatusBadge status={d.status} />
                   </td>
-                  <td className="text-secondary">{d.strategy}</td>
-                  <td className="text-muted">
+                  <td className="text-secondary hidden sm:table-cell">{d.strategy}</td>
+                  <td className="text-muted hidden md:table-cell">
                     {d.started_at ? formatDate(d.started_at) : "-"}
                   </td>
-                  <td className="text-muted">
+                  <td className="text-muted hidden md:table-cell">
                     {d.completed_at ? formatDate(d.completed_at) : "-"}
                   </td>
                 </tr>

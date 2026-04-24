@@ -71,7 +71,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           onClick={() => handle(false)}
         >
           <div
-            className="bg-surface border border-border-strong rounded-xl p-6 w-full max-w-sm mx-4 shadow-2xl"
+            className="bg-surface border border-border-strong rounded-xl p-5 sm:p-6 w-full max-w-sm mx-3 sm:mx-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-sm font-semibold text-primary">

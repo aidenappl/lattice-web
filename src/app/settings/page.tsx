@@ -561,10 +561,10 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
               <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Name
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden sm:table-cell">
                 URL
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden md:table-cell">
                 Events
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
@@ -594,10 +594,10 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
                   <td className="px-4 py-3 text-sm font-medium text-primary">
                     {wh.name}
                   </td>
-                  <td className="px-4 py-3 text-sm text-secondary truncate max-w-[200px]">
+                  <td className="px-4 py-3 text-sm text-secondary truncate max-w-[200px] hidden sm:table-cell">
                     {wh.url}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden md:table-cell">
                     <div className="flex flex-wrap gap-1">
                       {parseEvents(wh.events).map((evt) => (
                         <span
@@ -683,7 +683,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="py-6">
 
       {/* Version Check */}
       <div className="mb-8">

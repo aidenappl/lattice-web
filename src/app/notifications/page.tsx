@@ -690,7 +690,7 @@ export default function NotificationsPage() {
                         </div>
                     </div>
                 </div>
-                <div className="p-6">
+                <div className="py-6">
                     <div className="tabs-bar mb-6 !px-0">
                         <button className="tab-item active">
                             <FontAwesomeIcon
@@ -717,7 +717,7 @@ export default function NotificationsPage() {
                 </div>
             </div>
 
-            <div className="p-6">
+            <div className="py-6">
                 <div className="tabs-bar mb-6 !px-0">
                     <button
                         onClick={() => setTab("email")}

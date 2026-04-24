@@ -81,7 +81,7 @@ export default function TemplatesPage() {
         </Link>
       </div>
 
-      <div className="p-6">
+      <div className="py-6">
         <div className="panel">
           <table className="data-table">
             <thead>

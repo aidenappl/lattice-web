@@ -47,12 +47,12 @@ export function StackEnvTab({
           </div>
         ) : globalVars.length > 0 ? (
           <>
-            <div className="rounded-lg border border-border-subtle overflow-hidden">
-              <table className="w-full">
+            <div className="rounded-lg border border-border-subtle overflow-hidden overflow-x-auto">
+              <table className="w-full min-w-[300px]">
                 <tbody className="divide-y divide-border-subtle">
                   {globalVars.map((gv) => (
                     <tr key={gv.id}>
-                      <td className="px-3 py-1.5 text-xs font-mono text-secondary w-1/3">
+                      <td className="px-3 py-1.5 text-xs font-mono text-secondary w-1/3 break-all">
                         {gv.key}
                       </td>
                       <td className="px-3 py-1.5 text-xs font-mono text-muted">

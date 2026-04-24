@@ -21,7 +21,7 @@ export function useIdleTimeout(timeoutMs = IDLE_TIMEOUT_MS) {
             }, timeoutMs);
         };
 
-        const events = ["mousedown", "keydown", "scroll", "touchstart"] as const;
+        const events = ["mousedown", "mousemove", "keydown", "scroll", "touchstart"] as const;
         events.forEach((e) => window.addEventListener(e, reset));
         reset();
 

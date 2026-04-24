@@ -235,7 +235,7 @@ export default function RegistriesPage() {
         )}
       </div>
 
-      <div className="p-6">
+      <div className="py-6">
       {/* Create Form */}
       {canEdit(user) && showForm && (
         <form
@@ -343,16 +343,16 @@ export default function RegistriesPage() {
               <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                 Name
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden sm:table-cell">
                 URL
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden md:table-cell">
                 Type
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden lg:table-cell">
                 Auth
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden md:table-cell">
                 Created
               </th>
               <th className="px-4 py-3 text-right text-xs font-medium text-secondary uppercase tracking-wider">
@@ -377,23 +377,23 @@ export default function RegistriesPage() {
                     <td className="px-4 py-3 text-sm font-medium text-primary">
                       {reg.name}
                     </td>
-                    <td className="px-4 py-3 text-sm text-secondary font-mono">
+                    <td className="px-4 py-3 text-sm text-secondary font-mono hidden sm:table-cell truncate max-w-[200px]">
                       {reg.url}
                     </td>
-                    <td className="px-4 py-3 text-sm text-secondary">
+                    <td className="px-4 py-3 text-sm text-secondary hidden md:table-cell">
                       {reg.type}
                     </td>
-                    <td className="px-4 py-3 text-sm text-secondary">
+                    <td className="px-4 py-3 text-sm text-secondary hidden lg:table-cell">
                       {reg.username ? (
                         <span className="text-healthy">{reg.username}</span>
                       ) : (
                         <span className="text-muted">none</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-muted">
+                    <td className="px-4 py-3 text-sm text-muted hidden md:table-cell">
                       {formatDate(reg.inserted_at)}
                     </td>
-                    <td className="px-4 py-3 text-right space-x-2">
+                    <td className="px-4 py-3 text-right space-x-1 sm:space-x-2">
                       {canEdit(user) && (
                         <Button
                           variant="ghost"
@@ -433,7 +433,7 @@ export default function RegistriesPage() {
                   {canEdit(user) && editId === reg.id && (
                     <tr className="border-b border-border-subtle bg-background-alt">
                       <td colSpan={6} className="px-4 py-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
                           <Input
                             id={`edit-name-${reg.id}`}
                             label="Name"

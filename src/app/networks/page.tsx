@@ -116,7 +116,7 @@ export default function NetworksPage() {
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="py-6">
         {tab === "networks" ? (
           <NetworksTab
             networks={networks}
@@ -516,22 +516,22 @@ function PortsTab({
                   <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
                     Host Port
                   </th>
-                  <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider hidden sm:table-cell">
                     Container Port
                   </th>
-                  <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider hidden lg:table-cell">
                     Protocol
                   </th>
                   <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
                     Container
                   </th>
-                  <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider hidden sm:table-cell">
                     Status
                   </th>
-                  <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider hidden md:table-cell">
                     Stack
                   </th>
-                  <th className="px-5 py-2.5" />
+                  <th className="px-5 py-2.5 hidden sm:table-cell" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
@@ -566,12 +566,12 @@ function PortsTab({
                           )}
                         </span>
                       </td>
-                      <td className="px-5 py-2.5">
+                      <td className="px-5 py-2.5 hidden sm:table-cell">
                         <span className="text-sm font-mono text-secondary">
                           :{p.containerPort}
                         </span>
                       </td>
-                      <td className="px-5 py-2.5">
+                      <td className="px-5 py-2.5 hidden lg:table-cell">
                         <span className="text-xs text-muted uppercase">
                           {p.protocol}
                         </span>
@@ -579,15 +579,15 @@ function PortsTab({
                       <td className="px-5 py-2.5">
                         <Link
                           href={`/containers/${p.container.id}`}
-                          className="text-sm text-secondary hover:text-primary transition-colors"
+                          className="text-sm text-secondary hover:text-primary transition-colors truncate max-w-[120px] sm:max-w-none inline-block"
                         >
                           {p.container.name}
                         </Link>
                       </td>
-                      <td className="px-5 py-2.5">
+                      <td className="px-5 py-2.5 hidden sm:table-cell">
                         <StatusBadge status={p.container.status} />
                       </td>
-                      <td className="px-5 py-2.5">
+                      <td className="px-5 py-2.5 hidden md:table-cell">
                         <Link
                           href={`/stacks/${p.stack.id}`}
                           className="text-xs text-muted hover:text-primary transition-colors"
@@ -595,7 +595,7 @@ function PortsTab({
                           {p.stack.name}
                         </Link>
                       </td>
-                      <td className="px-5 py-2.5 text-right">
+                      <td className="px-5 py-2.5 text-right hidden sm:table-cell">
                         {group.worker.ip_address && p.protocol === "tcp" && (
                           <a
                             href={`http://${group.worker.ip_address}:${p.hostPort}`}

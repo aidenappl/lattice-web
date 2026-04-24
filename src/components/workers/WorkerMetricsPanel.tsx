@@ -186,7 +186,7 @@ export default function WorkerMetricsPanel({
 
       {/* Arc gauges row */}
       <div className="px-5 pt-5 pb-3">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6">
           {/* CPU gauge */}
           <div className="flex flex-col items-center">
             <ArcGauge percent={cpuPercent} color={sparkColor(cpuPercent)} />
@@ -282,7 +282,7 @@ export default function WorkerMetricsPanel({
       </div>
 
       {/* Secondary stats strip */}
-      <div className="border-t border-border px-5 py-4 grid grid-cols-2 sm:grid-cols-5 gap-4">
+      <div className="border-t border-border px-3 sm:px-5 py-3 sm:py-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
         <div>
           <p className="text-[10px] text-muted uppercase tracking-wider">
             Containers
