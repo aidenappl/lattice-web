@@ -45,7 +45,12 @@ export type WorkerMetrics = {
     container_running_count: number | null;
     network_rx_bytes: number | null;
     network_tx_bytes: number | null;
+    network_rx_rate: number | null;
+    network_tx_rate: number | null;
     uptime_seconds: number | null;
     process_count: number | null;
+    runner_goroutines: number | null;
+    runner_heap_mb: number | null;
+    runner_sys_mb: number | null;
     recorded_at: string;
 };

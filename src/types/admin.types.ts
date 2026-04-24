@@ -7,8 +7,8 @@ export type WorkerMetricsSummary = {
     memory: number | null;
     disk_used: number | null;
     disk_total: number | null;
-    net_rx: number | null;
-    net_tx: number | null;
+    net_rx_rate: number | null;
+    net_tx_rate: number | null;
     containers: number | null;
     running: number | null;
     status: string;
@@ -47,11 +47,11 @@ export type FleetMetricsPoint = {
     timestamp: string;
     cpu_avg: number;
     memory_avg: number;
-    network_rx_total: number;
-    network_tx_total: number;
+    network_rx_rate: number;
+    network_tx_rate: number;
     container_count: number;
     running_count: number;
-    online_workers?: number;
+    online_workers: number;
 };
 
 export type HealthAnomaly = {

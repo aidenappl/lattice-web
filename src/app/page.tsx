@@ -35,7 +35,7 @@ import type {
 
 function extractHistory(
   points: FleetMetricsPoint[],
-  key: "cpu_avg" | "memory_avg" | "network_rx_total" | "running_count",
+  key: "cpu_avg" | "memory_avg" | "network_rx_rate" | "running_count",
 ): number[] {
   if (points.length === 0) return [];
   const raw = points.map((p) => p[key]);
@@ -98,8 +98,8 @@ export default function DashboardPage() {
         workerMetricsRef.current.set(w.worker_id, {
           cpu: w.cpu ?? 0,
           memoryPct: w.memory ?? 0,
-          netRx: w.net_rx ?? 0,
-          netTx: w.net_tx ?? 0,
+          netRxRate: w.net_rx_rate ?? 0,
+          netTxRate: w.net_tx_rate ?? 0,
           containers: w.containers ?? 0,
           running: w.running ?? 0,
         });
@@ -119,15 +119,15 @@ export default function DashboardPage() {
     const count = workers.size || 1;
     let cpuSum = 0,
       memSum = 0,
-      netRxSum = 0,
-      netTxSum = 0,
+      netRxRateSum = 0,
+      netTxRateSum = 0,
       containerSum = 0,
       runningSum = 0;
     workers.forEach((w) => {
       cpuSum += w.cpu;
       memSum += w.memoryPct;
-      netRxSum += w.netRx;
-      netTxSum += w.netTx;
+      netRxRateSum += w.netRxRate;
+      netTxRateSum += w.netTxRate;
       containerSum += w.containers;
       runningSum += w.running;
     });
@@ -135,8 +135,8 @@ export default function DashboardPage() {
       timestamp: new Date().toISOString(),
       cpu_avg: cpuSum / count,
       memory_avg: memSum / count,
-      network_rx_total: netRxSum,
-      network_tx_total: netTxSum,
+      network_rx_rate: netRxRateSum,
+      network_tx_rate: netTxRateSum,
       container_count: containerSum,
       running_count: runningSum,
       online_workers: workers.size,
@@ -174,8 +174,8 @@ export default function DashboardPage() {
         const cpu = (p.cpu_percent as number) ?? 0;
         const memUsed = p.memory_used_mb as number | undefined;
         const memTotal = p.memory_total_mb as number | undefined;
-        const netRx = (p.network_rx_bytes as number) ?? 0;
-        const netTx = (p.network_tx_bytes as number) ?? 0;
+        const netRxRate = (p.network_rx_rate as number) ?? 0;
+        const netTxRate = (p.network_tx_rate as number) ?? 0;
         const containers = (p.container_count as number) ?? 0;
         const running = (p.container_running_count as number) ?? 0;
 
@@ -188,8 +188,8 @@ export default function DashboardPage() {
         workerMetricsRef.current.set(workerId, {
           cpu,
           memoryPct: memPct,
-          netRx,
-          netTx,
+          netRxRate,
+          netTxRate,
           containers,
           running,
         });
@@ -278,7 +278,7 @@ export default function DashboardPage() {
     [fleetHistory],
   );
   const netHistory = useMemo(
-    () => extractHistory(fleetHistory, "network_rx_total"),
+    () => extractHistory(fleetHistory, "network_rx_rate"),
     [fleetHistory],
   );
   const containerHistory = useMemo(
@@ -350,6 +350,7 @@ export default function DashboardPage() {
           memHistory={memHistory}
           netHistory={netHistory}
           containerHistory={containerHistory}
+          onRangeChange={(range) => dispatch(fetchFleetMetrics(range))}
         />
         <RecentActivityPanel entries={auditLog} />
       </div>

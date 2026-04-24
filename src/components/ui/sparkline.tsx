@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useEffect, useState, useRef, useCallback } from "react";
 
 type SparklineProps = {
   data: number[];
@@ -12,19 +12,47 @@ type SparklineProps = {
   className?: string;
   /** Fixed max value for scaling (e.g. 100 for percentages). If omitted, auto-scales to data max. */
   maxValue?: number;
+  /** When true, fills the parent container and resizes with the window. */
+  responsive?: boolean;
 };
 
 export function Sparkline({
   data,
-  width = 60,
-  height = 22,
+  width: widthProp = 60,
+  height: heightProp = 22,
   color = "var(--healthy)",
   fill = true,
   live = false,
   className,
   maxValue,
+  responsive = false,
 }: SparklineProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [liveData, setLiveData] = useState(data);
+
+  // Measure container when responsive
+  const measure = useCallback(() => {
+    if (!responsive || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      setSize((prev) => {
+        if (prev && Math.abs(prev.w - rect.width) < 1 && Math.abs(prev.h - rect.height) < 1) return prev;
+        return { w: Math.round(rect.width), h: Math.round(rect.height) };
+      });
+    }
+  }, [responsive]);
+
+  useEffect(() => {
+    if (!responsive || !containerRef.current) return;
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, [responsive, measure]);
+
+  const width = responsive && size ? size.w : widthProp;
+  const height = responsive && size ? size.h : heightProp;
 
   useEffect(() => {
     if (!live) return;
@@ -58,6 +86,33 @@ export function Sparkline({
     if (!fill || !d) return "";
     return `${d} L${width},${height} L0,${height} Z`;
   }, [d, fill, width, height]);
+
+  if (responsive) {
+    return (
+      <div ref={containerRef} className={className} style={{ width: "100%", height: "100%", minHeight: 0 }}>
+        {d && size && (
+          <svg
+            width={size.w}
+            height={size.h}
+            viewBox={`0 0 ${size.w} ${size.h}`}
+            style={{ display: "block" }}
+          >
+            {fill && fillD && (
+              <path d={fillD} fill={color} opacity={0.12} />
+            )}
+            <path
+              d={d}
+              fill="none"
+              stroke={color}
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
+      </div>
+    );
+  }
 
   if (!d) return null;
 

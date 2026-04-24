@@ -32,12 +32,7 @@ import {
   reqRemoveContainer,
   reqRecreateContainer,
   reqUnpauseContainer,
-  reqRestartStack,
-  reqStopStack,
-  reqStartStack,
-  reqExportStack,
 } from "@/services/stacks.service";
-import { reqCreateTemplateFromStack } from "@/services/templates.service";
 import {
   reqGetDeployments,
   reqGetDeploymentLogs,
@@ -45,7 +40,6 @@ import {
 import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { canEdit, timeAgo, workerStaleReason } from "@/lib/utils";
 import { useUser } from "@/store/hooks";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
@@ -64,6 +58,8 @@ import { StackLogsTab } from "@/components/stacks/StackLogsTab";
 import { StackDeployments } from "@/components/stacks/StackDeployments";
 import StackDeployTokensPanel from "@/components/stacks/StackDeployTokensPanel";
 import { StackDependencyGraph } from "@/components/stacks/StackDependencyGraph";
+import { StackHeaderActions } from "@/components/stacks/StackHeaderActions";
+import { useDeploymentProgress } from "@/hooks/useDeploymentProgress";
 
 export default function StackDetailPage() {
   const params = useParams();
@@ -81,6 +77,7 @@ export default function StackDetailPage() {
   // Worker liveness
   const workerLiveness = useWorkerLiveness(workers);
   const showConfirm = useConfirm();
+  const deployProgress = useDeploymentProgress();
 
   // Container actions state
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>(
@@ -146,9 +143,15 @@ export default function StackDetailPage() {
   type StackTab = "containers" | "compose" | "env" | "logs";
   const [activeTab, setActiveTab] = useState<StackTab>("containers");
 
+  // Mounted ref to prevent state updates after unmount
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   // Deploy button state
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
-  const [forceDeployHovered, setForceDeployHovered] = useState(false);
 
   // Stack settings edit state
   const [editingStack, setEditingStack] = useState(false);
@@ -166,6 +169,7 @@ export default function StackDetailPage() {
           reqGetDeployments(),
           reqGetWorkers(),
         ]);
+      if (!mountedRef.current) return;
       if (stackRes.success) {
         setStack(stackRes.data);
         setStackEnvVars(stackRes.data.env_vars ?? "");
@@ -294,6 +298,18 @@ export default function StackDetailPage() {
         handleLogSocketEvent(event, eventName);
       }
 
+      // Deployment progress — refresh stack and deployments on terminal statuses
+      if (event.type === "deployment_progress" || event.type === "deployment_status") {
+        const depStatus = (payload["status"] as string) ?? "";
+        if (depStatus === "deployed" || depStatus === "failed" || depStatus === "rolled_back") {
+          refreshContainers();
+          reqGetStack(id).then((r) => { if (r.success) setStack(r.data); });
+          reqGetDeployments().then((r) => {
+            if (r.success) setDeployments((r.data ?? []).filter((d) => d.stack_id === id));
+          });
+        }
+      }
+
       // Worker lifecycle events — reload logs after a short delay
       if (
         event.type === "worker_shutdown" ||
@@ -343,6 +359,9 @@ export default function StackDetailPage() {
     }
     setDeleting(false);
   };
+
+  // Note: Container/stack cache invalidation happens via WebSocket events
+  // which trigger scheduleRefresh on the list pages automatically.
 
   const handleCreateContainer = async (data: {
     name: string;
@@ -606,6 +625,20 @@ export default function StackDetailPage() {
                   </h1>
                   <StatusBadge status={stack.status} />
                 </div>
+                {stack.status === "deploying" && (() => {
+                  const activeDep = deployments.find(
+                    (d) => d.status === "deploying" || d.status === "validating" || d.status === "sending",
+                  );
+                  const pct = activeDep ? (deployProgress[activeDep.id]?.percent ?? 15) : 15;
+                  return (
+                    <div className="progress-bar mt-1" style={{ width: 160 }}>
+                      <div
+                        className="progress-bar-fill pending"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  );
+                })()}
                 {stack.description && (
                   <p className="text-xs text-muted mt-0.5">
                     {stack.description}
@@ -638,160 +671,19 @@ export default function StackDetailPage() {
               </span>
             </div>
           </div>
-          <div className="stack-header-actions">
-            {canEdit(user) &&
-              (() => {
-                const isDeploying = deploying || stack.status === "deploying";
-                const isFailed = stack.status === "failed";
-                const needsDeploy = hasPendingChanges || isFailed;
-                const showForce = !needsDeploy && !isDeploying;
-                return (
-                  <Button
-                    onClick={handleDeploy}
-                    disabled={isDeploying || !workerOnline}
-                    title={
-                      !workerOnline
-                        ? "Worker is offline — cannot deploy"
-                        : undefined
-                    }
-                    onMouseEnter={() =>
-                      showForce && setForceDeployHovered(true)
-                    }
-                    onMouseLeave={() => setForceDeployHovered(false)}
-                    className={
-                      showForce
-                        ? "opacity-50 hover:opacity-80 transition-opacity"
-                        : ""
-                    }
-                  >
-                    {isDeploying
-                      ? "Deploying..."
-                      : forceDeployHovered
-                        ? "Force Re-deploy"
-                        : isFailed
-                          ? "Redeploy"
-                          : needsDeploy
-                            ? "Deploy"
-                            : "Re-deploy"}
-                  </Button>
-                );
-              })()}
-            {canEdit(user) && (
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={async () => {
-                    const ok = await showConfirm({
-                      title: "Restart all containers",
-                      message: `Restart all running containers in "${stack.name}"?`,
-                      confirmLabel: "Restart All",
-                      variant: "warning",
-                    });
-                    if (!ok) return;
-                    const res = await reqRestartStack(id);
-                    if (res.success) toast.success(`Restarted ${res.data.restarted} containers`);
-                    else toast.error(res.error_message || "Failed");
-                  }}
-                  disabled={!workerOnline || containers.filter(c => c.status === "running").length === 0}
-                >
-                  Restart All
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={async () => {
-                    const ok = await showConfirm({
-                      title: "Stop all containers",
-                      message: `Stop all running containers in "${stack.name}"?`,
-                      confirmLabel: "Stop All",
-                      variant: "warning",
-                    });
-                    if (!ok) return;
-                    const res = await reqStopStack(id);
-                    if (res.success) toast.success(`Stopped ${res.data.stopped} containers`);
-                    else toast.error(res.error_message || "Failed");
-                  }}
-                  disabled={!workerOnline || containers.filter(c => c.status === "running").length === 0}
-                >
-                  Stop All
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={async () => {
-                    const res = await reqStartStack(id);
-                    if (res.success) toast.success(`Started ${res.data.started} containers`);
-                    else toast.error(res.error_message || "Failed");
-                  }}
-                  disabled={!workerOnline || containers.filter(c => c.status === "stopped").length === 0}
-                >
-                  Start All
-                </Button>
-              </div>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={async () => {
-                const res = await reqExportStack(id);
-                if (res.success) {
-                  const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `${stack.name}-export.json`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                  toast.success("Stack exported");
-                }
-              }}
-            >
-              Export
-            </Button>
-            {canEdit(user) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={async () => {
-                  const templateName = window.prompt(
-                    "Template name:",
-                    `${stack.name} template`,
-                  );
-                  if (!templateName) return;
-                  const res = await reqCreateTemplateFromStack(id, {
-                    name: templateName,
-                  });
-                  if (res.success) {
-                    toast.success("Saved as template");
-                  } else {
-                    toast.error(res.error_message || "Failed to save template");
-                  }
-                }}
-              >
-                Save as Template
-              </Button>
-            )}
-            {canEdit(user) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setEditingStack(true)}
-              >
-                Edit
-              </Button>
-            )}
-            {canEdit(user) && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleDeleteStack}
-                disabled={deleting}
-              >
-                {deleting ? "..." : "Delete"}
-              </Button>
-            )}
-          </div>
+          <StackHeaderActions
+            stack={stack}
+            stackId={id}
+            containers={containers}
+            workerOnline={workerOnline}
+            deploying={deploying}
+            hasPendingChanges={hasPendingChanges}
+            deleting={deleting}
+            canEditUser={canEdit(user)}
+            onDeploy={handleDeploy}
+            onEdit={() => setEditingStack(true)}
+            onDelete={handleDeleteStack}
+          />
         </div>
       </div>
 
@@ -831,10 +723,13 @@ export default function StackDetailPage() {
       <StackDependencyGraph containers={containers} />
 
       {/* ─── Tab Navigation ─────────────────────────────────────── */}
-      <div className="stack-tabs">
+      <div className="stack-tabs" role="tablist">
         {(["containers", "compose", "env", "logs"] as StackTab[]).map((tab) => (
           <button
             key={tab}
+            role="tab"
+            aria-selected={activeTab === tab}
+            tabIndex={activeTab === tab ? 0 : -1}
             onClick={() => setActiveTab(tab)}
             className={`stack-tab ${activeTab === tab ? "active" : ""}`}
           >

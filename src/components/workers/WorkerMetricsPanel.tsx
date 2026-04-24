@@ -145,10 +145,10 @@ export default function WorkerMetricsPanel({
         ? (m.memory_used_mb / m.memory_total_mb) * 100
         : 0,
     );
-  const netRxHistory = metrics
+  const netRxRateHistory = metrics
     .slice(0, 20)
     .reverse()
-    .map((m) => m.network_rx_bytes ?? 0);
+    .map((m) => m.network_rx_rate ?? 0);
 
   const cpuPercent = latestMetric.cpu_percent ?? 0;
   const memPercent =
@@ -260,21 +260,21 @@ export default function WorkerMetricsPanel({
           <div className="flex flex-col items-center">
             <ArcGauge percent={0} color="#22c55e" />
             <p className="text-2xl font-semibold -mt-1 text-healthy font-mono">
-              {latestMetric.network_rx_bytes != null
-                ? formatBytes(latestMetric.network_rx_bytes)
+              {latestMetric.network_rx_rate != null
+                ? `${formatBytes(latestMetric.network_rx_rate)}/s`
                 : "-"}
             </p>
             <p className="text-[10px] text-muted uppercase tracking-wider mt-1">
               Network RX
             </p>
             <p className="text-[10px] text-dimmed">
-              {latestMetric.network_tx_bytes != null
-                ? `TX: ${formatBytes(latestMetric.network_tx_bytes)}`
+              {latestMetric.network_tx_rate != null
+                ? `TX: ${formatBytes(latestMetric.network_tx_rate)}/s`
                 : "-"}
             </p>
-            {netRxHistory.length >= 2 && (
+            {netRxRateHistory.length >= 2 && (
               <div className="mt-2">
-                <Sparkline values={netRxHistory} color="#22c55e" />
+                <Sparkline values={netRxRateHistory} color="#22c55e" />
               </div>
             )}
           </div>
@@ -319,14 +319,14 @@ export default function WorkerMetricsPanel({
             Network I/O
           </p>
           <p className="text-sm text-secondary font-mono mt-0.5">
-            {latestMetric.network_rx_bytes != null
-              ? formatBytes(latestMetric.network_rx_bytes)
+            {latestMetric.network_rx_rate != null
+              ? `${formatBytes(latestMetric.network_rx_rate)}/s`
               : "-"}{" "}
             rx
           </p>
           <p className="text-[10px] text-secondary font-mono">
-            {latestMetric.network_tx_bytes != null
-              ? formatBytes(latestMetric.network_tx_bytes)
+            {latestMetric.network_tx_rate != null
+              ? `${formatBytes(latestMetric.network_tx_rate)}/s`
               : "-"}{" "}
             tx
           </p>

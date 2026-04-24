@@ -1,7 +1,7 @@
 export type Deployment = {
     id: number;
     stack_id: number;
-    status: "pending" | "approved" | "deploying" | "deployed" | "failed" | "rolled_back";
+    status: "pending" | "approved" | "sending" | "deploying" | "validating" | "deployed" | "failed" | "rolled_back";
     strategy: "rolling" | "blue-green" | "canary";
     triggered_by: number | null;
     approved_by: number | null;

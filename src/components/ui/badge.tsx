@@ -41,7 +41,9 @@ type StatusType =
   | "pending"
   | "paused"
   | "active"
+  | "sending"
   | "deploying"
+  | "validating"
   | "deployed"
   | "failed"
   | "rolled_back"
@@ -66,7 +68,9 @@ const statusVariantMap: Record<
   error: "error",
   failed: "error",
   unhealthy: "error",
+  sending: "warning",
   deploying: "warning",
+  validating: "warning",
   pending: "warning",
   starting: "warning",
   restarting: "error",
@@ -88,7 +92,9 @@ const statusDotMap: Record<StatusType, string> = {
   error: "bg-[#ef4444]",
   failed: "bg-[#ef4444]",
   unhealthy: "bg-[#ef4444]",
+  sending: "bg-[#eab308]",
   deploying: "bg-[#eab308]",
+  validating: "bg-[#eab308]",
   pending: "bg-[#eab308]",
   starting: "bg-[#eab308]",
   restarting: "bg-[#ef4444]",

@@ -13,56 +13,85 @@ const axiosApi = axios.create({
     timeout: 10000,
 });
 
+const MAX_GET_RETRIES = 3;
+
 export const fetchApi = async <T>(
     config: AxiosRequestConfig,
 ): Promise<ApiResponse<T>> => {
-    try {
-        const response = await executeRequest<T>(config, null);
+    const isGet = (config.method ?? "GET").toUpperCase() === "GET";
+    const maxAttempts = isGet ? MAX_GET_RETRIES : 1;
 
-        if (
-            response.status === 403 &&
-            !response.success &&
-            "error_code" in response &&
-            response.error_code === 4003 &&
-            typeof window !== "undefined"
-        ) {
-            window.location.href = "/unauthorized";
-            return response;
-        }
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const response = await executeRequest<T>(config, null);
 
-        if (
-            response.status === 403 &&
-            !response.success &&
-            "error_code" in response &&
-            response.error_code === 4004 &&
-            typeof window !== "undefined"
-        ) {
-            window.location.href = "/pending";
-            return response;
-        }
-
-        if (response.status === 401) {
-            const refreshResult = await handle401Response<T>(config);
-            if (refreshResult) return refreshResult;
-
-            if (typeof window !== "undefined") {
-                window.location.href = "/login";
+            if (
+                response.status === 403 &&
+                !response.success &&
+                "error_code" in response &&
+                response.error_code === 4003 &&
+                typeof window !== "undefined"
+            ) {
+                window.location.href = "/unauthorized";
+                return response;
             }
-            return response;
-        }
 
-        return response;
-    } catch (err: unknown) {
-        const status = err instanceof AxiosError ? (err.response?.status ?? 500) : 500;
-        const message = err instanceof AxiosError ? err.message : "Request failed unexpectedly";
-        return {
-            success: false,
-            status,
-            error: "request_failed",
-            error_message: message ?? "Request failed unexpectedly",
-            error_code: -1,
-        };
+            if (
+                response.status === 403 &&
+                !response.success &&
+                "error_code" in response &&
+                response.error_code === 4004 &&
+                typeof window !== "undefined"
+            ) {
+                window.location.href = "/pending";
+                return response;
+            }
+
+            if (response.status === 401) {
+                const refreshResult = await handle401Response<T>(config);
+                if (refreshResult) return refreshResult;
+
+                if (typeof window !== "undefined") {
+                    window.location.href = "/login";
+                }
+                return response;
+            }
+
+            // For GET requests, retry on 5xx errors
+            if (isGet && !response.success && response.status >= 500 && attempt < maxAttempts) {
+                await new Promise((r) => setTimeout(r, 1000 * attempt));
+                continue;
+            }
+
+            return response;
+        } catch (err: unknown) {
+            const status = err instanceof AxiosError ? (err.response?.status ?? 500) : 500;
+            const message = err instanceof AxiosError ? err.message : "Request failed unexpectedly";
+
+            // For GET requests, retry on network/5xx errors
+            if (isGet && attempt < maxAttempts) {
+                await new Promise((r) => setTimeout(r, 1000 * attempt));
+                continue;
+            }
+
+            return {
+                success: false,
+                status,
+                error: "request_failed",
+                error_message: message ?? "Request failed unexpectedly",
+                error_code: -1,
+            };
+        }
     }
+
+    // Fallback — should not reach here, but satisfies TypeScript
+    return {
+        success: false,
+        status: 500,
+        error: "request_failed",
+        error_message: "Request failed after retries",
+        error_code: -1,
+    };
 };
 
 // Singleton promise to deduplicate concurrent refresh requests.

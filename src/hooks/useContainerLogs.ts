@@ -18,6 +18,7 @@ import type { AdminSocketEvent } from "@/hooks/useAdminSocket";
 export interface ContainerLogsState {
     logs: ContainerLog[];
     logsLoading: boolean;
+    logsError: string | null;
     logLimit: LogLimit;
     setLogLimit: (limit: LogLimit) => void;
     streamFilter: string;
@@ -38,6 +39,7 @@ export interface ContainerLogsState {
 export function useContainerLogs(): ContainerLogsState {
     const [logs, setLogs] = useState<ContainerLog[]>([]);
     const [logsLoading, setLogsLoading] = useState(false);
+    const [logsError, setLogsError] = useState<string | null>(null);
     const [streamFilter, setStreamFilter] = useState("all");
     const [logLimit, setLogLimit] = useState<LogLimit>(250);
     const logLimitRef = useRef<LogLimit>(250);
@@ -49,6 +51,7 @@ export function useContainerLogs(): ContainerLogsState {
     const loadLogs = useCallback(
         async (containerId: number, stream?: string, limit?: number) => {
             setLogsLoading(true);
+            setLogsError(null);
             const params: { limit: number; stream?: string } = {
                 limit: limit ?? logLimitRef.current,
             };
@@ -70,6 +73,9 @@ export function useContainerLogs(): ContainerLogsState {
                     return true;
                 });
                 setLogs(sortLogs(unique));
+            } else {
+                const errMsg = !logRes.success ? logRes.error_message : "Failed to load logs";
+                setLogsError(errMsg ?? "Failed to load logs");
             }
             setLogsLoading(false);
         },
@@ -174,6 +180,7 @@ export function useContainerLogs(): ContainerLogsState {
     return {
         logs,
         logsLoading,
+        logsError,
         logLimit,
         setLogLimit,
         streamFilter,

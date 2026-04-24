@@ -6,6 +6,22 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChartLine } from "@fortawesome/free-solid-svg-icons";
 import type { OverviewData, WorkerMetricsSummary, MetricKey } from "@/types";
 
+type TimeRange = "1h" | "6h" | "24h" | "7d";
+
+const RANGE_LABELS: Record<TimeRange, string> = {
+  "1h": "1H",
+  "6h": "6H",
+  "24h": "24H",
+  "7d": "7D",
+};
+
+const RANGE_TICKS: Record<TimeRange, number> = {
+  "1h": 60,
+  "6h": 72,
+  "24h": 96,
+  "7d": 168,
+};
+
 export function FleetResourcePanel({
   workerMetrics,
   overview,
@@ -13,6 +29,7 @@ export function FleetResourcePanel({
   memHistory,
   netHistory,
   containerHistory,
+  onRangeChange,
 }: {
   workerMetrics: WorkerMetricsSummary[] | null;
   overview: OverviewData | null;
@@ -20,8 +37,10 @@ export function FleetResourcePanel({
   memHistory: number[];
   netHistory: number[];
   containerHistory: number[];
+  onRangeChange?: (range: TimeRange) => void;
 }) {
   const [metric, setMetric] = useState<MetricKey>("cpu");
+  const [range, setRange] = useState<TimeRange>("1h");
 
   const labels: Record<MetricKey, string> = {
     cpu: "CPU %",
@@ -71,7 +90,20 @@ export function FleetResourcePanel({
     net: netHistory,
     req: containerHistory,
   };
-  const chartData = historyMap[metric];
+
+  // Window data to the last N ticks for the selected range
+  const chartData = useMemo(() => {
+    const raw = historyMap[metric];
+    const maxTicks = RANGE_TICKS[range];
+    if (raw.length <= maxTicks) return raw;
+    return raw.slice(-maxTicks);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metric, range, cpuHistory, memHistory, netHistory, containerHistory]);
+
+  const handleRangeChange = (r: TimeRange) => {
+    setRange(r);
+    onRangeChange?.(r);
+  };
 
   return (
     <div className="panel" style={{ display: "flex", flexDirection: "column" }}>
@@ -82,7 +114,24 @@ export function FleetResourcePanel({
         />
         <span>Fleet resources</span>
         <span className="muted">· live</span>
-        <div className="panel-header-right">
+        <div className="panel-header-right" style={{ display: "flex", gap: 6 }}>
+          {/* Time range selector */}
+          <div className="flex gap-0.5 p-0.5 bg-surface-alt rounded border border-border text-[11px]">
+            {(["1h", "6h", "24h", "7d"] as TimeRange[]).map((r) => (
+              <button
+                key={r}
+                onClick={() => handleRangeChange(r)}
+                className={`px-2 py-1 rounded cursor-pointer font-medium ${
+                  range === r
+                    ? "bg-background text-primary shadow-sm"
+                    : "text-muted hover:text-primary"
+                }`}
+              >
+                {RANGE_LABELS[r]}
+              </button>
+            ))}
+          </div>
+          {/* Metric selector */}
           <div className="flex gap-0.5 p-0.5 bg-surface-alt rounded border border-border text-[11px]">
             {(["cpu", "mem", "net", "req"] as MetricKey[]).map((m) => (
               <button
@@ -107,6 +156,7 @@ export function FleetResourcePanel({
           gap: 20,
           alignItems: "stretch",
           flex: 1,
+          minHeight: 0,
         }}
       >
         {/* Left: value + worker list */}
@@ -116,6 +166,7 @@ export function FleetResourcePanel({
             flexDirection: "column",
             gap: 12,
             minWidth: 180,
+            flexShrink: 0,
           }}
         >
           <div>
@@ -177,7 +228,7 @@ export function FleetResourcePanel({
           </div>
         </div>
 
-        {/* Right: area chart */}
+        {/* Right: area chart — responsive to container size */}
         <div
           className="dash-chart-area"
           style={{
@@ -185,14 +236,15 @@ export function FleetResourcePanel({
             display: "flex",
             alignItems: "stretch",
             position: "relative",
+            minWidth: 0,
+            minHeight: 0,
           }}
         >
           <Sparkline
             data={chartData}
-            width={460}
-            height={260}
             color={colors[metric]}
             fill
+            responsive
             maxValue={
               metric === "req"
                 ? Math.max(overview?.total_containers ?? 1, 1)

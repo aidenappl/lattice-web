@@ -73,6 +73,13 @@ export default function ContainerDetailPage() {
   const containerNameRef = useRef<string>("");
   const showConfirm = useConfirm();
 
+  // Mounted ref to prevent state updates after unmount
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   // Container logs hook
   const {
     logs,
@@ -94,15 +101,18 @@ export default function ContainerDetailPage() {
 
   const loadContainer = useCallback(async () => {
     const res = await reqGetContainer(id);
+    if (!mountedRef.current) return;
     if (res.success) {
       setContainer(res.data);
       containerNameRef.current = res.data.name;
       if (res.data.stack_id) {
         const sRes = await reqGetStack(res.data.stack_id);
+        if (!mountedRef.current) return;
         if (sRes.success) {
           setStack(sRes.data);
           if (sRes.data.worker_id) {
             const wRes = await reqGetWorker(sRes.data.worker_id);
+            if (!mountedRef.current) return;
             if (wRes.success) setWorker(wRes.data);
           }
         }
@@ -439,10 +449,13 @@ export default function ContainerDetailPage() {
 
       {/* Tabs */}
       <div className="panel">
-        <div className="tabs-bar !px-4 !gap-0">
+        <div className="tabs-bar !px-4 !gap-0" role="tablist">
           {(["logs", "details", "health"] as Tab[]).map((t) => (
             <button
               key={t}
+              role="tab"
+              aria-selected={tab === t}
+              tabIndex={tab === t ? 0 : -1}
               onClick={() => setTab(t)}
               className={`tab-item ${tab === t ? "active" : ""}`}
             >

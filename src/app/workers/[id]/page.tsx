@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import type {
@@ -30,12 +30,11 @@ import { usePoll } from "@/hooks/usePoll";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faEllipsisVertical,
   faArrowLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { isAdmin, canEdit } from "@/lib/utils";
+import { canEdit } from "@/lib/utils";
 import { useUser } from "@/store/hooks";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { useConfirm } from "@/components/ui/confirm-modal";
@@ -65,6 +64,7 @@ import WorkerInfraPanel from "@/components/workers/WorkerInfraPanel";
 import WorkerTokensPanel from "@/components/workers/WorkerTokensPanel";
 import WorkerEditForm from "@/components/workers/WorkerEditForm";
 import { WorkerContainerStats } from "@/components/workers/WorkerContainerStats";
+import { WorkerHeaderActions } from "@/components/workers/WorkerHeaderActions";
 
 export default function WorkerDetailPage() {
   const params = useParams();
@@ -107,11 +107,17 @@ export default function WorkerDetailPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Actions dropdown state
-  const [actionsOpen, setActionsOpen] = useState(false);
+  // (Actions dropdown state moved to WorkerHeaderActions component)
 
   const showConfirm = useConfirm();
   const user = useUser();
+
+  // Mounted ref to prevent state updates after unmount
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Initial data load via Redux thunks
   useEffect(() => {
@@ -184,8 +190,13 @@ export default function WorkerDetailPage() {
             (p.container_running_count as number | null) ?? null,
           network_rx_bytes: (p.network_rx_bytes as number | null) ?? null,
           network_tx_bytes: (p.network_tx_bytes as number | null) ?? null,
+          network_rx_rate: (p.network_rx_rate as number | null) ?? null,
+          network_tx_rate: (p.network_tx_rate as number | null) ?? null,
           uptime_seconds: (p.uptime_seconds as number | null) ?? null,
           process_count: (p.process_count as number | null) ?? null,
+          runner_goroutines: (p.runner_goroutines as number | null) ?? null,
+          runner_heap_mb: (p.runner_heap_mb as number | null) ?? null,
+          runner_sys_mb: (p.runner_sys_mb as number | null) ?? null,
           recorded_at: now,
         };
         dispatch(pushMetricsSnapshot(snapshot));
@@ -347,6 +358,9 @@ export default function WorkerDetailPage() {
     setDeleteLoading(true);
     const res = await reqDeleteWorker(id);
     if (res.success) {
+      // Invalidate related Redux state
+      dispatch(fetchStacks());
+      dispatch(fetchAllContainers());
       router.push("/workers");
     }
     setDeleteLoading(false);
@@ -419,104 +433,15 @@ export default function WorkerDetailPage() {
 
         {/* Header actions */}
         {!editing && (
-          <div className="flex items-center gap-2 flex-shrink-0 relative">
-            <Link href={`/workers/${worker.id}/metrics`}>
-              <Button variant="secondary" size="sm">
-                Full Metrics
-              </Button>
-            </Link>
-            {canEdit(user) && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setEditing(true)}
-              >
-                Edit
-              </Button>
-            )}
-            {canEdit(user) && (
-              <div className="relative">
-                <button
-                  className="icon-btn"
-                  onClick={() => setActionsOpen(!actionsOpen)}
-                >
-                  <FontAwesomeIcon
-                    icon={faEllipsisVertical}
-                    className="h-4 w-4"
-                  />
-                </button>
-                {actionsOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-20"
-                      onClick={() => setActionsOpen(false)}
-                    />
-                    <div className="menu right-0 top-9">
-                      {worker.status === "online" && (
-                        <>
-                          <button
-                            className="menu-item w-full text-left"
-                            onClick={() => {
-                              setActionsOpen(false);
-                              handleWorkerAction("start-all");
-                            }}
-                            disabled={!!actionLoading}
-                          >
-                            Start All Containers
-                          </button>
-                          <button
-                            className="menu-item w-full text-left"
-                            onClick={() => {
-                              setActionsOpen(false);
-                              handleWorkerAction("stop-all");
-                            }}
-                            disabled={!!actionLoading}
-                          >
-                            Stop All Containers
-                          </button>
-                          {isAdmin(user) && (
-                            <button
-                              className="menu-item w-full text-left"
-                              onClick={() => {
-                                setActionsOpen(false);
-                                handleWorkerAction("upgrade");
-                              }}
-                              disabled={!!actionLoading}
-                            >
-                              Upgrade Runner
-                            </button>
-                          )}
-                          {isAdmin(user) && (
-                            <button
-                              className="menu-item w-full text-left text-failed"
-                              onClick={() => {
-                                setActionsOpen(false);
-                                handleWorkerAction("reboot");
-                              }}
-                              disabled={!!actionLoading}
-                            >
-                              Reboot OS
-                            </button>
-                          )}
-                          <div className="border-t border-border my-1" />
-                        </>
-                      )}
-                      <button
-                        className="menu-item w-full text-left text-failed"
-                        onClick={() => {
-                          setActionsOpen(false);
-                          handleDeleteWorker();
-                        }}
-                        disabled={deleteLoading}
-                      >
-                        {deleteLoading ? "Deleting..." : "Delete Worker"}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+          <WorkerHeaderActions
+            worker={worker}
+            user={user}
+            actionLoading={actionLoading}
+            deleteLoading={deleteLoading}
+            onWorkerAction={handleWorkerAction}
+            onDeleteWorker={handleDeleteWorker}
+            onEdit={() => setEditing(true)}
+          />
         )}
       </div>
 

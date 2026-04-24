@@ -10,6 +10,7 @@ import {
 import { Deployment, DeploymentLog } from "@/types";
 import { StatusBadge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
+import { useDeploymentProgress } from "@/hooks/useDeploymentProgress";
 
 interface StackDeploymentsProps {
   deployments: Deployment[];
@@ -27,6 +28,7 @@ export function StackDeployments({
   onSelectDeployment,
 }: StackDeploymentsProps) {
   const deploymentLogsEndRef = useRef<HTMLDivElement>(null);
+  const deployProgress = useDeploymentProgress();
 
   return (
     <div className="space-y-5">
@@ -69,6 +71,14 @@ export function StackDeployments({
                   </div>
                 </div>
                 <StatusBadge status={d.status} />
+                {(d.status === "deploying" || d.status === "validating" || d.status === "sending") && (
+                  <div className="progress-bar" style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, borderRadius: 0 }}>
+                    <div
+                      className="progress-bar-fill pending"
+                      style={{ width: `${deployProgress[d.id]?.percent ?? 15}%` }}
+                    />
+                  </div>
+                )}
               </button>
             ))
           )}

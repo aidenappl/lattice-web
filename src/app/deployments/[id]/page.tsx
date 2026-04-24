@@ -19,8 +19,9 @@ import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useConfirm } from "@/components/ui/confirm-modal";
+import { useDeploymentProgress } from "@/hooks/useDeploymentProgress";
 
-const timelineSteps = ["pending", "approved", "deploying", "deployed"] as const;
+const timelineSteps = ["pending", "approved", "deploying", "validating", "deployed"] as const;
 
 export default function DeploymentDetailPage() {
   const params = useParams();
@@ -33,6 +34,7 @@ export default function DeploymentDetailPage() {
     { id: number; name: string | null; email: string }[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const [liveMeta, setLiveMeta] = useState<{
     attempt?: number;
@@ -43,27 +45,42 @@ export default function DeploymentDetailPage() {
   }>({});
   const logsEndRef = useRef<HTMLDivElement>(null);
   const showConfirm = useConfirm();
+  const deployProgress = useDeploymentProgress();
+
+  // Mounted ref to prevent state updates after unmount
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     if (deployment) document.title = `Lattice - Deployment #${deployment.id}`;
   }, [deployment]);
 
-  useEffect(() => {
-    const load = async () => {
-      const [depRes, logsRes, stacksRes, usersRes] = await Promise.all([
-        reqGetDeployment(id),
-        reqGetDeploymentLogs(id),
-        reqGetStacks(),
-        reqGetUsers(),
-      ]);
-      if (depRes.success) setDeployment(depRes.data);
-      if (logsRes.success) setLogs(logsRes.data ?? []);
-      if (stacksRes.success) setStacks(stacksRes.data ?? []);
-      if (usersRes.success) setUsers(usersRes.data ?? []);
-      setLoading(false);
-    };
-    load();
+  const loadDeployment = useCallback(async () => {
+    setError(null);
+    const [depRes, logsRes, stacksRes, usersRes] = await Promise.all([
+      reqGetDeployment(id),
+      reqGetDeploymentLogs(id),
+      reqGetStacks(),
+      reqGetUsers(),
+    ]);
+    if (!mountedRef.current) return;
+    if (depRes.success) {
+      setDeployment(depRes.data);
+    } else {
+      setError(depRes.error_message ?? "Failed to load deployment");
+    }
+    if (logsRes.success) setLogs(logsRes.data ?? []);
+    if (stacksRes.success) setStacks(stacksRes.data ?? []);
+    if (usersRes.success) setUsers(usersRes.data ?? []);
+    setLoading(false);
   }, [id]);
+
+  useEffect(() => {
+    loadDeployment();
+  }, [loadDeployment]);
 
   // WS: listen for deployment_progress events for this deployment
   const handleSocketEvent = useCallback(
@@ -126,7 +143,7 @@ export default function DeploymentDetailPage() {
 
   // Poll while deploying
   useEffect(() => {
-    if (!deployment || deployment.status !== "deploying") return;
+    if (!deployment || (deployment.status !== "deploying" && deployment.status !== "validating")) return;
     const interval = setInterval(async () => {
       const [depRes, logsRes] = await Promise.all([
         reqGetDeployment(id),
@@ -151,7 +168,11 @@ export default function DeploymentDetailPage() {
     if (!ok) return;
     setActing(true);
     const res = await reqApproveDeployment(id);
-    if (res.success) setDeployment(res.data);
+    if (res.success) {
+      setDeployment(res.data);
+      // Refresh deployment data to pick up all changes
+      setTimeout(loadDeployment, 2000);
+    }
     setActing(false);
   };
 
@@ -166,11 +187,24 @@ export default function DeploymentDetailPage() {
     if (!ok) return;
     setActing(true);
     const res = await reqRollbackDeployment(id);
-    if (res.success) setDeployment(res.data);
+    if (res.success) {
+      setDeployment(res.data);
+      // Refresh deployment data to pick up all changes
+      setTimeout(loadDeployment, 2000);
+    }
     setActing(false);
   };
 
   if (loading) return <PageLoader />;
+  if (error)
+    return (
+      <div className="flex flex-col items-center gap-2 py-8 text-muted">
+        <p>{error}</p>
+        <button onClick={loadDeployment} className="text-sm text-info hover:underline cursor-pointer">
+          Retry
+        </button>
+      </div>
+    );
   if (!deployment)
     return (
       <div className="text-center text-sm text-muted py-12">
@@ -183,6 +217,9 @@ export default function DeploymentDetailPage() {
   );
   const isFailed = deployment.status === "failed";
   const isRolledBack = deployment.status === "rolled_back";
+  const isActive = deployment.status === "deploying" || deployment.status === "validating" || deployment.status === "sending";
+  const progressEntry = deployProgress[deployment.id];
+  const percent = progressEntry?.percent ?? (deployment.status === "deployed" ? 100 : 0);
 
   return (
     <div className="p-6">
@@ -202,6 +239,14 @@ export default function DeploymentDetailPage() {
             </Link>{" "}
             &middot; {deployment.strategy}
           </p>
+          {isActive && (
+            <div className="progress-bar mt-2" style={{ width: 200 }}>
+              <div
+                className="progress-bar-fill pending"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           {deployment.status === "pending" && (
@@ -210,7 +255,8 @@ export default function DeploymentDetailPage() {
             </Button>
           )}
           {(deployment.status === "deployed" ||
-            deployment.status === "deploying") && (
+            deployment.status === "deploying" ||
+            deployment.status === "validating") && (
             <Button
               variant="destructive"
               onClick={handleRollback}
@@ -290,13 +336,18 @@ export default function DeploymentDetailPage() {
                 Live Progress
               </p>
               <p className="text-sm text-secondary mt-1">
-                {liveMeta.attempt && liveMeta.maxRetries
-                  ? `Attempt ${liveMeta.attempt}/${liveMeta.maxRetries}`
-                  : "Attempt 1/3"}
+                {progressEntry?.status === "validating" && progressEntry.verifyCheck && progressEntry.verifyTotal
+                  ? `Verifying health: check ${progressEntry.verifyCheck}/${progressEntry.verifyTotal}`
+                  : liveMeta.attempt && liveMeta.maxRetries
+                    ? `Attempt ${liveMeta.attempt}/${liveMeta.maxRetries}`
+                    : "Attempt 1/3"}
                 {liveMeta.step ? ` • ${liveMeta.step}` : ""}
               </p>
               {liveMeta.message && (
                 <p className="text-xs text-muted mt-1">{liveMeta.message}</p>
+              )}
+              {isActive && (
+                <p className="text-xs text-muted mt-1">{percent}% complete</p>
               )}
             </div>
             <div>
@@ -359,7 +410,7 @@ export default function DeploymentDetailPage() {
       <div className="mt-6 card p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium text-primary">Deployment Logs</h2>
-          {deployment.status === "deploying" && (
+          {isActive && (
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-info opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-info" />

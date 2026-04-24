@@ -6,6 +6,7 @@ import { timeAgo } from "@/lib/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronRight } from "@fortawesome/free-solid-svg-icons";
 import type { Deployment } from "@/types";
+import { useDeploymentProgress } from "@/hooks/useDeploymentProgress";
 
 export function DeploymentTimelineMini({
   deployments,
@@ -15,11 +16,12 @@ export function DeploymentTimelineMini({
   stackNames: Record<number, string>;
 }) {
   const router = useRouter();
+  const deployProgress = useDeploymentProgress();
 
   const active = useMemo(
     () =>
       (deployments ?? []).filter(
-        (d) => d.status === "deploying" || d.status === "pending",
+        (d) => d.status === "deploying" || d.status === "validating" || d.status === "sending" || d.status === "pending",
       ),
     [deployments],
   );
@@ -27,7 +29,7 @@ export function DeploymentTimelineMini({
   const recent = useMemo(
     () =>
       (deployments ?? [])
-        .filter((d) => d.status !== "deploying" && d.status !== "pending")
+        .filter((d) => d.status !== "deploying" && d.status !== "validating" && d.status !== "sending" && d.status !== "pending")
         .slice(0, 5),
     [deployments],
   );
@@ -80,14 +82,16 @@ export function DeploymentTimelineMini({
             <div className="progress-bar">
               <div
                 className="progress-bar-fill pending"
-                style={{ width: "50%" }}
+                style={{ width: `${deployProgress[d.id]?.percent ?? (d.status === "pending" ? 0 : 15)}%` }}
               />
             </div>
             <div
               className="mono text-muted"
               style={{ fontSize: 10, marginTop: 4 }}
             >
-              started {d.started_at ? timeAgo(d.started_at) : "just now"}
+              {deployProgress[d.id]?.message
+                ? deployProgress[d.id].message
+                : `started ${d.started_at ? timeAgo(d.started_at) : "just now"}`}
             </div>
           </div>
         ))}

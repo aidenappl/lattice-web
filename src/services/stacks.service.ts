@@ -1,4 +1,4 @@
-import { Stack, Container, ContainerLog, LifecycleLog, ComposeNetwork, DeployToken, StackExportPayload, StackImportPayload } from "@/types";
+import { Stack, Container, ContainerLog, LifecycleLog, ComposeNetwork, DeployToken, StackExportPayload, StackImportPayload, ContainerMetrics } from "@/types";
 import { fetchApi } from "./api.service";
 
 export const reqGetStacks = () =>
@@ -92,6 +92,13 @@ export const reqGetLifecycleLogs = (containerId: number, params?: { limit?: numb
         method: "GET",
         url: `/admin/containers/${containerId}/lifecycle`,
         params,
+    });
+
+export const reqGetContainerMetrics = (containerId: number, range?: string) =>
+    fetchApi<ContainerMetrics[]>({
+        method: "GET",
+        url: `/admin/containers/${containerId}/metrics`,
+        params: range ? { range } : undefined,
     });
 
 export const reqStartContainer = (id: number) =>

@@ -59,6 +59,8 @@ const chartColors = {
   network_rx: "#22c55e",
   network_tx: "#ef4444",
   containers: "#06b6d4",
+  load: "#f97316",
+  swap: "#ec4899",
 };
 
 export default function WorkerMetricsPage() {
@@ -153,6 +155,71 @@ export default function WorkerMetricsPage() {
             tickFormatter={tickFormatter}
           />
 
+          {/* Load Average */}
+          <div className="card p-5">
+            <h3 className="text-sm font-medium text-primary mb-4">
+              Load Average
+            </h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={metrics}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--border-subtle)"
+                />
+                <XAxis
+                  dataKey="recorded_at"
+                  tickFormatter={tickFormatter}
+                  stroke="var(--muted)"
+                  fontSize={11}
+                />
+                <YAxis stroke="var(--muted)" fontSize={11} />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border-strong)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                  labelFormatter={(label) => formatDateTime(String(label))}
+                  formatter={(value, name) => [
+                    Number(value).toFixed(2),
+                    String(name) === "load_avg_1"
+                      ? "1m"
+                      : String(name) === "load_avg_5"
+                        ? "5m"
+                        : "15m",
+                  ]}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="load_avg_1"
+                  stroke={chartColors.load}
+                  strokeWidth={2}
+                  dot={false}
+                  name="load_avg_1"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="load_avg_5"
+                  stroke={chartColors.cpu}
+                  strokeWidth={1.5}
+                  dot={false}
+                  strokeDasharray="4 2"
+                  name="load_avg_5"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="load_avg_15"
+                  stroke="var(--muted)"
+                  strokeWidth={1}
+                  dot={false}
+                  strokeDasharray="4 4"
+                  name="load_avg_15"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
           {/* Memory Usage */}
           <MetricChart
             title="Memory Usage (MB)"
@@ -164,6 +231,22 @@ export default function WorkerMetricsPage() {
             secondaryKey="memory_total_mb"
             secondaryLabel="Total"
           />
+
+          {/* Swap Usage */}
+          {metrics.some(
+            (m) => m.swap_total_mb != null && m.swap_total_mb > 0,
+          ) && (
+            <MetricChart
+              title="Swap Usage (MB)"
+              data={metrics}
+              dataKey="swap_used_mb"
+              color={chartColors.swap}
+              unit=" MB"
+              tickFormatter={tickFormatter}
+              secondaryKey="swap_total_mb"
+              secondaryLabel="Total"
+            />
+          )}
 
           {/* Disk Usage */}
           <MetricChart
@@ -177,10 +260,10 @@ export default function WorkerMetricsPage() {
             secondaryLabel="Total"
           />
 
-          {/* Network I/O */}
+          {/* Network Throughput (bytes/sec) */}
           <div className="card p-5">
             <h3 className="text-sm font-medium text-primary mb-4">
-              Network I/O
+              Network Throughput
             </h3>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={metrics}>
@@ -197,7 +280,7 @@ export default function WorkerMetricsPage() {
                 <YAxis
                   stroke="var(--muted)"
                   fontSize={11}
-                  tickFormatter={(v: number) => formatBytes(v)}
+                  tickFormatter={(v: number) => `${formatBytes(v)}/s`}
                 />
                 <Tooltip
                   contentStyle={{
@@ -208,25 +291,25 @@ export default function WorkerMetricsPage() {
                   }}
                   labelFormatter={(label) => formatDateTime(String(label))}
                   formatter={(value, name) => [
-                    formatBytes(Number(value)),
-                    String(name) === "network_rx_bytes" ? "RX" : "TX",
+                    `${formatBytes(Number(value))}/s`,
+                    String(name) === "network_rx_rate" ? "RX" : "TX",
                   ]}
                 />
                 <Line
                   type="monotone"
-                  dataKey="network_rx_bytes"
+                  dataKey="network_rx_rate"
                   stroke={chartColors.network_rx}
                   strokeWidth={2}
                   dot={false}
-                  name="network_rx_bytes"
+                  name="network_rx_rate"
                 />
                 <Line
                   type="monotone"
-                  dataKey="network_tx_bytes"
+                  dataKey="network_tx_rate"
                   stroke={chartColors.network_tx}
                   strokeWidth={2}
                   dot={false}
-                  name="network_tx_bytes"
+                  name="network_tx_rate"
                 />
               </LineChart>
             </ResponsiveContainer>

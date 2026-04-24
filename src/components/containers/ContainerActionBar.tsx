@@ -34,6 +34,7 @@ export function ActionButton({
       onClick={onClick}
       disabled={disabled}
       title={title ?? label}
+      aria-label={title ?? label}
       className={`inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 h-8 text-sm font-medium transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${color}`}
     >
       {loading ? (

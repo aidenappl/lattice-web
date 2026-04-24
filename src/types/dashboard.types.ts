@@ -1,8 +1,8 @@
 export type WorkerLatestMetrics = {
     cpu: number;
     memoryPct: number;
-    netRx: number;
-    netTx: number;
+    netRxRate: number;
+    netTxRate: number;
     containers: number;
     running: number;
 };
@@ -34,6 +34,19 @@ export type ContainerResourceUsage = {
     mem_usage_mb: number | null;
     mem_limit_mb: number | null;
     mem_percent: number | null;
+};
+
+/** Per-container metrics stored in the DB (from container_metrics table). */
+export type ContainerMetrics = {
+    id: number;
+    worker_id: number;
+    container_id: number | null;
+    container_name: string;
+    cpu_percent: number | null;
+    mem_usage_mb: number | null;
+    mem_limit_mb: number | null;
+    mem_percent: number | null;
+    recorded_at: string;
 };
 
 /** Payload shape returned by GET /admin/stacks/{id}/export */

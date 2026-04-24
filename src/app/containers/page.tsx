@@ -1,17 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
-import toast from "react-hot-toast";
 import type { Container, Stack, Worker } from "@/types";
 import {
   reqGetAllContainers,
   reqGetStacks,
-  reqStartContainer,
-  reqStopContainer,
-  reqRestartContainer,
-  reqRecreateContainer,
-  reqUnpauseContainer,
 } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
@@ -28,8 +22,8 @@ import { StatusBadge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
+import { useContainerActions } from "@/hooks/useContainerActions";
 import { StalePill } from "@/components/ui/worker-offline-banner";
-import { useConfirm } from "@/components/ui/confirm-modal";
 import WorkerBadge from "@/components/ui/worker-badge";
 
 function parsePortMappings(raw: string | null): string {
@@ -64,11 +58,6 @@ export default function ContainersPage() {
   const [filterWorker, setFilterWorker] = useState<string>("all");
   const [search, setSearch] = useState<string>("");
 
-  const [actionLoading, setActionLoading] = useState<Record<number, string>>(
-    {},
-  );
-  const showConfirm = useConfirm();
-
   // Debounce socket-driven refreshes
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -85,10 +74,16 @@ export default function ContainersPage() {
     setLoading(false);
   }, []);
 
+  // Use a ref for load to avoid stale closure in scheduleRefresh
+  const loadRef = useRef(load);
+  loadRef.current = load;
+
   const scheduleRefresh = useCallback(() => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    refreshTimerRef.current = setTimeout(load, 1500);
-  }, [load]);
+    refreshTimerRef.current = setTimeout(() => loadRef.current(), 1500);
+  }, []);
+
+  const { actionLoading, performAction } = useContainerActions(load);
 
   // Real-time WebSocket updates
   const handleSocketEvent = useCallback(
@@ -123,83 +118,22 @@ export default function ContainersPage() {
     };
   }, [load]);
 
-  const confirmAndRun = async (id: number, action: string) => {
-    const container = containers.find((c) => c.id === id);
-    const name = container?.name ?? String(id);
-    const confirmMap: Record<
-      string,
-      { title: string; message: string; variant: "danger" | "warning" }
-    > = {
-      stop: {
-        title: "Stop container",
-        message: `Stop "${name}"? The container will be gracefully shut down.`,
-        variant: "warning",
-      },
-      restart: {
-        title: "Restart container",
-        message: `Restart "${name}"? The container will be stopped and started.`,
-        variant: "warning",
-      },
-      recreate: {
-        title: "Recreate container",
-        message: `Recreate "${name}"? The container will be removed and created fresh.`,
-        variant: "warning",
-      },
-    };
-    const conf = confirmMap[action];
-    if (conf) {
-      const ok = await showConfirm({
-        ...conf,
-        confirmLabel: conf.title.split(" ")[0],
-      });
-      if (!ok) return;
-    }
-    runAction(id, action);
-  };
+  const runAction = useCallback(
+    (id: number, action: string) => {
+      const container = containers.find((c) => c.id === id);
+      performAction(id, action, container?.name);
+    },
+    [containers, performAction],
+  );
 
-  const runAction = async (id: number, action: string) => {
-    const container = containers.find((c) => c.id === id);
-    const name = container?.name ?? String(id);
-    const label = action.charAt(0).toUpperCase() + action.slice(1);
-
-    setActionLoading((p) => ({ ...p, [id]: action }));
-    const toastId = toast.loading(`Sending ${label.toLowerCase()} to ${name}…`);
-
-    try {
-      const fns: Record<
-        string,
-        (id: number) => Promise<{ success: boolean; error_message?: string }>
-      > = {
-        start: reqStartContainer,
-        stop: reqStopContainer,
-        restart: reqRestartContainer,
-        recreate: reqRecreateContainer,
-        unpause: reqUnpauseContainer,
-      };
-      const res = await fns[action]?.(id);
-      if (res?.success) {
-        toast.success(`${label} command sent to ${name}`, { id: toastId });
-        if (process.env.NODE_ENV === "development") console.log(`[Containers] ${action} ok for container ${id} (${name})`);
-      } else {
-        const msg = res?.error_message ?? "Unknown error";
-        toast.error(`${label} failed: ${msg}`, { id: toastId });
-        if (process.env.NODE_ENV === "development") console.error(`[Containers] ${action} failed for ${name}:`, msg);
-      }
-    } catch (err) {
-      toast.error(`${label} error: ${String(err)}`, { id: toastId });
-      if (process.env.NODE_ENV === "development") console.error(`[Containers] ${action} threw for ${name}:`, err);
-    }
-
-    setActionLoading((p) => {
-      const n = { ...p };
-      delete n[id];
-      return n;
-    });
-    setTimeout(load, 2500);
-  };
-
-  const stackMap = Object.fromEntries(stacks.map((s) => [s.id, s]));
-  const workerMap = Object.fromEntries(workers.map((w) => [w.id, w]));
+  const stackMap = useMemo(
+    () => Object.fromEntries(stacks.map((s) => [s.id, s])),
+    [stacks],
+  );
+  const workerMap = useMemo(
+    () => Object.fromEntries(workers.map((w) => [w.id, w])),
+    [workers],
+  );
   const workerLiveness = useWorkerLiveness(workers);
 
   const filtered = containers.filter((c) => {
@@ -396,6 +330,7 @@ export default function ContainersPage() {
                             onClick={() => runAction(c.id, "start")}
                             disabled={!!busy || !workerOnline}
                             title={!workerOnline ? "Worker offline" : "Start container"}
+                            aria-label="Start container"
                             className="h-7 w-7 rounded flex items-center justify-center text-healthy hover:bg-healthy/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "start" ? (
@@ -417,6 +352,7 @@ export default function ContainersPage() {
                             onClick={() => runAction(c.id, "unpause")}
                             disabled={!!busy || !workerOnline}
                             title={!workerOnline ? "Worker offline" : "Resume container"}
+                            aria-label="Resume container"
                             className="h-7 w-7 rounded flex items-center justify-center text-healthy hover:bg-healthy/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "unpause" ? (
@@ -435,9 +371,10 @@ export default function ContainersPage() {
                         {/* Stop (only when running) */}
                         {c.status === "running" && (
                           <button
-                            onClick={() => confirmAndRun(c.id, "stop")}
+                            onClick={() => runAction(c.id, "stop")}
                             disabled={!!busy || !workerOnline}
                             title={!workerOnline ? "Worker offline" : "Stop container"}
+                            aria-label="Stop container"
                             className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-failed hover:bg-failed/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "stop" ? (
@@ -456,9 +393,10 @@ export default function ContainersPage() {
                         {/* Restart */}
                         {c.status === "running" && (
                           <button
-                            onClick={() => confirmAndRun(c.id, "restart")}
+                            onClick={() => runAction(c.id, "restart")}
                             disabled={!!busy || !workerOnline}
                             title={!workerOnline ? "Worker offline" : "Restart container"}
+                            aria-label="Restart container"
                             className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-info hover:bg-info/10 disabled:opacity-40 transition-colors cursor-pointer"
                           >
                             {busy === "restart" ? (
@@ -476,9 +414,10 @@ export default function ContainersPage() {
                         )}
                         {/* Recreate */}
                         <button
-                          onClick={() => confirmAndRun(c.id, "recreate")}
+                          onClick={() => runAction(c.id, "recreate")}
                           disabled={!!busy || !workerOnline}
                           title={!workerOnline ? "Worker offline" : "Remove and recreate container from config"}
+                          aria-label="Recreate container"
                           className="h-7 w-7 rounded flex items-center justify-center text-secondary hover:text-violet hover:bg-violet/10 disabled:opacity-40 transition-colors cursor-pointer"
                         >
                           {busy === "recreate" ? (
