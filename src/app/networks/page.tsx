@@ -16,7 +16,7 @@ import type {
   PortEntry,
   WorkerGroup,
   GlobalEnvVar,
-  LatticeNetwork,
+  ComposeNetwork,
 } from "@/types";
 import { reqGetAllContainers, reqGetStacks } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
@@ -35,7 +35,7 @@ export default function NetworksPage() {
   const [stacks, setStacks] = useState<Stack[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [globalEnvVars, setGlobalEnvVars] = useState<GlobalEnvVar[]>([]);
-  const [networks, setNetworks] = useState<LatticeNetwork[]>([]);
+  const [networks, setNetworks] = useState<ComposeNetwork[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -145,7 +145,7 @@ function NetworksTab({
   workers,
   containers,
 }: {
-  networks: LatticeNetwork[];
+  networks: ComposeNetwork[];
   stacks: Stack[];
   stackMap: Record<number, Stack>;
   workers: Worker[];
@@ -164,26 +164,22 @@ function NetworksTab({
   }
 
   // Group networks by stack
-  const byStack = new Map<number, LatticeNetwork[]>();
+  const byStack = new Map<number, ComposeNetwork[]>();
   for (const n of networks) {
     const list = byStack.get(n.stack_id) ?? [];
     list.push(n);
     byStack.set(n.stack_id, list);
   }
 
-  // Build a map of containers per network name (from the same stack)
-  const containersByNetwork = new Map<string, Container[]>();
+  // Build containers by stack for the "connected containers" column
+  const containersByStack = new Map<number, Container[]>();
   for (const c of containers) {
-    const netNames = parseJSON<string[]>(c.networks) ?? [];
-    for (const name of netNames) {
-      const key = `${c.stack_id}:${name}`;
-      const list = containersByNetwork.get(key) ?? [];
-      list.push(c);
-      containersByNetwork.set(key, list);
-    }
+    const list = containersByStack.get(c.stack_id) ?? [];
+    list.push(c);
+    containersByStack.set(c.stack_id, list);
   }
 
-  // Sort stacks: those with networks first, then by name
+  // Sort stacks by name
   const stackIds = Array.from(byStack.keys()).sort((a, b) => {
     const nameA = stackMap[a]?.name ?? "";
     const nameB = stackMap[b]?.name ?? "";
@@ -243,8 +239,7 @@ function NetworksTab({
               </thead>
               <tbody className="divide-y divide-border-subtle">
                 {stackNetworks.map((n) => {
-                  const key = `${n.stack_id}:${n.name}`;
-                  const connected = containersByNetwork.get(key) ?? [];
+                  const connected = containersByStack.get(n.stack_id) ?? [];
                   return (
                     <tr
                       key={n.id}

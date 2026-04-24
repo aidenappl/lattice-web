@@ -1,8 +1,8 @@
 import { fetchApi } from "./api.service";
-import type { LatticeNetwork } from "@/types";
+import type { ComposeNetwork } from "@/types";
 
 export const reqListAllNetworks = () =>
-    fetchApi<LatticeNetwork[]>({
+    fetchApi<ComposeNetwork[]>({
         method: "GET",
         url: "/admin/networks",
     });
