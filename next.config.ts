@@ -1,5 +1,10 @@
 import type { NextConfig } from "next";
 
+const isDev = process.env.NODE_ENV === "development";
+const apiUrl = process.env.NEXT_PUBLIC_LATTICE_API || "";
+// Derive allowed WS origin from API URL for tighter connect-src
+const apiWsUrl = apiUrl.replace(/^https:/, "wss:").replace(/^http:/, "ws:");
+
 const nextConfig: NextConfig = {
   output: "standalone",
   productionBrowserSourceMaps: false,
@@ -17,11 +22,15 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://kit.fontawesome.com https://ka-p.fontawesome.com",
+              // unsafe-eval only in dev (Next.js HMR requires it); unsafe-inline for FA kit
+              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://kit.fontawesome.com https://ka-p.fontawesome.com`,
               "style-src 'self' 'unsafe-inline' https://ka-p.fontawesome.com",
               "font-src 'self' https://ka-p.fontawesome.com",
               "img-src 'self' data: blob: https:",
-              "connect-src 'self' wss: ws: https:",
+              // Tighten connect-src to API origin instead of blanket wss:/https:
+              apiUrl
+                ? `connect-src 'self' ${apiUrl} ${apiWsUrl} https://ka-p.fontawesome.com`
+                : "connect-src 'self' wss: ws: https:",
               "frame-ancestors 'none'",
             ].join("; "),
           },

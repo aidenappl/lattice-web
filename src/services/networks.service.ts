@@ -1,4 +1,11 @@
 import { fetchApi } from "./api.service";
+import type { LatticeNetwork } from "@/types";
+
+export const reqListAllNetworks = () =>
+    fetchApi<LatticeNetwork[]>({
+        method: "GET",
+        url: "/admin/networks",
+    });
 
 export const reqListNetworks = (workerId: number) =>
     fetchApi<void>({

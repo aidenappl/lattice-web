@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { reqLogout } from "@/services/auth.service";
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -12,8 +13,11 @@ export function useIdleTimeout(timeoutMs = IDLE_TIMEOUT_MS) {
 
         const reset = () => {
             clearTimeout(timer);
-            timer = setTimeout(() => {
-                window.location.href = `${process.env.NEXT_PUBLIC_LATTICE_API}/auth/logout`;
+            timer = setTimeout(async () => {
+                // Use POST to properly invalidate the server-side session,
+                // then redirect to login page.
+                await reqLogout().catch(() => {});
+                window.location.replace("/login");
             }, timeoutMs);
         };
 

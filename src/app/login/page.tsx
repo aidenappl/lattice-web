@@ -147,9 +147,9 @@ export default function LoginPage() {
                 <div className="flex-1 h-px bg-border" />
               </div>
 
-              {/* SSO */}
+              {/* SSO — validate login_url starts with / to prevent javascript: or open redirect */}
               <a
-                href={`${API_URL}${ssoConfig.login_url}`}
+                href={ssoConfig.login_url?.startsWith("/") ? `${API_URL}${ssoConfig.login_url}` : "#"}
                 className="btn btn-secondary w-full justify-center !h-10"
               >
                 {ssoConfig.button_label}
