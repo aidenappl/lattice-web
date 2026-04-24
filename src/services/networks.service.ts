@@ -25,3 +25,9 @@ export const reqDeleteNetwork = (workerId: number, name: string) =>
         method: "DELETE",
         url: `/admin/workers/${workerId}/networks/${encodeURIComponent(name)}`,
     });
+
+export const reqDeleteNetworkByID = (networkId: number) =>
+    fetchApi<void>({
+        method: "DELETE",
+        url: `/admin/networks/${networkId}`,
+    });

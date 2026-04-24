@@ -6,6 +6,8 @@ import {
   faCheck,
   faTriangleExclamation,
   faArrowUp,
+  faChevronDown,
+  faChevronUp,
 } from "@fortawesome/free-solid-svg-icons";
 import { useAdminSocket, type AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
@@ -68,6 +70,13 @@ function Spinner({ className }: { className?: string }) {
   );
 }
 
+/** Check whether a failure message contains multi-line script output. */
+function hasErrorDetail(r: RunnerStatusEntry): boolean {
+  if (r.upgrade_status !== "failed" || !r.message) return false;
+  return r.message.includes("\n");
+}
+
+/** First line of the message (for inline display). */
 function statusLabel(r: RunnerStatusEntry): string {
   switch (r.upgrade_status) {
     case "sending":
@@ -78,8 +87,11 @@ function statusLabel(r: RunnerStatusEntry): string {
       return r.message || "restarting runner…";
     case "success":
       return r.message ?? "upgraded";
-    case "failed":
-      return r.message ?? "failed";
+    case "failed": {
+      const msg = r.message ?? "failed";
+      const firstLine = msg.split("\n")[0];
+      return firstLine;
+    }
     default:
       if (r.worker_status !== "online") return "offline";
       return r.current_version ?? "unknown";
@@ -367,6 +379,16 @@ export function RunnerUpgradePanel({
     }
   }, [statuses]);
 
+  const [expandedErrors, setExpandedErrors] = useState<Set<number>>(new Set());
+  const toggleError = useCallback((workerId: number) => {
+    setExpandedErrors((prev) => {
+      const next = new Set(prev);
+      if (next.has(workerId)) next.delete(workerId);
+      else next.add(workerId);
+      return next;
+    });
+  }, []);
+
   const upgradeableIdle = statuses.filter(
     (r) =>
       r.outdated &&
@@ -480,6 +502,27 @@ export function RunnerUpgradePanel({
                       style={{ width: `${pct}%` }}
                     />
                   </div>
+                </div>
+              )}
+
+              {/* Expandable error detail */}
+              {hasErrorDetail(r) && (
+                <div className="mt-1 ml-8">
+                  <button
+                    onClick={() => toggleError(r.worker_id)}
+                    className="flex items-center gap-1 text-[10px] text-red-400/70 hover:text-red-400 transition-colors cursor-pointer"
+                  >
+                    <FontAwesomeIcon
+                      icon={expandedErrors.has(r.worker_id) ? faChevronUp : faChevronDown}
+                      className="h-2 w-2"
+                    />
+                    {expandedErrors.has(r.worker_id) ? "Hide" : "Show"} output
+                  </button>
+                  {expandedErrors.has(r.worker_id) && (
+                    <pre className="mt-1 p-2 rounded bg-surface-elevated text-[10px] leading-relaxed text-red-300/80 font-mono overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">
+                      {r.message?.split("\n").slice(1).join("\n").trim()}
+                    </pre>
+                  )}
                 </div>
               )}
             </div>

@@ -8,6 +8,8 @@ import {
   faArrowUpRightFromSquare,
   faNetworkWired,
   faPlug,
+  faTriangleExclamation,
+  faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import type {
   Container,
@@ -21,11 +23,12 @@ import type {
 import { reqGetAllContainers, reqGetStacks } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { reqGetGlobalEnvVars } from "@/services/admin.service";
-import { reqListAllNetworks } from "@/services/networks.service";
+import { reqListAllNetworks, reqDeleteNetworkByID } from "@/services/networks.service";
 import { parsePortMappings, parseJSON } from "@/lib/utils";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import WorkerBadge from "@/components/ui/worker-badge";
+import { useConfirm } from "@/components/ui/confirm-modal";
 
 type Tab = "networks" | "ports";
 
@@ -121,6 +124,7 @@ export default function NetworksPage() {
             stackMap={stackMap}
             workers={workers}
             containers={containers}
+            onDelete={load}
           />
         ) : (
           <PortsTab
@@ -144,13 +148,17 @@ function NetworksTab({
   stackMap,
   workers,
   containers,
+  onDelete,
 }: {
   networks: ComposeNetwork[];
   stacks: Stack[];
   stackMap: Record<number, Stack>;
   workers: Worker[];
   containers: Container[];
+  onDelete: () => void;
 }) {
+  const confirm = useConfirm();
+
   if (networks.length === 0) {
     return (
       <div className="card p-12 text-center">
@@ -163,12 +171,17 @@ function NetworksTab({
     );
   }
 
-  // Group networks by stack
+  // Group networks by stack, separating orphaned (stack deleted)
   const byStack = new Map<number, ComposeNetwork[]>();
+  const orphaned: ComposeNetwork[] = [];
   for (const n of networks) {
-    const list = byStack.get(n.stack_id) ?? [];
-    list.push(n);
-    byStack.set(n.stack_id, list);
+    if (!stackMap[n.stack_id]) {
+      orphaned.push(n);
+    } else {
+      const list = byStack.get(n.stack_id) ?? [];
+      list.push(n);
+      byStack.set(n.stack_id, list);
+    }
   }
 
   // Build containers by stack for the "connected containers" column
@@ -189,6 +202,18 @@ function NetworksTab({
   // Find worker for each stack
   const workerMap = Object.fromEntries(workers.map((w) => [w.id, w]));
 
+  const handleDeleteOrphaned = async (n: ComposeNetwork) => {
+    const ok = await confirm({
+      title: "Delete Orphaned Network",
+      message: `Remove the network record "${n.name}"? This network belongs to a deleted stack and is no longer in use.`,
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
+    const res = await reqDeleteNetworkByID(n.id);
+    if (res.success) onDelete();
+  };
+
   return (
     <div className="space-y-6">
       {stackIds.map((stackId) => {
@@ -204,9 +229,9 @@ function NetworksTab({
                   href={`/stacks/${stackId}`}
                   className="text-sm font-medium text-primary hover:text-info transition-colors"
                 >
-                  {stack?.name ?? `Stack #${stackId}`}
+                  {stack.name}
                 </Link>
-                {stack && <StatusBadge status={stack.status} />}
+                <StatusBadge status={stack.status} />
                 {worker && (
                   <WorkerBadge
                     id={worker.id}
@@ -288,6 +313,76 @@ function NetworksTab({
           </div>
         );
       })}
+
+      {/* Orphaned networks — stack was deleted but network record remains */}
+      {orphaned.length > 0 && (
+        <div className="panel border-[#eab308]/20">
+          <div className="panel-header">
+            <div className="flex items-center gap-2">
+              <FontAwesomeIcon
+                icon={faTriangleExclamation}
+                className="h-3.5 w-3.5 text-[#eab308]"
+              />
+              <span className="text-sm font-medium text-[#eab308]">
+                Orphaned Networks
+              </span>
+            </div>
+            <span className="text-xs text-muted">
+              {orphaned.length} network{orphaned.length !== 1 ? "s" : ""} from
+              deleted stacks
+            </span>
+          </div>
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border-subtle">
+                <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  Name
+                </th>
+                <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  Driver
+                </th>
+                <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  Stack ID
+                </th>
+                <th className="px-5 py-2.5" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-subtle">
+              {orphaned.map((n) => (
+                <tr
+                  key={n.id}
+                  className="hover:bg-surface-elevated transition-colors"
+                >
+                  <td className="px-5 py-2.5">
+                    <span className="text-sm font-mono font-medium text-primary">
+                      {n.name}
+                    </span>
+                  </td>
+                  <td className="px-5 py-2.5">
+                    <span className="text-xs text-secondary bg-surface-alt px-2 py-0.5 rounded font-mono">
+                      {n.driver || "bridge"}
+                    </span>
+                  </td>
+                  <td className="px-5 py-2.5">
+                    <span className="text-xs text-muted font-mono">
+                      #{n.stack_id} (deleted)
+                    </span>
+                  </td>
+                  <td className="px-5 py-2.5 text-right">
+                    <button
+                      onClick={() => handleDeleteOrphaned(n)}
+                      className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-failed transition-colors cursor-pointer"
+                    >
+                      <FontAwesomeIcon icon={faTrash} className="h-3 w-3" />
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
