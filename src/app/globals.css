@@ -250,9 +250,6 @@ html {
   overflow-y: auto;
   overflow-x: hidden;
   position: relative;
-  width: 100%;
-  max-width: 1600px;
-  margin: 0 auto;
   padding-left: 40px;
   padding-right: 40px;
 }
