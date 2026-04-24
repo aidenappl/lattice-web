@@ -1,4 +1,4 @@
-import { Worker, WorkerToken, WorkerMetrics } from "@/types";
+import { Worker, WorkerToken, WorkerMetrics, ContainerMetrics } from "@/types";
 import { fetchApi } from "./api.service";
 
 export const reqGetWorkers = () =>
@@ -81,6 +81,12 @@ export const reqStartAllContainers = (id: number) =>
     fetchApi<void>({
         method: "POST",
         url: `/admin/workers/${id}/start-all`,
+    });
+
+export const reqGetWorkerContainerStats = (workerId: number) =>
+    fetchApi<ContainerMetrics[]>({
+        method: "GET",
+        url: `/admin/workers/${workerId}/container-stats`,
     });
 
 export const reqForceRemoveContainer = (workerId: number, containerName: string) =>

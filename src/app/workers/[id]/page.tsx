@@ -19,6 +19,7 @@ import {
   reqStopAllContainers,
   reqStartAllContainers,
   reqForceRemoveContainer,
+  reqGetWorkerContainerStats,
 } from "@/services/workers.service";
 import { reqListVolumes } from "@/services/volumes.service";
 import { reqListNetworks } from "@/services/networks.service";
@@ -126,12 +127,25 @@ export default function WorkerDetailPage() {
       const versionsRes = await reqGetVersions();
       if (versionsRes.success) setLatestRunner(versionsRes.data.runner.latest);
     };
+    const loadContainerStats = async () => {
+      const res = await reqGetWorkerContainerStats(id);
+      if (res.success && res.data?.length > 0) {
+        setContainerStats(res.data.map((m) => ({
+          name: m.container_name,
+          cpu_percent: m.cpu_percent,
+          mem_usage_mb: m.mem_usage_mb,
+          mem_limit_mb: m.mem_limit_mb,
+          mem_percent: m.mem_percent,
+        })));
+      }
+    };
     dispatch(fetchWorker(id));
     dispatch(fetchWorkerMetrics(id));
     dispatch(fetchWorkerTokens(id));
     dispatch(fetchStacks());
     dispatch(fetchAllContainers());
     load();
+    loadContainerStats();
   }, [id, dispatch]);
 
   useEffect(() => {
