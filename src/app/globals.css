@@ -2118,3 +2118,51 @@ html {
     padding: 6px 8px;
   }
 }
+
+/* ─── Code Editor ───────────────────────────────────────────────────────── */
+
+.code-editor-pre {
+  /* JSON syntax */
+  .json-key { color: #7aa2f7; }
+  .json-string { color: #9ece6a; }
+  .json-number { color: #ff9e64; }
+  .json-bool { color: #ff9e64; }
+
+  /* YAML syntax */
+  .yaml-key { color: #7aa2f7; }
+  .yaml-colon { color: var(--color-muted); }
+  .yaml-comment { color: var(--color-muted); }
+  .yaml-string { color: #9ece6a; }
+  .yaml-bool { color: #ff9e64; }
+  .yaml-number { color: #ff9e64; }
+
+  /* Environment variables */
+  .env-var-defined { color: var(--color-healthy); font-weight: 600; }
+  .env-var-missing { color: var(--color-failed); font-weight: 600; }
+  .env-var-clickable { text-decoration-line: underline; text-decoration-style: dotted; }
+
+  /* Whitespace visualization */
+  .ws-dot, .ws-tab {
+    color: var(--color-muted);
+    opacity: 0.3;
+    font-style: normal;
+  }
+
+  /* Error lines */
+  .code-error-line {
+    background: rgba(239, 68, 68, 0.1);
+    display: inline-block;
+    min-width: 100%;
+    text-decoration: underline wavy rgba(239, 68, 68, 0.5);
+    text-underline-offset: 3px;
+  }
+
+  /* Warning lines */
+  .code-warning-line {
+    background: rgba(245, 158, 11, 0.06);
+    display: inline-block;
+    min-width: 100%;
+    text-decoration: underline wavy rgba(245, 158, 11, 0.3);
+    text-underline-offset: 3px;
+  }
+}

@@ -1,7 +1,10 @@
 "use client";
 
 import { useRef, useCallback, KeyboardEvent, useMemo, useEffect } from "react";
+import yaml from "js-yaml";
 import { cn } from "@/lib/utils";
+
+// ─── Constants ──────────────────────────────────────────────────────────────
 
 const PAIRS: Record<string, string> = {
   "{": "}",
@@ -16,14 +19,12 @@ const CLOSE_CHARS = new Set(Object.values(PAIRS));
 
 const TAB = "  ";
 
-// ─── Shared typography for pixel-perfect overlay alignment ───────────────────
-
-const SHARED_STYLES_BASE =
+const SHARED_STYLES =
   "px-3 py-2 text-sm font-mono leading-5";
 const LINE_HEIGHT_PX = 20; // must match leading-5 (1.25rem)
 const PADDING_Y_PX = 8;    // must match py-2 (0.5rem)
 
-// ─── Syntax highlighting ─────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function escapeHtml(text: string): string {
   return text
@@ -31,6 +32,8 @@ function escapeHtml(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
+
+// ─── Syntax highlighting ─────────────────────────────────────────────────────
 
 function highlightJSON(text: string): string {
   if (!text) return "";
@@ -73,7 +76,7 @@ function highlightYAML(text: string): string {
       }
 
       // Split line into key portion and value portion at the first colon
-      const keyMatch = line.match(/^(\s*)([\w.-]+)(:)(.*)/);
+      const keyMatch = line.match(/^(\s*(?:-\s+)?)([\w.-]+)(:)(.*)/);
       if (!keyMatch) {
         // No key — could be a list item or plain value
         return highlightYAMLValue(line);
@@ -81,7 +84,7 @@ function highlightYAML(text: string): string {
 
       const [, indent, key, colon, rest] = keyMatch;
       const keyHtml = `${indent}<span class="yaml-key">${key}</span><span class="yaml-colon">${colon}</span>`;
-      // Highlight the value portion (after the colon) — safe since no HTML tags in it yet
+      // Highlight the value portion (after the colon)
       return keyHtml + highlightYAMLValue(rest);
     })
     .join("\n");
@@ -116,11 +119,32 @@ function highlightYAMLValue(text: string): string {
   return result;
 }
 
+// ─── Whitespace visualization ────────────────────────────────────────────────
+
+function renderWhitespace(html: string): string {
+  return html
+    .split("\n")
+    .map((line) => {
+      // Split by HTML tags — only process text nodes
+      const parts = line.split(/(<[^>]*>)/);
+      return parts
+        .map((part) => {
+          if (part.startsWith("<")) return part; // HTML tag — leave alone
+          return part
+            .replace(/\t/g, '<span class="ws-tab">\u2192\u00A0</span>')
+            .replace(/ /g, '<span class="ws-dot">\u00B7</span>');
+        })
+        .join("");
+    })
+    .join("\n");
+}
+
 // ─── Validation ─────────────────────────────────────────────────────────────
 
 interface LineError {
   line: number;
   message: string;
+  severity?: "error" | "warning";
 }
 
 function validateJSON(text: string): LineError[] {
@@ -131,8 +155,27 @@ function validateJSON(text: string): LineError[] {
   const lines = text.split("\n");
 
   lines.forEach((line, i) => {
+    // Tabs
     if (/\t/.test(line)) {
       errors.push({ line: i, message: "Use spaces instead of tabs" });
+    }
+
+    // Trailing whitespace
+    if (line.trimEnd() !== line && line.trim()) {
+      errors.push({ line: i, message: "Trailing whitespace", severity: "warning" });
+    }
+
+    const stripped = line.trim();
+
+    // Comments — JSON does not support comments
+    if (stripped.startsWith("//") || stripped.startsWith("/*")) {
+      errors.push({ line: i, message: "JSON does not support comments" });
+    }
+
+    // Single-quoted strings (should be double-quoted in JSON)
+    const withoutDoubleQuotes = line.replace(/"(?:[^"\\]|\\.)*"/g, "");
+    if (/'[^']*'/.test(withoutDoubleQuotes)) {
+      errors.push({ line: i, message: "Use double quotes instead of single quotes" });
     }
   });
 
@@ -170,14 +213,13 @@ function validateJSON(text: string): LineError[] {
           if (count > pos) { errorLine = i; break; }
         }
       } else if (colMatch) {
-        // If only column is available, error is likely on last non-empty line
         for (let i = lines.length - 1; i >= 0; i--) {
           if (lines[i].trim()) { errorLine = i; break; }
         }
       }
 
       const msg = e.message.replace(/\s+at position \d+.*$/i, "").replace(/\s+in JSON.*$/i, "");
-      if (!errors.some((err) => err.line === errorLine)) {
+      if (!errors.some((err) => err.line === errorLine && err.severity !== "warning")) {
         errors.push({ line: errorLine, message: msg });
       }
     }
@@ -202,12 +244,31 @@ function validateYAML(text: string): LineError[] {
   }
 
   lines.forEach((line, i) => {
-    if (!line.trim() || line.trim().startsWith("#")) return;
+    // Blank lines with whitespace
+    if (!line.trim()) {
+      if (line.length > 0) {
+        errors.push({ line: i, message: "Blank line contains whitespace", severity: "warning" });
+      }
+      return;
+    }
+
+    // Comments — check for trailing whitespace only
+    if (line.trim().startsWith("#")) {
+      if (line.trimEnd() !== line) {
+        errors.push({ line: i, message: "Trailing whitespace", severity: "warning" });
+      }
+      return;
+    }
 
     // Tabs
     if (/\t/.test(line)) {
       errors.push({ line: i, message: "YAML forbids tab characters — use spaces" });
-      return;
+      return; // Skip other checks for this line
+    }
+
+    // Trailing whitespace
+    if (line.trimEnd() !== line) {
+      errors.push({ line: i, message: "Trailing whitespace", severity: "warning" });
     }
 
     // Indentation must be a multiple of the detected unit
@@ -216,31 +277,59 @@ function validateYAML(text: string): LineError[] {
       errors.push({ line: i, message: `Indentation (${indent}) is not a multiple of ${indentUnit}` });
     }
 
-    // Duplicate colon on the same key line (e.g. "key: value: extra")
+    // Missing space after colon in key-value patterns
     const stripped = line.trim();
     if (!stripped.startsWith("-") && !stripped.startsWith("#")) {
-      const colonParts = stripped.split(":");
-      if (colonParts.length > 2) {
-        // Allow if value part looks like a time or URL (contains :// or digit:digit)
-        const afterFirst = colonParts.slice(1).join(":");
-        if (!/\d:\d|:\/\//.test(afterFirst)) {
-          errors.push({ line: i, message: "Multiple colons — possible formatting error" });
-        }
+      const kvMatch = stripped.match(/^([\w.-]+):(\S)/);
+      if (kvMatch) {
+        errors.push({
+          line: i,
+          message: `Missing space after ":" — did you mean "${kvMatch[1]}: ${kvMatch[2]}..."?`,
+          severity: "warning",
+        });
       }
     }
   });
 
+  // Parse validation using js-yaml
+  try {
+    yaml.loadAll(text);
+  } catch (e: unknown) {
+    if (e && typeof e === "object" && "mark" in e) {
+      const yamlErr = e as { mark?: { line?: number }; reason?: string; message?: string };
+      const errorLine = Math.max(0, yamlErr.mark?.line ?? lines.length - 1);
+      const msg = yamlErr.reason || (yamlErr.message ? yamlErr.message.split("\n")[0] : "Invalid YAML");
+      // Avoid duplicate error on same line
+      if (!errors.some((err) => err.line === errorLine && err.severity !== "warning")) {
+        errors.push({ line: errorLine, message: msg });
+      }
+    }
+  }
+
   return errors;
 }
 
+// ─── Error / warning application ────────────────────────────────────────────
+
 function applyLineErrors(html: string, errors: LineError[]): string {
   if (errors.length === 0) return html;
-  const errorSet = new Set(errors.map((e) => e.line));
+  const lineMap = new Map<number, "error" | "warning">();
+  for (const e of errors) {
+    const sev = e.severity || "error";
+    const existing = lineMap.get(e.line);
+    // Error takes precedence over warning on same line
+    if (!existing || (existing === "warning" && sev === "error")) {
+      lineMap.set(e.line, sev);
+    }
+  }
   return html
     .split("\n")
-    .map((line, i) =>
-      errorSet.has(i) ? `<span class="code-error-line">${line}</span>` : line,
-    )
+    .map((line, i) => {
+      const sev = lineMap.get(i);
+      if (!sev) return line;
+      const cls = sev === "error" ? "code-error-line" : "code-warning-line";
+      return `<span class="${cls}">${line}</span>`;
+    })
     .join("\n");
 }
 
@@ -272,19 +361,92 @@ export function CodeEditor({
   const ref = useRef<HTMLTextAreaElement>(null);
   const preRef = useRef<HTMLPreElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const gutterRef = useRef<HTMLDivElement>(null);
+  const activeHighlightRef = useRef<HTMLDivElement>(null);
+  const activeLineRef = useRef(-1);
+
+  const lineCount = useMemo(() => value.split("\n").length, [value]);
+  const gutterDigits = Math.max(2, String(lineCount).length);
+
+  // ── Scroll sync ──────────────────────────────────────────────────────────
+
+  const positionActiveHighlight = useCallback(() => {
+    const ta = ref.current;
+    const highlight = activeHighlightRef.current;
+    if (!ta || !highlight || activeLineRef.current < 0) {
+      if (highlight) highlight.style.display = "none";
+      return;
+    }
+    const top = PADDING_Y_PX + activeLineRef.current * LINE_HEIGHT_PX - ta.scrollTop;
+    highlight.style.transform = `translateY(${top}px)`;
+    highlight.style.display =
+      top > -LINE_HEIGHT_PX && top < ta.clientHeight ? "block" : "none";
+  }, []);
 
   const syncScroll = useCallback(() => {
-    if (preRef.current && ref.current) {
-      preRef.current.scrollTop = ref.current.scrollTop;
-      preRef.current.scrollLeft = ref.current.scrollLeft;
+    const ta = ref.current;
+    if (!ta) return;
+    if (preRef.current) {
+      preRef.current.scrollTop = ta.scrollTop;
+      preRef.current.scrollLeft = ta.scrollLeft;
+    }
+    if (gutterRef.current) {
+      gutterRef.current.scrollTop = ta.scrollTop;
     }
     if (tooltipRef.current) tooltipRef.current.style.display = "none";
-  }, []);
+    positionActiveHighlight();
+  }, [positionActiveHighlight]);
 
   // Re-sync scroll whenever value changes (content reflow can shift positions)
   useEffect(() => {
     syncScroll();
   }, [value, syncScroll]);
+
+  // ── Active line tracking (imperative — no React re-renders) ──────────────
+
+  const updateActiveLine = useCallback(() => {
+    const ta = ref.current;
+    if (!ta) return;
+
+    const pos = ta.selectionStart;
+    const line = ta.value.slice(0, pos).split("\n").length - 1;
+
+    if (line !== activeLineRef.current) {
+      activeLineRef.current = line;
+
+      // Update gutter highlighting
+      const gutter = gutterRef.current;
+      if (gutter) {
+        const prev = gutter.querySelector("[data-active]");
+        if (prev) {
+          prev.removeAttribute("data-active");
+          (prev as HTMLElement).style.color = "";
+        }
+        const lineEl = gutter.children[line] as HTMLElement | undefined;
+        if (lineEl) {
+          lineEl.setAttribute("data-active", "");
+          lineEl.style.color = "var(--color-primary)";
+        }
+      }
+    }
+
+    positionActiveHighlight();
+  }, [positionActiveHighlight]);
+
+  const handleBlur = useCallback(() => {
+    activeLineRef.current = -1;
+    if (activeHighlightRef.current) activeHighlightRef.current.style.display = "none";
+    const gutter = gutterRef.current;
+    if (gutter) {
+      const prev = gutter.querySelector("[data-active]");
+      if (prev) {
+        prev.removeAttribute("data-active");
+        (prev as HTMLElement).style.color = "";
+      }
+    }
+  }, []);
+
+  // ── Validation ───────────────────────────────────────────────────────────
 
   const errors = useMemo(() => {
     if (language === "json") return validateJSON(value);
@@ -292,12 +454,24 @@ export function CodeEditor({
     return [];
   }, [value, language]);
 
+  const errorCount = useMemo(
+    () => errors.filter((e) => (e.severity || "error") === "error").length,
+    [errors],
+  );
+  const warningCount = useMemo(
+    () => errors.filter((e) => e.severity === "warning").length,
+    [errors],
+  );
+
+  // ── Highlighted HTML ─────────────────────────────────────────────────────
+
   const highlighted = useMemo(() => {
     let html: string;
     if (language === "json") html = highlightJSON(value);
     else if (language === "yaml") html = highlightYAML(value);
     else html = escapeHtml(value);
 
+    // Env var highlighting
     if (envVars !== undefined) {
       html = html.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, key) => {
         const defined = key in envVars && envVars[key].trim() !== "";
@@ -307,19 +481,22 @@ export function CodeEditor({
       });
     }
 
+    // Error/warning line decoration
     html = applyLineErrors(html, errors);
+
+    // Whitespace dots/arrows (last — modifies text nodes)
+    html = renderWhitespace(html);
 
     return html;
   }, [value, language, envVars, onEnvVarClick, errors]);
 
+  // ── Text insertion helpers ───────────────────────────────────────────────
+
   // Insert text via execCommand to preserve the browser's native undo stack.
-  // Falls back to direct value manipulation if execCommand is unavailable.
   const nativeInsert = useCallback(
     (ta: HTMLTextAreaElement, text: string) => {
       ta.focus();
-      // execCommand('insertText') pushes onto the undo stack
       if (!document.execCommand("insertText", false, text)) {
-        // Fallback: direct set (loses undo)
         const start = ta.selectionStart;
         const end = ta.selectionEnd;
         const next = ta.value.slice(0, start) + text + ta.value.slice(end);
@@ -329,7 +506,6 @@ export function CodeEditor({
           ta.selectionEnd = start + text.length;
         });
       } else {
-        // execCommand already updated the DOM; fire onChange to sync React state
         onChange(ta.value);
       }
     },
@@ -344,7 +520,6 @@ export function CodeEditor({
       if (start !== end && after) {
         const selected = ta.value.slice(start, end);
         const replacement = before + selected + after;
-        // Select the range to replace, then insert
         ta.setSelectionRange(start, end);
         nativeInsert(ta, replacement);
         requestAnimationFrame(() => {
@@ -364,6 +539,8 @@ export function CodeEditor({
     [nativeInsert],
   );
 
+  // ── Keyboard handling ────────────────────────────────────────────────────
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       const ta = ref.current;
@@ -379,7 +556,6 @@ export function CodeEditor({
         const multiLine = hasSelection && selText.includes("\n");
 
         if (multiLine) {
-          // Find the full range of lines touched by the selection
           const blockStart = val.lastIndexOf("\n", start - 1) + 1;
           const blockEnd = val.indexOf("\n", end - 1);
           const blockEndFinal = blockEnd === -1 ? val.length : blockEnd;
@@ -391,7 +567,6 @@ export function CodeEditor({
           let totalDelta = 0;
 
           if (e.shiftKey) {
-            // Dedent each line
             newLines = lines.map((line, i) => {
               if (line.startsWith(TAB)) {
                 if (i === 0) startDelta = -TAB.length;
@@ -401,7 +576,6 @@ export function CodeEditor({
               return line;
             });
           } else {
-            // Indent each line
             newLines = lines.map((line, i) => {
               if (i === 0) startDelta = TAB.length;
               totalDelta += TAB.length;
@@ -417,7 +591,6 @@ export function CodeEditor({
             ta.selectionEnd = end + totalDelta;
           });
         } else if (e.shiftKey) {
-          // Single line dedent
           const lineStart = val.lastIndexOf("\n", start - 1) + 1;
           const linePrefix = val.slice(lineStart, lineStart + TAB.length);
           if (linePrefix === TAB) {
@@ -429,7 +602,6 @@ export function CodeEditor({
             });
           }
         } else {
-          // Single cursor indent
           ta.setSelectionRange(start, end);
           nativeInsert(ta, TAB);
           requestAnimationFrame(() => {
@@ -537,15 +709,12 @@ export function CodeEditor({
     [nativeInsert, insert, language],
   );
 
-  const wrapClass = wordWrap ? "whitespace-pre-wrap break-words" : "whitespace-pre";
-  const sharedStyles = `${SHARED_STYLES_BASE} ${wrapClass}`;
+  // ── Mouse handlers ───────────────────────────────────────────────────────
 
-  // Detect if the user clicked on an env var reference in the textarea
   const handleTextareaClick = useCallback(() => {
     if (!onEnvVarClick || !ref.current) return;
     const ta = ref.current;
     const pos = ta.selectionStart;
-    // Check a window around the cursor for ${...} pattern
     const start = Math.max(0, pos - 50);
     const end = Math.min(ta.value.length, pos + 50);
     const snippet = ta.value.slice(start, end);
@@ -576,13 +745,13 @@ export function CodeEditor({
       const y = e.clientY - rect.top + ta.scrollTop;
       const lineIndex = Math.floor((y - PADDING_Y_PX) / LINE_HEIGHT_PX);
 
-      const error = errors.find((err) => err.line === lineIndex);
-      if (error) {
-        tooltip.textContent = error.message;
+      const lineErrors = errors.filter((err) => err.line === lineIndex);
+      if (lineErrors.length > 0) {
+        tooltip.textContent = lineErrors.map((err) => err.message).join(" · ");
         tooltip.style.display = "block";
 
         const lineTop =
-          PADDING_Y_PX + error.line * LINE_HEIGHT_PX - ta.scrollTop;
+          PADDING_Y_PX + lineIndex * LINE_HEIGHT_PX - ta.scrollTop;
         const tooltipH = tooltip.offsetHeight;
 
         tooltip.style.top =
@@ -601,47 +770,118 @@ export function CodeEditor({
     if (tooltipRef.current) tooltipRef.current.style.display = "none";
   }, []);
 
+  // ── Layout helpers ───────────────────────────────────────────────────────
+
+  const wrapClass = wordWrap ? "whitespace-pre-wrap break-words" : "whitespace-pre";
+  const sharedStyles = `${SHARED_STYLES} ${wrapClass}`;
+  const hasIssues = errorCount > 0 || warningCount > 0;
+
+  // ── Gutter line numbers ──────────────────────────────────────────────────
+
+  const gutterLines = useMemo(() => {
+    const arr = [];
+    for (let i = 1; i <= lineCount; i++) {
+      arr.push(
+        <div
+          key={i}
+          className="pr-3 pl-2 text-right leading-5 select-none"
+          style={{ height: LINE_HEIGHT_PX }}
+        >
+          {i}
+        </div>,
+      );
+    }
+    return arr;
+  }, [lineCount]);
+
+  // ── Render ───────────────────────────────────────────────────────────────
+
   return (
     <div
       className={cn(
         "relative rounded-lg border bg-background-alt overflow-hidden focus-within:border-border-emphasis",
-        errors.length > 0 ? "border-red-500/40" : "border-border-strong",
+        errorCount > 0
+          ? "border-red-500/40"
+          : warningCount > 0
+            ? "border-amber-500/30"
+            : "border-border-strong",
         className,
       )}
     >
-      {/* Highlighted underlay */}
-      <pre
-        ref={preRef}
-        aria-hidden
-        className={`absolute inset-0 ${sharedStyles} overflow-hidden pointer-events-none m-0 [&_.json-key]:text-[#7aa2f7] [&_.json-string]:text-[#9ece6a] [&_.json-number]:text-[#ff9e64] [&_.json-bool]:text-[#ff9e64] [&_.yaml-key]:text-[#7aa2f7] [&_.yaml-colon]:text-muted [&_.yaml-comment]:text-muted [&_.yaml-string]:text-[#9ece6a] [&_.yaml-bool]:text-[#ff9e64] [&_.yaml-number]:text-[#ff9e64] [&_.env-var-defined]:text-healthy [&_.env-var-defined]:font-semibold [&_.env-var-missing]:text-failed [&_.env-var-missing]:font-semibold [&_.env-var-clickable]:underline [&_.env-var-clickable]:decoration-dotted [&_.code-error-line]:bg-[rgba(239,68,68,0.1)] [&_.code-error-line]:inline-block [&_.code-error-line]:min-w-full [&_.code-error-line]:underline [&_.code-error-line]:decoration-wavy [&_.code-error-line]:decoration-[rgba(239,68,68,0.5)] [&_.code-error-line]:underline-offset-[3px]`}
-        style={{ tabSize: 2 }}
-        dangerouslySetInnerHTML={{ __html: highlighted + "\n" }}
-      />
-      {/* Transparent textarea on top for editing */}
-      <textarea
-        ref={ref}
-        rows={rows}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onClick={handleTextareaClick}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        onScroll={syncScroll}
-        placeholder={placeholder}
-        spellCheck={false}
-        style={{ tabSize: 2 }}
-        className={`relative w-full bg-transparent ${sharedStyles} text-transparent caret-white placeholder:text-muted focus:outline-none resize-none selection:bg-[#264f78] selection:text-[#e4e4e7]`}
-      />
-      {/* Error badge */}
-      {errors.length > 0 && (
+      <div className="flex">
+        {/* Gutter — line numbers */}
         <div
-          className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1 rounded bg-red-500/15 border border-red-500/30 px-1.5 py-0.5 text-[10px] font-medium text-red-400 select-none"
-          title={errors.map((e) => `Line ${e.line + 1}: ${e.message}`).join("\n")}
+          ref={gutterRef}
+          className="shrink-0 overflow-hidden border-r border-border-subtle bg-background-alt/50 font-mono text-xs text-muted/30"
+          style={{ minWidth: `${gutterDigits + 2}ch` }}
         >
-          {errors.length} {errors.length === 1 ? "error" : "errors"}
+          <div className="py-2">{gutterLines}</div>
+        </div>
+
+        {/* Editor area */}
+        <div className="relative flex-1 min-w-0">
+          {/* Active line highlight */}
+          <div
+            ref={activeHighlightRef}
+            className="absolute left-0 right-0 pointer-events-none bg-white/[0.03]"
+            style={{ height: LINE_HEIGHT_PX, display: "none" }}
+          />
+
+          {/* Highlighted underlay */}
+          <pre
+            ref={preRef}
+            aria-hidden
+            className={`code-editor-pre absolute inset-0 ${sharedStyles} overflow-hidden pointer-events-none m-0`}
+            style={{ tabSize: 2 }}
+            dangerouslySetInnerHTML={{ __html: highlighted + "\n" }}
+          />
+
+          {/* Transparent textarea on top for editing */}
+          <textarea
+            ref={ref}
+            rows={rows}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onKeyUp={updateActiveLine}
+            onClick={() => {
+              handleTextareaClick();
+              updateActiveLine();
+            }}
+            onFocus={updateActiveLine}
+            onBlur={handleBlur}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+            onScroll={syncScroll}
+            placeholder={placeholder}
+            spellCheck={false}
+            style={{ tabSize: 2 }}
+            className={`relative w-full bg-transparent ${sharedStyles} text-transparent caret-white placeholder:text-muted focus:outline-none resize-none selection:bg-[#264f78] selection:text-[#e4e4e7]`}
+          />
+        </div>
+      </div>
+
+      {/* Error / warning badges */}
+      {hasIssues && (
+        <div
+          className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1 select-none"
+          title={errors
+            .map((e) => `Line ${e.line + 1}: ${e.message}`)
+            .join("\n")}
+        >
+          {errorCount > 0 && (
+            <div className="rounded bg-red-500/15 border border-red-500/30 px-1.5 py-0.5 text-[10px] font-medium text-red-400">
+              {errorCount} {errorCount === 1 ? "error" : "errors"}
+            </div>
+          )}
+          {warningCount > 0 && (
+            <div className="rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+              {warningCount} {warningCount === 1 ? "hint" : "hints"}
+            </div>
+          )}
         </div>
       )}
+
       {/* Error tooltip — shown imperatively via ref on mouse hover */}
       <div
         ref={tooltipRef}
