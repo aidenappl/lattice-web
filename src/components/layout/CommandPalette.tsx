@@ -77,7 +77,7 @@ interface ResultItem {
 function buildSearchItems(data: SearchResults): ResultItem[] {
   const items: ResultItem[] = [];
 
-  for (const w of data.workers) {
+  for (const w of data.workers ?? []) {
     items.push({
       group: "Workers",
       label: w.name,
@@ -87,7 +87,7 @@ function buildSearchItems(data: SearchResults): ResultItem[] {
     });
   }
 
-  for (const s of data.stacks) {
+  for (const s of data.stacks ?? []) {
     items.push({
       group: "Stacks",
       label: s.name,
@@ -97,7 +97,7 @@ function buildSearchItems(data: SearchResults): ResultItem[] {
     });
   }
 
-  for (const c of data.containers) {
+  for (const c of data.containers ?? []) {
     items.push({
       group: "Containers",
       label: c.name,
@@ -158,15 +158,20 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      const res = await reqSearch(trimmed);
-      if (controller.signal.aborted) return;
+      try {
+        const res = await reqSearch(trimmed);
+        if (controller.signal.aborted) return;
 
-      if (res.success) {
-        setSearchResults(buildSearchItems(res.data));
-      } else {
+        if (res.success) {
+          setSearchResults(buildSearchItems(res.data));
+        } else {
+          setSearchResults([]);
+        }
+      } catch {
         setSearchResults([]);
+      } finally {
+        if (!controller.signal.aborted) setSearching(false);
       }
-      setSearching(false);
     }, 80);
 
     return () => {
