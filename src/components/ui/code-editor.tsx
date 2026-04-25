@@ -339,6 +339,7 @@ interface CodeEditorProps {
   value: string;
   onChange: (value: string) => void;
   rows?: number;
+  maxRows?: number;
   placeholder?: string;
   className?: string;
   language?: "json" | "yaml" | "text";
@@ -351,6 +352,7 @@ export function CodeEditor({
   value,
   onChange,
   rows = 6,
+  maxRows,
   placeholder,
   className,
   language = "json",
@@ -367,6 +369,9 @@ export function CodeEditor({
 
   const lineCount = useMemo(() => value.split("\n").length, [value]);
   const gutterDigits = Math.max(2, String(lineCount).length);
+  const maxHeightPx = maxRows
+    ? maxRows * LINE_HEIGHT_PX + PADDING_Y_PX * 2
+    : undefined;
 
   // ── Scroll sync ──────────────────────────────────────────────────────────
 
@@ -808,7 +813,7 @@ export function CodeEditor({
         className,
       )}
     >
-      <div className="flex">
+      <div className="flex" style={maxHeightPx ? { maxHeight: maxHeightPx } : undefined}>
         {/* Gutter — line numbers */}
         <div
           ref={gutterRef}
@@ -819,7 +824,7 @@ export function CodeEditor({
         </div>
 
         {/* Editor area */}
-        <div className="relative flex-1 min-w-0">
+        <div className="relative flex-1 min-w-0 overflow-hidden">
           {/* Active line highlight */}
           <div
             ref={activeHighlightRef}
@@ -855,7 +860,7 @@ export function CodeEditor({
             onScroll={syncScroll}
             placeholder={placeholder}
             spellCheck={false}
-            style={{ tabSize: 2 }}
+            style={{ tabSize: 2, ...(maxHeightPx ? { maxHeight: maxHeightPx } : {}) }}
             className={`relative w-full bg-transparent ${sharedStyles} text-transparent caret-white placeholder:text-muted focus:outline-none resize-none selection:bg-[#264f78] selection:text-[#e4e4e7]`}
           />
         </div>

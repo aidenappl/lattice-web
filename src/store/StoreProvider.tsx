@@ -5,6 +5,7 @@ import { makeStore, AppStore } from "./index";
 import { setIsLoading, setIsLogged, setUser } from "./slices/authSlice";
 import { useEffect, useState } from "react";
 import { reqGetSelf } from "@/services/auth.service";
+import { startProactiveRefresh, stopProactiveRefresh } from "@/services/api.service";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { Logo } from "@/components/ui/logo";
 
@@ -42,6 +43,7 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
           storeInstance.dispatch(setIsLogged(true));
           storeInstance.dispatch(setUser(authRes.data));
           storeInstance.dispatch(setIsLoading(false));
+          startProactiveRefresh();
           if (authRes.data.role === "pending") {
             window.location.href = "/pending";
             return;
@@ -64,6 +66,10 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
     };
 
     initialize();
+
+    return () => {
+      stopProactiveRefresh();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

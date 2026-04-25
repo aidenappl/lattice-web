@@ -164,6 +164,55 @@ const handle401Response = async <T>(
     return null;
 };
 
+// ─── Proactive token refresh ────────────────────────────────────────────────
+// Keeps the session alive while the user is actively using the app.
+// Complements the reactive 401-based refresh above.
+
+const REFRESH_INTERVAL_MS = 4 * 60 * 1000; // 4 minutes
+let refreshIntervalId: ReturnType<typeof setInterval> | null = null;
+
+const silentRefresh = async () => {
+    try {
+        await axios.post(
+            `${BASE_API_URL}/auth/refresh`,
+            {},
+            { withCredentials: true, validateStatus: () => true, timeout: 10000 },
+        );
+    } catch {
+        // Silently fail — the reactive 401 handler will catch it on the next request
+    }
+};
+
+export function startProactiveRefresh() {
+    if (refreshIntervalId) return;
+
+    // Periodic background refresh
+    refreshIntervalId = setInterval(silentRefresh, REFRESH_INTERVAL_MS);
+
+    // Refresh when user returns to the tab after being away
+    if (typeof document !== "undefined") {
+        document.addEventListener("visibilitychange", handleVisibility);
+    }
+}
+
+export function stopProactiveRefresh() {
+    if (refreshIntervalId) {
+        clearInterval(refreshIntervalId);
+        refreshIntervalId = null;
+    }
+    if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibility);
+    }
+}
+
+function handleVisibility() {
+    if (document.visibilityState === "visible") {
+        silentRefresh();
+    }
+}
+
+// ─── CSRF ───────────────────────────────────────────────────────────────────
+
 function getCSRFToken(): string {
     if (typeof document === "undefined") return "";
     const match = document.cookie.match(/(?:^|;\s*)lattice-csrf=([^;]*)/);

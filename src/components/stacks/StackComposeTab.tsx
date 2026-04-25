@@ -118,7 +118,8 @@ export function StackComposeTab({
         {/* Editor */}
         <div className="p-0">
           <CodeEditor
-            rows={Math.max(28, Math.min(lineCount + 4, 50))}
+            rows={20}
+            maxRows={28}
             value={composeYaml}
             onChange={onChange}
             language="yaml"
