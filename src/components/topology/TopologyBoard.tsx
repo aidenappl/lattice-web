@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTopologyData, type ViewMode } from "./useTopologyData";
-import { Sparkline, generateSparkData } from "@/components/ui/sparkline";
+import { Sparkline } from "@/components/ui/sparkline";
 import { PageLoader } from "@/components/ui/loading";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -564,6 +564,7 @@ function WorkerNodeEl({
   onNavigate,
   onHoverStart,
   onHoverEnd,
+  cpuHistory,
 }: {
   node: TopoNode;
   selected: boolean;
@@ -572,6 +573,7 @@ function WorkerNodeEl({
   onNavigate: () => void;
   onHoverStart: () => void;
   onHoverEnd: () => void;
+  cpuHistory?: number[];
 }) {
   const st = workerStatusClass(node.status);
   const meta = node.meta as {
@@ -649,13 +651,16 @@ function WorkerNodeEl({
         >
           <span>{meta.stackCount}s</span>
           <span>{meta.containerCount}c</span>
-          <Sparkline
-            data={generateSparkData(12, node.entityId, 0.5, 0.2)}
-            width={28}
-            height={12}
-            color="var(--healthy)"
-            fill={false}
-          />
+          {cpuHistory && cpuHistory.length >= 2 && (
+            <Sparkline
+              data={cpuHistory}
+              width={28}
+              height={12}
+              color="var(--healthy)"
+              fill={false}
+              maxValue={100}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -909,7 +914,7 @@ function getTreeIds(
 
 export function TopologyBoard() {
   const router = useRouter();
-  const { workers, stacks, containers, networks, loading } = useTopologyData();
+  const { workers, stacks, containers, networks, loading, workerCpuHistory } = useTopologyData();
   const [viewMode, setViewMode] = useState<ViewMode>("system");
   const [selected, setSelected] = useState<string | null>(null);
   const [hoveredTree, setHoveredTree] = useState<Set<string> | null>(null);
@@ -1177,6 +1182,7 @@ export function TopologyBoard() {
                   onNavigate={() => handleNavigate("worker", node.entityId)}
                   onHoverStart={() => onNodeHover(node.id)}
                   onHoverEnd={() => onNodeHover(null)}
+                  cpuHistory={workerCpuHistory.get(node.entityId)}
                 />
               );
             }

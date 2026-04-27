@@ -36,9 +36,10 @@ import type {
 function extractHistory(
   points: FleetMetricsPoint[],
   key: "cpu_avg" | "memory_avg" | "network_rx_rate" | "running_count",
-): number[] {
-  if (points.length === 0) return [];
+): { values: number[]; timestamps: string[] } {
+  if (points.length === 0) return { values: [], timestamps: [] };
   const raw = points.map((p) => p[key]);
+  const ts = points.map((p) => p.timestamp);
   // Trim leading zeros — these are empty buckets before data started flowing.
   // This prevents "spike up from zero" visual on graphs where the value is
   // actually stable (e.g., container count = 16 for the entire session).
@@ -50,7 +51,7 @@ function extractHistory(
     }
     if (i === raw.length - 1) firstNonZero = i; // all zeros, show last point
   }
-  return raw.slice(firstNonZero);
+  return { values: raw.slice(firstNonZero), timestamps: ts.slice(firstNonZero) };
 }
 
 // ── Dashboard Page ──────────────────────────────────────────────────
@@ -82,10 +83,9 @@ export default function DashboardPage() {
   }, [dispatch]);
   usePoll(refreshOverview, 30000);
 
-  // Per-worker latest metrics for proper fleet aggregation (avoids sawtooth)
+  // Per-worker latest metrics for proper fleet aggregation
   const workerMetricsRef = useRef<Map<number, WorkerLatestMetrics>>(new Map());
   const workerHeartbeatCount = useRef<Map<number, number>>(new Map());
-  const lastHistoryPush = useRef<number>(0);
 
   // Worker health history — tracked independently from fleet metrics
   const [workerHealthHistory, setWorkerHealthHistory] = useState<number[]>([]);
@@ -151,13 +151,13 @@ export default function DashboardPage() {
         const workerId = event.worker_id as number | undefined;
         if (workerId == null) return;
 
-        // Track heartbeat count per worker — skip the first one after connect
-        // because the runner's CPU delta calculation reports 0% on the first beat
+        // Track heartbeat count per worker — skip the first two after connect.
+        // Beat 1: runner reports 0% CPU (calibration, no prior delta).
+        // Beat 2: delta spans from runner start/reconnect, often inflated.
+        // By beat 3 the delta window is a clean 15s cycle.
         const beatCount = (workerHeartbeatCount.current.get(workerId) ?? 0) + 1;
         workerHeartbeatCount.current.set(workerId, beatCount);
-        if (beatCount === 1) {
-          // First heartbeat is calibration — don't use it for fleet metrics
-          // but still count containers since those are accurate immediately
+        if (beatCount <= 2) {
           const containers = (p.container_count as number) ?? 0;
           const running = (p.container_running_count as number) ?? 0;
           const existing = workerMetricsRef.current.get(workerId);
@@ -184,20 +184,30 @@ export default function DashboardPage() {
             ? (memUsed / memTotal) * 100
             : 0;
 
-        // Update this worker's latest metrics
+        // EMA-smooth CPU, memory, and network to eliminate sawtooth jitter.
+        // Raw heartbeat values are point-in-time snapshots that oscillate due to
+        // natural measurement noise; the API's historical data is time-averaged
+        // and much smoother. α=0.35 tracks real trends within ~4 beats (~60s)
+        // while filtering single-sample spikes.
+        const EMA_ALPHA = 0.35;
+        const prev = workerMetricsRef.current.get(workerId);
+        const smoothCpu = prev ? prev.cpu * (1 - EMA_ALPHA) + cpu * EMA_ALPHA : cpu;
+        const smoothMem = prev ? prev.memoryPct * (1 - EMA_ALPHA) + memPct * EMA_ALPHA : memPct;
+        const smoothRx = prev ? prev.netRxRate * (1 - EMA_ALPHA) + netRxRate * EMA_ALPHA : netRxRate;
+        const smoothTx = prev ? prev.netTxRate * (1 - EMA_ALPHA) + netTxRate * EMA_ALPHA : netTxRate;
+
+        // Update this worker's latest metrics (smoothed continuous, raw discrete)
         workerMetricsRef.current.set(workerId, {
-          cpu,
-          memoryPct: memPct,
-          netRxRate,
-          netTxRate,
+          cpu: smoothCpu,
+          memoryPct: smoothMem,
+          netRxRate: smoothRx,
+          netTxRate: smoothTx,
           containers,
           running,
         });
 
-        // Compute fleet aggregate
+        // Update KPI numbers immediately (point-in-time is fine for numeric displays)
         const aggregate = computeFleetAggregate();
-
-        // Update overview with fleet averages (always, for KPI numbers)
         dispatch(
           updateOverviewField({
             fleet_cpu_avg: aggregate.cpu_avg,
@@ -206,14 +216,6 @@ export default function DashboardPage() {
             fleet_running_count: aggregate.running_count,
           }),
         );
-
-        // Throttle fleet history pushes to once per heartbeat cycle (~15s)
-        // This ensures one clean data point per cycle instead of 5 overlapping ones
-        const now = Date.now();
-        if (now - lastHistoryPush.current >= 14_000) {
-          lastHistoryPush.current = now;
-          dispatch(pushFleetHistoryPoint(aggregate));
-        }
       }
 
       if (event.type === "worker_connected") {
@@ -268,23 +270,44 @@ export default function DashboardPage() {
 
   useAdminSocket(handleDashboardEvent);
 
+  // Push fleet history on a fixed 15s timer, decoupled from heartbeat arrival.
+  // This avoids sawtooth: heartbeats arrive staggered (one worker at a time), so
+  // per-heartbeat aggregates are partial snapshots. The timer always reads the
+  // latest value from every worker, producing a clean fleet-wide aggregate.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (workerMetricsRef.current.size === 0) return;
+      dispatch(pushFleetHistoryPoint(computeFleetAggregate()));
+    }, 15_000);
+    return () => clearInterval(id);
+  }, [computeFleetAggregate, dispatch]);
+
   // Derive sparkline arrays from fleet history (raw values — Sparkline auto-scales)
-  const cpuHistory = useMemo(
+  const cpuH = useMemo(
     () => extractHistory(fleetHistory, "cpu_avg"),
     [fleetHistory],
   );
-  const memHistory = useMemo(
+  const memH = useMemo(
     () => extractHistory(fleetHistory, "memory_avg"),
     [fleetHistory],
   );
-  const netHistory = useMemo(
+  const netH = useMemo(
     () => extractHistory(fleetHistory, "network_rx_rate"),
     [fleetHistory],
   );
-  const containerHistory = useMemo(
+  const containerH = useMemo(
     () => extractHistory(fleetHistory, "running_count"),
     [fleetHistory],
   );
+
+  const cpuHistory = cpuH.values;
+  const memHistory = memH.values;
+  const netHistory = netH.values;
+  const containerHistory = containerH.values;
+  const cpuTimestamps = cpuH.timestamps;
+  const memTimestamps = memH.timestamps;
+  const netTimestamps = netH.timestamps;
+  const containerTimestamps = containerH.timestamps;
 
   return (
     <div className="dash-page">
@@ -305,6 +328,9 @@ export default function DashboardPage() {
         netHistory={netHistory}
         containerHistory={containerHistory}
         workerHistory={workerHealthHistory}
+        cpuTimestamps={cpuTimestamps}
+        memTimestamps={memTimestamps}
+        containerTimestamps={containerTimestamps}
       />
 
       {/* Topology + Event Stream (resizable) */}
@@ -350,6 +376,10 @@ export default function DashboardPage() {
           memHistory={memHistory}
           netHistory={netHistory}
           containerHistory={containerHistory}
+          cpuTimestamps={cpuTimestamps}
+          memTimestamps={memTimestamps}
+          netTimestamps={netTimestamps}
+          containerTimestamps={containerTimestamps}
           onRangeChange={(range) => dispatch(fetchFleetMetrics(range))}
         />
         <RecentActivityPanel entries={auditLog} />

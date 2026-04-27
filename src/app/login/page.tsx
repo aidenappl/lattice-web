@@ -17,12 +17,28 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState(0);
   const [ssoConfig, setSsoConfig] = useState<{ enabled: boolean; button_label: string; login_url: string } | null>(null);
 
   useEffect(() => {
     document.title = "Lattice - Login";
+  }, []);
+
+  // Redirect to dashboard if already authenticated
+  useEffect(() => {
+    fetch(`${API_URL}/auth/self`, { credentials: "include" })
+      .then((res) => {
+        if (res.ok) {
+          window.location.replace("/");
+        } else {
+          setChecking(false);
+        }
+      })
+      .catch(() => {
+        setChecking(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -88,6 +104,8 @@ export default function LoginPage() {
     }
     setLoading(false);
   };
+
+  if (checking) return null;
 
   return (
     <div className="login-page">

@@ -324,9 +324,9 @@ export default function StackDetailPage() {
   );
   useAdminSocket(handleSocketEvent);
 
-  const handleDeploy = async () => {
+  const handleDeploy = async (containerIds?: number[]) => {
     setDeploying(true);
-    const res = await reqDeployStack(id);
+    const res = await reqDeployStack(id, containerIds);
     if (res.success) {
       setHasPendingChanges(false);
       const stackRes = await reqGetStack(id);
@@ -341,6 +341,16 @@ export default function StackDetailPage() {
       toast.error(res.error_message || "Deploy failed");
     }
     setDeploying(false);
+  };
+
+  const handleCancelDeploy = async () => {
+    const res = await reqUpdateStack(id, { status: "active" });
+    if (res.success) {
+      setStack(res.data);
+      toast.success("Deploy cancelled");
+    } else {
+      toast.error(res.error_message || "Failed to cancel deploy");
+    }
   };
 
   const handleDeleteStack = async () => {
@@ -526,17 +536,33 @@ export default function StackDetailPage() {
     const res = await reqUpdateCompose(id, { compose_yaml: composeYaml });
     setSavingCompose(false);
     if (res.success) {
-      setStack(res.data);
-      setHasPendingChanges(true);
-      await refreshContainers();
-      const deploy = await showConfirm({
-        title: "Compose saved",
-        message:
-          "Deploy now to apply the updated definition to your containers?",
-        confirmLabel: "Deploy",
-        variant: "warning",
-      });
-      if (deploy) handleDeploy();
+      setStack(res.data.stack);
+      // Refresh containers and capture the new list for accurate count
+      const cRes = await reqGetContainers(id);
+      const newContainers = cRes.success ? (cRes.data ?? []) : [];
+      if (cRes.success) setContainers(newContainers);
+      const totalContainers = newContainers.length;
+      const changedIds = res.data.changed_container_ids ?? [];
+      if (changedIds.length === 0) {
+        toast.success("Compose saved — no container changes detected");
+      } else {
+        const allChanged = changedIds.length >= totalContainers;
+        const deploy = await showConfirm({
+          title: "Compose saved",
+          message: allChanged
+            ? "Deploy now to apply the updated definition to your containers?"
+            : `${changedIds.length} of ${totalContainers} container${totalContainers !== 1 ? "s" : ""} changed. Deploy only the changed containers?`,
+          confirmLabel: allChanged
+            ? "Deploy"
+            : `Deploy ${changedIds.length} Changed`,
+          variant: "warning",
+        });
+        if (deploy) {
+          handleDeploy(allChanged ? undefined : changedIds);
+        } else {
+          setHasPendingChanges(true);
+        }
+      }
     } else {
       setComposeError(res.error_message || "Failed to update compose");
     }
@@ -680,7 +706,11 @@ export default function StackDetailPage() {
             hasPendingChanges={hasPendingChanges}
             deleting={deleting}
             canEditUser={canEdit(user)}
+            hasActiveDeployment={deployments.some(
+              (d) => d.status === "deploying" || d.status === "validating" || d.status === "sending" || d.status === "pending",
+            )}
             onDeploy={handleDeploy}
+            onCancelDeploy={handleCancelDeploy}
             onEdit={() => setEditingStack(true)}
             onDelete={handleDeleteStack}
           />

@@ -5,26 +5,29 @@ import type { WorkerMetrics } from "@/types";
 import { formatDisk, formatBytes, formatUptime, barColor, sparkColor, timeAgo } from "@/lib/utils";
 
 /* ─── Sparkline ─── */
-export function Sparkline({ values, color }: { values: number[]; color: string }) {
+import { Sparkline as SparklineBase } from "@/components/ui/sparkline";
+export function Sparkline({
+  values,
+  color,
+  timestamps,
+  formatValue,
+}: {
+  values: number[];
+  color: string;
+  timestamps?: string[];
+  formatValue?: (v: number) => string;
+}) {
   if (values.length < 2) return null;
-  const w = 80;
-  const h = 28;
-  const max = Math.max(...values, 1);
-  const step = w / (values.length - 1);
-  const pts = values
-    .map((v, i) => `${i * step},${h - (v / max) * h}`)
-    .join(" ");
   return (
-    <svg width={w} height={h} className="overflow-visible opacity-60">
-      <polyline
-        points={pts}
-        fill="none"
-        stroke={color}
-        strokeWidth={1.5}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    </svg>
+    <SparklineBase
+      data={values}
+      width={80}
+      height={28}
+      color={color}
+      fill={false}
+      timestamps={timestamps}
+      formatValue={formatValue}
+    />
   );
 }
 
@@ -133,22 +136,15 @@ export default function WorkerMetricsPanel({
   }
 
   // Sparkline history (oldest -> newest, up to last 20 heartbeats)
-  const cpuHistory = metrics
-    .slice(0, 20)
-    .reverse()
-    .map((m) => m.cpu_percent ?? 0);
-  const memHistory = metrics
-    .slice(0, 20)
-    .reverse()
-    .map((m) =>
-      m.memory_used_mb != null && m.memory_total_mb
-        ? (m.memory_used_mb / m.memory_total_mb) * 100
-        : 0,
-    );
-  const netRxRateHistory = metrics
-    .slice(0, 20)
-    .reverse()
-    .map((m) => m.network_rx_rate ?? 0);
+  const recentMetrics = metrics.slice(0, 20).reverse();
+  const cpuHistory = recentMetrics.map((m) => m.cpu_percent ?? 0);
+  const memHistory = recentMetrics.map((m) =>
+    m.memory_used_mb != null && m.memory_total_mb
+      ? (m.memory_used_mb / m.memory_total_mb) * 100
+      : 0,
+  );
+  const netRxRateHistory = recentMetrics.map((m) => m.network_rx_rate ?? 0);
+  const metricTimestamps = recentMetrics.map((m) => m.recorded_at);
 
   const cpuPercent = latestMetric.cpu_percent ?? 0;
   const memPercent =
@@ -206,6 +202,8 @@ export default function WorkerMetricsPanel({
                 <Sparkline
                   values={cpuHistory}
                   color={sparkColor(cpuPercent)}
+                  timestamps={metricTimestamps}
+                  formatValue={(v) => `${v.toFixed(1)}%`}
                 />
               </div>
             )}
@@ -228,7 +226,12 @@ export default function WorkerMetricsPanel({
             </p>
             {memHistory.length >= 2 && (
               <div className="mt-2">
-                <Sparkline values={memHistory} color="#a855f7" />
+                <Sparkline
+                  values={memHistory}
+                  color="#a855f7"
+                  timestamps={metricTimestamps}
+                  formatValue={(v) => `${v.toFixed(1)}%`}
+                />
               </div>
             )}
           </div>
@@ -274,7 +277,12 @@ export default function WorkerMetricsPanel({
             </p>
             {netRxRateHistory.length >= 2 && (
               <div className="mt-2">
-                <Sparkline values={netRxRateHistory} color="#22c55e" />
+                <Sparkline
+                  values={netRxRateHistory}
+                  color="#22c55e"
+                  timestamps={metricTimestamps}
+                  formatValue={(v) => `${formatBytes(v)}/s`}
+                />
               </div>
             )}
           </div>

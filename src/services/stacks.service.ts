@@ -20,7 +20,7 @@ export const reqCreateStack = (data: { name: string; description?: string; worke
         data,
     });
 
-export const reqUpdateStack = (id: number, data: Partial<{ name: string; description: string; worker_id: number; deployment_strategy: string; auto_deploy: boolean; env_vars: string; active: boolean; placement_constraints: string }>) =>
+export const reqUpdateStack = (id: number, data: Partial<{ name: string; description: string; worker_id: number; deployment_strategy: string; auto_deploy: boolean; env_vars: string; active: boolean; placement_constraints: string; status: string }>) =>
     fetchApi<Stack>({
         method: "PUT",
         url: `/admin/stacks/${id}`,
@@ -33,10 +33,11 @@ export const reqDeleteStack = (id: number) =>
         url: `/admin/stacks/${id}`,
     });
 
-export const reqDeployStack = (id: number) =>
+export const reqDeployStack = (id: number, containerIds?: number[]) =>
     fetchApi<{ deployment_id: number }>({
         method: "POST",
         url: `/admin/stacks/${id}/deploy`,
+        data: containerIds?.length ? { container_ids: containerIds } : undefined,
     });
 
 // --- Containers ---
@@ -157,7 +158,7 @@ export const reqImportCompose = (data: { name: string; description?: string; wor
     });
 
 export const reqUpdateCompose = (id: number, data: { compose_yaml: string }) =>
-    fetchApi<Stack>({
+    fetchApi<{ stack: Stack; changed_container_ids: number[] }>({
         method: "PUT",
         url: `/admin/stacks/${id}/compose`,
         data,

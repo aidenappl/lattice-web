@@ -12,6 +12,8 @@ export type TopologyState = {
     containers: Container[];
     networks: ComposeNetwork[];
     loading: boolean;
+    /** Per-worker CPU history (worker_id → last N cpu_percent values) */
+    workerCpuHistory: Map<number, number[]>;
 };
 
 export function useTopologyData() {
@@ -21,10 +23,12 @@ export function useTopologyData() {
         containers: [],
         networks: [],
         loading: true,
+        workerCpuHistory: new Map(),
     });
 
     const recentHeartbeats = useRef<Set<number>>(new Set());
     const recentContainerChanges = useRef<Set<number>>(new Set());
+    const cpuHistoryRef = useRef<Map<number, number[]>>(new Map());
 
     const load = useCallback(async () => {
         const [wRes, sRes, cRes, nRes] = await Promise.all([
@@ -34,13 +38,14 @@ export function useTopologyData() {
             reqGetAllNetworks(),
         ]);
 
-        setState({
+        setState((prev) => ({
             workers: wRes.success ? wRes.data : [],
             stacks: sRes.success ? sRes.data : [],
             containers: cRes.success ? cRes.data : [],
             networks: nRes.success ? (nRes.data ?? []) : [],
             loading: false,
-        });
+            workerCpuHistory: prev.workerCpuHistory,
+        }));
     }, []);
 
     useEffect(() => {
@@ -55,6 +60,14 @@ export function useTopologyData() {
                 recentHeartbeats.current.delete(wid);
             }, 6500);
 
+            // Track CPU history for topology sparklines
+            const cpuPercent = (event.payload?.cpu_percent as number) ?? null;
+            if (cpuPercent != null) {
+                const history = cpuHistoryRef.current.get(wid) ?? [];
+                const updated = [...history, cpuPercent].slice(-12);
+                cpuHistoryRef.current.set(wid, updated);
+            }
+
             setState((prev) => ({
                 ...prev,
                 workers: prev.workers.map((w) =>
@@ -62,6 +75,7 @@ export function useTopologyData() {
                         ? { ...w, status: "online" as const, last_heartbeat_at: new Date().toISOString() }
                         : w,
                 ),
+                workerCpuHistory: new Map(cpuHistoryRef.current),
             }));
         }
 

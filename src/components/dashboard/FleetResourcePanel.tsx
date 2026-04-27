@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Sparkline, Meter } from "@/components/ui/sparkline";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChartLine } from "@fortawesome/free-solid-svg-icons";
+import { formatBytes } from "@/lib/utils";
 import type { OverviewData, WorkerMetricsSummary, MetricKey } from "@/types";
 
 type TimeRange = "1h" | "6h" | "24h" | "7d";
@@ -29,6 +30,10 @@ export function FleetResourcePanel({
   memHistory,
   netHistory,
   containerHistory,
+  cpuTimestamps,
+  memTimestamps,
+  netTimestamps,
+  containerTimestamps,
   onRangeChange,
 }: {
   workerMetrics: WorkerMetricsSummary[] | null;
@@ -37,6 +42,10 @@ export function FleetResourcePanel({
   memHistory: number[];
   netHistory: number[];
   containerHistory: number[];
+  cpuTimestamps?: string[];
+  memTimestamps?: string[];
+  netTimestamps?: string[];
+  containerTimestamps?: string[];
   onRangeChange?: (range: TimeRange) => void;
 }) {
   const [metric, setMetric] = useState<MetricKey>("cpu");
@@ -62,12 +71,14 @@ export function FleetResourcePanel({
         return `${Math.round(overview.fleet_cpu_avg)}%`;
       case "mem":
         return `${Math.round(overview.fleet_memory_avg)}%`;
-      case "net":
-        return "\u2014";
+      case "net": {
+        const totalRx = (workerMetrics ?? []).reduce((s, w) => s + (w.net_rx_rate ?? 0), 0);
+        return totalRx > 0 ? `${formatBytes(totalRx)}/s` : "-";
+      }
       case "req":
         return `${overview.fleet_running_count}`;
     }
-  }, [metric, overview]);
+  }, [metric, overview, workerMetrics]);
 
   const getWorkerValue = (w: WorkerMetricsSummary): number => {
     switch (metric) {
@@ -76,7 +87,7 @@ export function FleetResourcePanel({
       case "mem":
         return w.memory ?? 0;
       case "net":
-        return 0;
+        return w.net_rx_rate ?? 0;
       case "req":
         return w.running != null && w.containers != null && w.containers > 0
           ? (w.running / w.containers) * 100
@@ -84,11 +95,32 @@ export function FleetResourcePanel({
     }
   };
 
+  // Sort workers by the selected metric (highest first)
+  const sortedWorkers = useMemo(() => {
+    if (!workerMetrics) return [];
+    return [...workerMetrics].sort((a, b) => getWorkerValue(b) - getWorkerValue(a));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workerMetrics, metric]);
+
   const historyMap: Record<MetricKey, number[]> = {
     cpu: cpuHistory,
     mem: memHistory,
     net: netHistory,
     req: containerHistory,
+  };
+
+  const timestampMap: Record<MetricKey, string[] | undefined> = {
+    cpu: cpuTimestamps,
+    mem: memTimestamps,
+    net: netTimestamps,
+    req: containerTimestamps,
+  };
+
+  const valueFormatters: Record<MetricKey, (v: number) => string> = {
+    cpu: (v) => `${v.toFixed(1)}%`,
+    mem: (v) => `${v.toFixed(1)}%`,
+    net: (v) => `${formatBytes(v)}/s`,
+    req: (v) => `${Math.round(v)} containers`,
   };
 
   // Window data to the last N ticks for the selected range
@@ -99,6 +131,15 @@ export function FleetResourcePanel({
     return raw.slice(-maxTicks);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metric, range, cpuHistory, memHistory, netHistory, containerHistory]);
+
+  const chartTimestamps = useMemo(() => {
+    const raw = timestampMap[metric];
+    if (!raw) return undefined;
+    const maxTicks = RANGE_TICKS[range];
+    if (raw.length <= maxTicks) return raw;
+    return raw.slice(-maxTicks);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metric, range, cpuTimestamps, memTimestamps, netTimestamps, containerTimestamps]);
 
   const handleRangeChange = (r: TimeRange) => {
     setRange(r);
@@ -194,7 +235,7 @@ export function FleetResourcePanel({
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {(workerMetrics ?? []).slice(0, 6).map((w) => (
+            {sortedWorkers.slice(0, 6).map((w) => (
               <div
                 key={w.worker_id}
                 style={{
@@ -217,7 +258,16 @@ export function FleetResourcePanel({
                 >
                   {w.worker_name}
                 </span>
-                <Meter value={getWorkerValue(w)} width={40} />
+                <Meter
+                  value={
+                    metric === "net"
+                      ? sortedWorkers[0] && getWorkerValue(sortedWorkers[0]) > 0
+                        ? (getWorkerValue(w) / getWorkerValue(sortedWorkers[0])) * 100
+                        : 0
+                      : getWorkerValue(w)
+                  }
+                  width={40}
+                />
               </div>
             ))}
             {(!workerMetrics || workerMetrics.length === 0) && (
@@ -250,6 +300,8 @@ export function FleetResourcePanel({
                 ? Math.max(overview?.total_containers ?? 1, 1)
                 : undefined
             }
+            timestamps={chartTimestamps}
+            formatValue={valueFormatters[metric]}
           />
         </div>
       </div>

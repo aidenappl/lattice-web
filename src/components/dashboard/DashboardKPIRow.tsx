@@ -1,8 +1,22 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { APP_VERSION } from "@/lib/version";
 import { Sparkline } from "@/components/ui/sparkline";
 import type { OverviewData } from "@/types";
+
+type HoverInfo = { value: number; timestamp: string | null } | null;
+
+function formatShortTime(ts: string): string {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 export function DashboardKPIRow({
   overview,
@@ -11,6 +25,9 @@ export function DashboardKPIRow({
   netHistory,
   containerHistory,
   workerHistory,
+  cpuTimestamps,
+  memTimestamps,
+  containerTimestamps,
 }: {
   overview: OverviewData | null;
   cpuHistory: number[];
@@ -18,19 +35,40 @@ export function DashboardKPIRow({
   netHistory: number[];
   containerHistory: number[];
   workerHistory: number[];
+  cpuTimestamps?: string[];
+  memTimestamps?: string[];
+  containerTimestamps?: string[];
 }) {
+  const [cpuHover, setCpuHover] = useState<HoverInfo>(null);
+  const [memHover, setMemHover] = useState<HoverInfo>(null);
+  const [containerHover, setContainerHover] = useState<HoverInfo>(null);
+  const [workerHover, setWorkerHover] = useState<HoverInfo>(null);
+  const [stackHover, setStackHover] = useState<HoverInfo>(null);
+
+  const makeHandler = useCallback(
+    (setter: (v: HoverInfo) => void) =>
+      (info: { index: number; value: number; timestamp: string | null } | null) => {
+        setter(info ? { value: info.value, timestamp: info.timestamp } : null);
+      },
+    [],
+  );
+
   return (
     <div className="card dash-kpi-row">
       <div className="kpi">
         <div className="kpi-label">Fleet Health</div>
         <div className="kpi-value">
-          {overview
-            ? `${overview.online_workers}/${overview.total_workers}`
-            : "-"}
+          {workerHover
+            ? Math.round(workerHover.value)
+            : overview
+              ? `${overview.online_workers}/${overview.total_workers}`
+              : "-"}
           <span className="unit">workers</span>
         </div>
         <div className="kpi-sub">
-          {overview && overview.online_workers > 0 ? (
+          {workerHover?.timestamp ? (
+            <span className="mono text-muted">{formatShortTime(workerHover.timestamp)}</span>
+          ) : overview && overview.online_workers > 0 ? (
             <>
               <span className="up">●</span>{" "}
               {Math.round(
@@ -45,82 +83,136 @@ export function DashboardKPIRow({
           )}
         </div>
         <div className="kpi-spark">
-          <Sparkline data={workerHistory} color="var(--healthy)" />
+          <Sparkline
+            data={workerHistory}
+            color="var(--healthy)"
+            formatValue={(v) => `${Math.round(v)} workers`}
+            onHover={makeHandler(setWorkerHover)}
+          />
         </div>
       </div>
 
       <div className="kpi">
         <div className="kpi-label">Running Containers</div>
         <div className="kpi-value">
-          {overview?.running_containers ?? "-"}
-          <span className="unit">/ {overview?.total_containers ?? "-"}</span>
+          {containerHover
+            ? Math.round(containerHover.value)
+            : overview?.running_containers ?? "-"}
+          <span className="unit">
+            {containerHover ? "running" : `/ ${overview?.total_containers ?? "-"}`}
+          </span>
         </div>
         <div className="kpi-sub">
-          <span className="up mono">active</span>
+          {containerHover?.timestamp ? (
+            <span className="mono text-muted">{formatShortTime(containerHover.timestamp)}</span>
+          ) : (
+            <span className="up mono">active</span>
+          )}
         </div>
         <div className="kpi-spark">
-          <Sparkline data={containerHistory} color="var(--healthy)" />
+          <Sparkline
+            data={containerHistory}
+            color="var(--healthy)"
+            timestamps={containerTimestamps}
+            formatValue={(v) => `${Math.round(v)} running`}
+            onHover={makeHandler(setContainerHover)}
+          />
         </div>
       </div>
 
       <div className="kpi">
         <div className="kpi-label">Stacks Deployed</div>
         <div className="kpi-value">
-          {overview
-            ? `${overview.active_stacks}/${overview.total_stacks}`
-            : "-"}
+          {stackHover
+            ? Math.round(stackHover.value)
+            : overview
+              ? `${overview.active_stacks}/${overview.total_stacks}`
+              : "-"}
+          {stackHover && <span className="unit">containers</span>}
         </div>
         <div className="kpi-sub">
-          {overview && overview.deploying_stacks > 0 && (
+          {stackHover?.timestamp ? (
+            <span className="mono text-muted">{formatShortTime(stackHover.timestamp)}</span>
+          ) : (
             <>
-              <span className="pulse-dot pending" />{" "}
-              <span className="mono">
-                {overview.deploying_stacks} deploying
-              </span>
+              {overview && overview.deploying_stacks > 0 && (
+                <>
+                  <span className="pulse-dot pending" />{" "}
+                  <span className="mono">
+                    {overview.deploying_stacks} deploying
+                  </span>
+                </>
+              )}
+              {overview && overview.failed_stacks > 0 && (
+                <span className="mono" style={{ color: "var(--failed)" }}>
+                  {overview.deploying_stacks > 0 ? ", " : ""}
+                  {overview.failed_stacks} failed
+                </span>
+              )}
+              {overview &&
+                overview.deploying_stacks === 0 &&
+                overview.failed_stacks === 0 && (
+                  <span className="mono text-muted">all healthy</span>
+                )}
             </>
           )}
-          {overview && overview.failed_stacks > 0 && (
-            <span className="mono" style={{ color: "var(--failed)" }}>
-              {overview.deploying_stacks > 0 ? ", " : ""}
-              {overview.failed_stacks} failed
-            </span>
-          )}
-          {overview &&
-            overview.deploying_stacks === 0 &&
-            overview.failed_stacks === 0 && (
-              <span className="mono text-muted">all healthy</span>
-            )}
         </div>
         <div className="kpi-spark">
-          <Sparkline data={containerHistory} color="var(--info)" />
+          <Sparkline
+            data={containerHistory}
+            color="var(--info)"
+            timestamps={containerTimestamps}
+            formatValue={(v) => `${Math.round(v)} containers`}
+            onHover={makeHandler(setStackHover)}
+          />
         </div>
       </div>
 
       <div className="kpi">
         <div className="kpi-label">CPU · Fleet Avg</div>
         <div className="kpi-value">
-          {overview ? Math.round(overview.fleet_cpu_avg) : "-"}
+          {cpuHover ? cpuHover.value.toFixed(1) : overview ? Math.round(overview.fleet_cpu_avg) : "-"}
           <span className="unit">%</span>
         </div>
         <div className="kpi-sub">
-          <span className="mono text-muted">across fleet</span>
+          {cpuHover?.timestamp ? (
+            <span className="mono text-muted">{formatShortTime(cpuHover.timestamp)}</span>
+          ) : (
+            <span className="mono text-muted">across fleet</span>
+          )}
         </div>
         <div className="kpi-spark">
-          <Sparkline data={cpuHistory} color="var(--pending)" />
+          <Sparkline
+            data={cpuHistory}
+            color="var(--pending)"
+            timestamps={cpuTimestamps}
+            formatValue={(v) => `${v.toFixed(1)}%`}
+            onHover={makeHandler(setCpuHover)}
+          />
         </div>
       </div>
 
       <div className="kpi">
         <div className="kpi-label">Memory · Fleet Avg</div>
         <div className="kpi-value">
-          {overview ? Math.round(overview.fleet_memory_avg) : "-"}
+          {memHover ? memHover.value.toFixed(1) : overview ? Math.round(overview.fleet_memory_avg) : "-"}
           <span className="unit">%</span>
         </div>
         <div className="kpi-sub">
-          <span className="mono text-muted">across fleet</span>
+          {memHover?.timestamp ? (
+            <span className="mono text-muted">{formatShortTime(memHover.timestamp)}</span>
+          ) : (
+            <span className="mono text-muted">across fleet</span>
+          )}
         </div>
         <div className="kpi-spark">
-          <Sparkline data={memHistory} color="var(--info)" />
+          <Sparkline
+            data={memHistory}
+            color="var(--info)"
+            timestamps={memTimestamps}
+            formatValue={(v) => `${v.toFixed(1)}%`}
+            onHover={makeHandler(setMemHover)}
+          />
         </div>
       </div>
 

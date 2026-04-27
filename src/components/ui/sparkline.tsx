@@ -2,6 +2,17 @@
 
 import { useMemo, useEffect, useState, useRef, useCallback } from "react";
 
+function formatTooltipTime(ts: string): string {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts;
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 type SparklineProps = {
   data: number[];
   width?: number;
@@ -14,6 +25,12 @@ type SparklineProps = {
   maxValue?: number;
   /** When true, fills the parent container and resizes with the window. */
   responsive?: boolean;
+  /** ISO timestamps aligned to data points — enables hover tooltip. */
+  timestamps?: string[];
+  /** Custom value formatter for tooltip (e.g. v => `${v.toFixed(1)}%`). */
+  formatValue?: (v: number) => string;
+  /** Called when hovering a data point; null on mouse leave. */
+  onHover?: (info: { index: number; value: number; timestamp: string | null } | null) => void;
 };
 
 export function Sparkline({
@@ -26,10 +43,17 @@ export function Sparkline({
   className,
   maxValue,
   responsive = false,
+  timestamps,
+  formatValue,
+  onHover,
 }: SparklineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [liveData, setLiveData] = useState(data);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+
+  const hasTooltip = (timestamps != null && timestamps.length > 0 && !live) || onHover != null;
 
   // Measure container when responsive
   const measure = useCallback(() => {
@@ -68,11 +92,12 @@ export function Sparkline({
     return () => clearInterval(id);
   }, [live, data]);
 
+  const pts = live ? liveData : data;
+  const max = maxValue != null ? maxValue : Math.max(...pts, 0.01);
+  const step = pts.length > 1 ? width / (pts.length - 1) : 0;
+
   const d = useMemo(() => {
-    const pts = live ? liveData : data;
     if (pts.length < 2) return "";
-    const max = maxValue != null ? maxValue : Math.max(...pts, 0.01);
-    const step = width / (pts.length - 1);
     return pts
       .map((v, i) => {
         const x = i * step;
@@ -80,50 +105,57 @@ export function Sparkline({
         return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
       })
       .join(" ");
-  }, [data, liveData, live, width, height, maxValue]);
+  }, [pts, step, max, height]);
 
   const fillD = useMemo(() => {
     if (!fill || !d) return "";
     return `${d} L${width},${height} L0,${height} Z`;
   }, [d, fill, width, height]);
 
-  if (responsive) {
-    return (
-      <div ref={containerRef} className={className} style={{ width: "100%", height: "100%", minHeight: 0 }}>
-        {d && size && (
-          <svg
-            width={size.w}
-            height={size.h}
-            viewBox={`0 0 ${size.w} ${size.h}`}
-            style={{ display: "block" }}
-          >
-            {fill && fillD && (
-              <path d={fillD} fill={color} opacity={0.12} />
-            )}
-            <path
-              d={d}
-              fill="none"
-              stroke={color}
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        )}
-      </div>
-    );
-  }
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      if (!hasTooltip || pts.length < 2) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const idx = Math.round(x / step);
+      const clamped = Math.min(Math.max(idx, 0), pts.length - 1);
+      setHoverIndex(clamped);
+      setTooltipPos({ x: e.clientX, y: rect.top });
+      onHover?.({
+        index: clamped,
+        value: pts[clamped],
+        timestamp: timestamps?.[clamped] ?? null,
+      });
+    },
+    [hasTooltip, pts.length, step, onHover, timestamps],
+  );
 
-  if (!d) return null;
+  const handleMouseLeave = useCallback(() => {
+    setHoverIndex(null);
+    setTooltipPos(null);
+    onHover?.(null);
+  }, [onHover]);
 
-  return (
-    <svg
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      className={className}
-      style={{ display: "block", flexShrink: 0 }}
-    >
+  // Compute hovered point's Y position in SVG coordinates
+  const hoverPoint = useMemo(() => {
+    if (hoverIndex == null || pts.length < 2) return null;
+    const v = pts[hoverIndex];
+    const x = hoverIndex * step;
+    const y = height - (v / max) * height * 0.9 - height * 0.05;
+    return { x, y, value: v };
+  }, [hoverIndex, pts, step, height, max]);
+
+  const tooltipContent = useMemo(() => {
+    if (hoverIndex == null || !hasTooltip) return null;
+    const v = pts[hoverIndex];
+    const label = formatValue ? formatValue(v) : v.toFixed(1);
+    const ts = timestamps?.[hoverIndex];
+    const time = ts ? formatTooltipTime(ts) : null;
+    return { label, time };
+  }, [hoverIndex, hasTooltip, pts, formatValue, timestamps]);
+
+  const svgContent = (w: number, h: number) => (
+    <>
       {fill && fillD && (
         <path d={fillD} fill={color} opacity={0.12} />
       )}
@@ -135,7 +167,97 @@ export function Sparkline({
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </svg>
+      {hoverPoint && (
+        <>
+          <line
+            x1={hoverPoint.x}
+            y1={0}
+            x2={hoverPoint.x}
+            y2={h}
+            stroke="var(--text-muted)"
+            strokeWidth={0.5}
+            strokeDasharray="2,2"
+            opacity={0.6}
+          />
+          <circle
+            cx={hoverPoint.x}
+            cy={hoverPoint.y}
+            r={3}
+            fill={color}
+            stroke="var(--background)"
+            strokeWidth={1.5}
+          />
+        </>
+      )}
+    </>
+  );
+
+  const tooltip = tooltipContent && tooltipPos ? (
+    <div
+      style={{
+        position: "fixed",
+        left: tooltipPos.x,
+        top: tooltipPos.y - 8,
+        transform: "translate(-50%, -100%)",
+        background: "var(--surface)",
+        border: "1px solid var(--border-strong)",
+        borderRadius: 8,
+        padding: "6px 10px",
+        fontSize: 11,
+        lineHeight: 1.4,
+        whiteSpace: "nowrap",
+        pointerEvents: "none",
+        zIndex: 200,
+        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+      }}
+    >
+      <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+        {tooltipContent.label}
+      </div>
+      {tooltipContent.time && (
+        <div style={{ color: "var(--text-muted)", fontSize: 10 }}>
+          {tooltipContent.time}
+        </div>
+      )}
+    </div>
+  ) : null;
+
+  if (responsive) {
+    return (
+      <div ref={containerRef} className={className} style={{ width: "100%", height: "100%", minHeight: 0, position: "relative" }}>
+        {d && size && (
+          <svg
+            width={size.w}
+            height={size.h}
+            viewBox={`0 0 ${size.w} ${size.h}`}
+            style={{ display: "block", cursor: hasTooltip ? "crosshair" : undefined }}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+          >
+            {svgContent(size.w, size.h)}
+          </svg>
+        )}
+        {tooltip}
+      </div>
+    );
+  }
+
+  if (!d) return null;
+
+  return (
+    <div style={{ position: "relative", display: "inline-block", flexShrink: 0 }} className={className}>
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        style={{ display: "block", cursor: hasTooltip ? "crosshair" : undefined }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+      >
+        {svgContent(width, height)}
+      </svg>
+      {tooltip}
+    </div>
   );
 }
 

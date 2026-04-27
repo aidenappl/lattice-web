@@ -94,14 +94,23 @@ export const fetchApi = async <T>(
     };
 };
 
-// Singleton promise to deduplicate concurrent refresh requests.
-// Without this, multiple 401s fire parallel refresh calls — a race condition
-// that can corrupt token state.
-let refreshPromise: Promise<string | null> | null = null;
+// ─── Token refresh ──────────────────────────────────────────────────────────
+// Two layers:
+//   1. Reactive (401 handler): catches expired tokens on API calls, refreshes,
+//      and retries the original request.
+//   2. Proactive (activity-aware scheduler): refreshes ~60s before expiry IF
+//      the user is actively using the app. If idle, defers until next activity.
+//
+// Both use the same doRefresh() with a shared singleton promise so concurrent
+// callers never fire parallel /auth/refresh requests.
+
+type RefreshResult = { token: string; expiresAt: string | null };
 
 const MAX_REFRESH_ATTEMPTS = 2;
 
-const doRefresh = async (): Promise<string | null> => {
+let refreshPromise: Promise<RefreshResult | null> | null = null;
+
+const doRefresh = async (): Promise<RefreshResult | null> => {
     for (let attempt = 1; attempt <= MAX_REFRESH_ATTEMPTS; attempt++) {
         try {
             const refreshResponse = await axios.post(
@@ -115,7 +124,10 @@ const doRefresh = async (): Promise<string | null> => {
             );
 
             if (refreshResponse.status === 200 && refreshResponse.data?.success) {
-                return refreshResponse.data.data.token as string;
+                return {
+                    token: refreshResponse.data.data.token as string,
+                    expiresAt: (refreshResponse.data.data.expires_at as string) ?? null,
+                };
             }
 
             // Definitive auth failure — don't retry
@@ -139,75 +151,151 @@ const doRefresh = async (): Promise<string | null> => {
     return null;
 };
 
-const handle401Response = async <T>(
-    originalConfig: AxiosRequestConfig,
-): Promise<ApiResponse<T> | null> => {
-    // Deduplicate: if a refresh is already in flight, wait for it
+/** Shared entry point — deduplicates concurrent refresh calls. */
+function getRefreshPromise(): Promise<RefreshResult | null> {
     if (!refreshPromise) {
         refreshPromise = doRefresh().finally(() => {
             refreshPromise = null;
         });
     }
+    return refreshPromise;
+}
 
-    const newToken = await refreshPromise;
-    if (newToken) {
-        // Only retry safe methods automatically; state-changing methods
-        // could cause unintended side effects on retry
-        const method = (originalConfig.method ?? "GET").toUpperCase();
-        if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
-            return await executeRequest<T>(originalConfig, newToken);
-        }
-        // For mutations, retry with the new token — the caller already
-        // intends this action and the alternative is a hard redirect to /login
-        return await executeRequest<T>(originalConfig, newToken);
+const handle401Response = async <T>(
+    originalConfig: AxiosRequestConfig,
+): Promise<ApiResponse<T> | null> => {
+    const result = await getRefreshPromise();
+    if (result) {
+        // Reschedule proactive refresh with the new expiry
+        scheduleNextRefresh(result.expiresAt);
+
+        return await executeRequest<T>(originalConfig, result.token);
     }
     return null;
 };
 
-// ─── Proactive token refresh ────────────────────────────────────────────────
-// Keeps the session alive while the user is actively using the app.
-// Complements the reactive 401-based refresh above.
+// ─── Activity-aware proactive refresh ───────────────────────────────────────
+// Tracks user activity and schedules token refresh relative to expiry.
+// Active user → refresh 60s before expiry.
+// Idle user   → skip refresh, defer until next interaction.
+// Tab return  → check expiry immediately.
 
-const REFRESH_INTERVAL_MS = 4 * 60 * 1000; // 4 minutes
-let refreshIntervalId: ReturnType<typeof setInterval> | null = null;
+const ACTIVITY_THRESHOLD_MS = 5 * 60 * 1000;  // 5 min — user considered "active"
+const REFRESH_BEFORE_EXPIRY_MS = 60 * 1000;   // Refresh 60s before token expires
+const DEFAULT_TOKEN_LIFETIME_MS = 14 * 60 * 1000; // Fallback if no expires_at
+const ACTIVITY_DEBOUNCE_MS = 2000;             // Throttle activity events
 
-const silentRefresh = async () => {
-    try {
-        await axios.post(
-            `${BASE_API_URL}/auth/refresh`,
-            {},
-            { withCredentials: true, validateStatus: () => true, timeout: 10000 },
-        );
-    } catch {
-        // Silently fail — the reactive 401 handler will catch it on the next request
+let lastUserActivity = 0;
+let tokenExpiresAt: number | null = null;
+let refreshTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let pendingRefreshOnActivity = false;
+let activityListenersAttached = false;
+let activityThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function isUserActive(): boolean {
+    return Date.now() - lastUserActivity < ACTIVITY_THRESHOLD_MS;
+}
+
+function onUserActivity() {
+    if (activityThrottleTimer) return;
+    lastUserActivity = Date.now();
+    activityThrottleTimer = setTimeout(() => {
+        activityThrottleTimer = null;
+    }, ACTIVITY_DEBOUNCE_MS);
+
+    // If we skipped a refresh due to inactivity, do it now
+    if (pendingRefreshOnActivity) {
+        pendingRefreshOnActivity = false;
+        performScheduledRefresh();
     }
-};
+}
+
+function attachActivityListeners() {
+    if (activityListenersAttached || typeof window === "undefined") return;
+    const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
+    events.forEach((e) => window.addEventListener(e, onUserActivity, { passive: true }));
+    activityListenersAttached = true;
+}
+
+function detachActivityListeners() {
+    if (!activityListenersAttached || typeof window === "undefined") return;
+    const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
+    events.forEach((e) => window.removeEventListener(e, onUserActivity));
+    activityListenersAttached = false;
+}
+
+function scheduleNextRefresh(expiresAt?: string | null) {
+    if (refreshTimeoutId) {
+        clearTimeout(refreshTimeoutId);
+        refreshTimeoutId = null;
+    }
+
+    if (expiresAt) {
+        tokenExpiresAt = new Date(expiresAt).getTime();
+    } else if (!tokenExpiresAt) {
+        tokenExpiresAt = Date.now() + DEFAULT_TOKEN_LIFETIME_MS;
+    }
+
+    const msUntilExpiry = tokenExpiresAt - Date.now();
+    const refreshIn = Math.max(5_000, msUntilExpiry - REFRESH_BEFORE_EXPIRY_MS);
+
+    refreshTimeoutId = setTimeout(performScheduledRefresh, refreshIn);
+}
+
+async function performScheduledRefresh() {
+    refreshTimeoutId = null;
+
+    if (!isUserActive()) {
+        // User is idle — defer until they interact again
+        pendingRefreshOnActivity = true;
+        return;
+    }
+
+    const result = await getRefreshPromise();
+    if (result) {
+        scheduleNextRefresh(result.expiresAt);
+    }
+    // If refresh failed, the reactive 401 handler catches it on next request
+}
+
+function onVisibilityChange() {
+    if (typeof document === "undefined" || document.visibilityState !== "visible") return;
+    lastUserActivity = Date.now();
+
+    if (!tokenExpiresAt) return;
+    const msUntilExpiry = tokenExpiresAt - Date.now();
+
+    if (msUntilExpiry < REFRESH_BEFORE_EXPIRY_MS) {
+        // Token is close to or past expiry — refresh now
+        performScheduledRefresh();
+    }
+}
 
 export function startProactiveRefresh() {
-    if (refreshIntervalId) return;
+    lastUserActivity = Date.now();
+    pendingRefreshOnActivity = false;
+    attachActivityListeners();
+    scheduleNextRefresh();
 
-    // Periodic background refresh
-    refreshIntervalId = setInterval(silentRefresh, REFRESH_INTERVAL_MS);
-
-    // Refresh when user returns to the tab after being away
     if (typeof document !== "undefined") {
-        document.addEventListener("visibilitychange", handleVisibility);
+        document.addEventListener("visibilitychange", onVisibilityChange);
     }
 }
 
 export function stopProactiveRefresh() {
-    if (refreshIntervalId) {
-        clearInterval(refreshIntervalId);
-        refreshIntervalId = null;
+    if (refreshTimeoutId) {
+        clearTimeout(refreshTimeoutId);
+        refreshTimeoutId = null;
     }
+    if (activityThrottleTimer) {
+        clearTimeout(activityThrottleTimer);
+        activityThrottleTimer = null;
+    }
+    pendingRefreshOnActivity = false;
+    tokenExpiresAt = null;
+    detachActivityListeners();
     if (typeof document !== "undefined") {
-        document.removeEventListener("visibilitychange", handleVisibility);
-    }
-}
-
-function handleVisibility() {
-    if (document.visibilityState === "visible") {
-        silentRefresh();
+        document.removeEventListener("visibilitychange", onVisibilityChange);
     }
 }
 

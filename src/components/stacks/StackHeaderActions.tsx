@@ -22,7 +22,9 @@ interface StackHeaderActionsProps {
     hasPendingChanges: boolean;
     deleting: boolean;
     canEditUser: boolean;
+    hasActiveDeployment: boolean;
     onDeploy: () => void;
+    onCancelDeploy: () => void;
     onEdit: () => void;
     onDelete: () => void;
 }
@@ -36,7 +38,9 @@ export function StackHeaderActions({
     hasPendingChanges,
     deleting,
     canEditUser,
+    hasActiveDeployment,
     onDeploy,
+    onCancelDeploy,
     onEdit,
     onDelete,
 }: StackHeaderActionsProps) {
@@ -47,13 +51,21 @@ export function StackHeaderActions({
     const stoppedCount = containers.filter((c) => c.status === "stopped").length;
 
     const isDeploying = deploying || stack.status === "deploying";
+    const isStuckDeploying = isDeploying && !hasActiveDeployment && !deploying;
     const isFailed = stack.status === "failed";
     const needsDeploy = hasPendingChanges || isFailed;
     const showForce = !needsDeploy && !isDeploying;
 
     return (
         <div className="stack-header-actions">
-            {canEditUser && (
+            {canEditUser && isStuckDeploying ? (
+                <Button
+                    variant="warning"
+                    onClick={onCancelDeploy}
+                >
+                    Cancel Deploy
+                </Button>
+            ) : canEditUser && (
                 <Button
                     onClick={onDeploy}
                     disabled={isDeploying || !workerOnline}
