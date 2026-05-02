@@ -22,6 +22,8 @@ import {
   faFileCode,
   faShieldHalved,
   faBell,
+  faDatabase,
+  faCloudArrowUp,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { useAuth } from "@/store/hooks";
@@ -55,6 +57,7 @@ const SIDEBAR_GROUPS: NavGroup[] = [
       { path: "/workers", label: "Workers", icon: faServer },
       { path: "/stacks", label: "Stacks", icon: faLayerGroup },
       { path: "/containers", label: "Containers", icon: faCubes },
+      { path: "/databases", label: "Databases", icon: faDatabase },
       { path: "/networks", label: "Networks", icon: faNetworkWired },
       { path: "/registries", label: "Registries", icon: faBoxArchive },
     ],
@@ -64,6 +67,7 @@ const SIDEBAR_GROUPS: NavGroup[] = [
     items: [
       { path: "/env-vars", label: "Env Variables", icon: faKey },
       { path: "/templates", label: "Templates", icon: faFileCode },
+      { path: "/backup-destinations", label: "Backups", icon: faCloudArrowUp },
       { path: "/authentication", label: "Authentication", icon: faShieldHalved },
       { path: "/notifications", label: "Notifications", icon: faBell },
       { path: "/settings", label: "Settings", icon: faGear },
