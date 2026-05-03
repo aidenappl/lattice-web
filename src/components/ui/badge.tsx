@@ -52,6 +52,8 @@ type StatusType =
   | "unhealthy"
   | "starting"
   | "restarting"
+  | "completed"
+  | "uploading"
   | "none";
 
 const statusVariantMap: Record<
@@ -64,6 +66,7 @@ const statusVariantMap: Record<
   deployed: "success",
   approved: "success",
   healthy: "success",
+  completed: "success",
   offline: "error",
   error: "error",
   failed: "error",
@@ -74,6 +77,7 @@ const statusVariantMap: Record<
   pending: "warning",
   starting: "warning",
   restarting: "error",
+  uploading: "warning",
   stopped: "default",
   maintenance: "default",
   rolled_back: "default",
@@ -88,6 +92,7 @@ const statusDotMap: Record<StatusType, string> = {
   deployed: "bg-[#22c55e]",
   approved: "bg-[#22c55e]",
   healthy: "bg-[#22c55e]",
+  completed: "bg-[#22c55e]",
   offline: "bg-[#ef4444]",
   error: "bg-[#ef4444]",
   failed: "bg-[#ef4444]",
@@ -98,6 +103,7 @@ const statusDotMap: Record<StatusType, string> = {
   pending: "bg-[#eab308]",
   starting: "bg-[#eab308]",
   restarting: "bg-[#ef4444]",
+  uploading: "bg-[#eab308]",
   stopped: "bg-[#888888]",
   maintenance: "bg-[#888888]",
   rolled_back: "bg-[#888888]",

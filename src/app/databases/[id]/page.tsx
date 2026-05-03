@@ -84,6 +84,8 @@ export default function DatabaseDetailPage() {
   // Settings
   const [backupDestinations, setBackupDestinations] = useState<BackupDestination[]>([]);
   const [settingsForm, setSettingsForm] = useState({
+    name: "",
+    port: "",
     snapshot_schedule: "",
     retention_count: "",
     backup_destination_id: "",
@@ -146,6 +148,8 @@ export default function DatabaseDetailPage() {
   useEffect(() => {
     if (db) {
       setSettingsForm({
+        name: db.name ?? "",
+        port: db.port != null ? String(db.port) : "",
         snapshot_schedule: db.snapshot_schedule ?? "",
         retention_count: db.retention_count != null ? String(db.retention_count) : "",
         backup_destination_id: db.backup_destination_id != null ? String(db.backup_destination_id) : "",
@@ -161,7 +165,7 @@ export default function DatabaseDetailPage() {
   }, [db]);
 
   // Poll for status updates (10s)
-  usePoll(loadDatabase, 10000, db?.status === "pending" || actionLoading !== null);
+  usePoll(loadDatabase, 10000);
 
   // ─── WebSocket ───────────────────────────────────────────────────────────────
 
@@ -330,12 +334,16 @@ export default function DatabaseDetailPage() {
   const handleSaveSettings = async () => {
     setSavingSettings(true);
     const data: Partial<{
+      name: string;
+      port: number | null;
       snapshot_schedule: string | null;
       retention_count: number | null;
       backup_destination_id: number | null;
       cpu_limit: number | null;
       memory_limit: number | null;
     }> = {
+      name: settingsForm.name || undefined,
+      port: settingsForm.port ? parseInt(settingsForm.port) : null,
       snapshot_schedule: settingsForm.snapshot_schedule || null,
       retention_count: settingsForm.retention_count ? parseInt(settingsForm.retention_count) : null,
       backup_destination_id: settingsForm.backup_destination_id ? parseInt(settingsForm.backup_destination_id) : null,
@@ -384,10 +392,10 @@ export default function DatabaseDetailPage() {
   );
 
   const connectionString = useMemo(() => {
-    if (credentials) return credentials.connection_string;
     if (!db) return "";
-    const engineProto = db.engine === "postgres" ? "postgresql" : db.engine;
-    return `${engineProto}://${db.username}:****@localhost:${db.port}/${db.database_name}`;
+    if (credentials) return credentials.connection_string;
+    const engineProto = db.engine === "postgres" ? "postgresql" : "mysql";
+    return `${engineProto}://${db.username}:****@${db.container_name}:${db.port}/${db.database_name}`;
   }, [db, credentials]);
 
   // ─── Render ──────────────────────────────────────────────────────────────────
@@ -398,6 +406,13 @@ export default function DatabaseDetailPage() {
     return (
       <div className="card p-12 text-center">
         <p className="text-sm text-muted">Database not found</p>
+        <Link
+          href="/databases"
+          className="inline-flex items-center gap-1.5 text-sm text-info hover:underline mt-4"
+        >
+          <FontAwesomeIcon icon={faChevronRight} className="h-3 w-3 rotate-180" />
+          Back to Databases
+        </Link>
       </div>
     );
   }
@@ -451,7 +466,7 @@ export default function DatabaseDetailPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                disabled={isRunning || !!actionLoading}
+                disabled={isRunning || db.status === "pending" || !!actionLoading}
                 loading={actionLoading === "start"}
                 onClick={() => runAction("start")}
               >
@@ -526,7 +541,7 @@ export default function DatabaseDetailPage() {
                 <dl className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <dt className="text-muted">Host</dt>
-                    <dd className="text-secondary font-mono">localhost</dd>
+                    <dd className="text-secondary font-mono">{credentials?.host ?? db.container_name}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-muted">Port</dt>
@@ -733,6 +748,11 @@ export default function DatabaseDetailPage() {
                         </td>
                         <td className="py-2 px-3">
                           <StatusBadge status={snap.status} />
+                          {snap.status === "failed" && snap.error_message && (
+                            <p className="text-xs text-destructive mt-0.5 max-w-[200px] truncate" title={snap.error_message}>
+                              {snap.error_message}
+                            </p>
+                          )}
                         </td>
                         <td className="py-2 px-3">
                           <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium ${
@@ -817,6 +837,29 @@ export default function DatabaseDetailPage() {
         {/* ─── Settings Tab ───────────────────────────────────────────────── */}
         {activeTab === "settings" && (
           <div className="p-4 space-y-6">
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-primary">General</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Name"
+                  value={settingsForm.name}
+                  onChange={(e) => setSettingsForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Database name"
+                  disabled={!canEdit(user)}
+                />
+                <Input
+                  label="Port"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={settingsForm.port}
+                  onChange={(e) => setSettingsForm((f) => ({ ...f, port: e.target.value }))}
+                  placeholder="5432"
+                  disabled={!canEdit(user)}
+                />
+              </div>
+            </div>
+
             <div className="space-y-4">
               <h3 className="text-sm font-medium text-primary">Backup &amp; Snapshot Settings</h3>
 

@@ -8,6 +8,7 @@ import {
   reqGetDatabaseInstances,
   reqCreateDatabaseInstance,
   reqDatabaseAction,
+  reqDeleteDatabaseInstance,
 } from "@/services/databases.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
@@ -15,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/badge";
 import { useConfirm } from "@/components/ui/confirm-modal";
-import { formatDate, canEdit } from "@/lib/utils";
+import { canEdit } from "@/lib/utils";
 import { useUser } from "@/store/hooks";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import WorkerBadge from "@/components/ui/worker-badge";
@@ -41,18 +42,24 @@ export default function DatabasesPage() {
   const [databaseName, setDatabaseName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rootPassword, setRootPassword] = useState("");
   const [cpuLimit, setCpuLimit] = useState<number | "">("");
   const [memoryLimit, setMemoryLimit] = useState<number | "">("");
   const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
-    const [dbRes, wRes] = await Promise.all([
-      reqGetDatabaseInstances(),
-      reqGetWorkers(),
-    ]);
-    if (dbRes.success) setDatabases(dbRes.data ?? []);
-    else toast.error("Failed to load databases");
-    if (wRes.success) setWorkers(wRes.data ?? []);
+    try {
+      const [dbRes, wRes] = await Promise.all([
+        reqGetDatabaseInstances(),
+        reqGetWorkers(),
+      ]);
+      if (dbRes.success) setDatabases(dbRes.data ?? []);
+      else toast.error("Failed to load databases");
+      if (wRes.success) setWorkers(wRes.data ?? []);
+      else toast.error("Failed to load workers");
+    } catch {
+      toast.error("Failed to load data");
+    }
   }, []);
 
   useEffect(() => {
@@ -101,6 +108,7 @@ export default function DatabasesPage() {
     setDatabaseName("");
     setUsername("");
     setPassword("");
+    setRootPassword("");
     setCpuLimit("");
     setMemoryLimit("");
   };
@@ -109,45 +117,55 @@ export default function DatabasesPage() {
     e.preventDefault();
     if (!name.trim() || !databaseName.trim() || !username.trim() || !workerId) return;
     setSubmitting(true);
-    const res = await reqCreateDatabaseInstance({
-      name: name.trim(),
-      engine,
-      engine_version: engineVersion.trim() || undefined,
-      worker_id: workerId as number,
-      port: port ? (port as number) : undefined,
-      database_name: databaseName.trim(),
-      username: username.trim(),
-      password: password.trim() || undefined,
-      cpu_limit: cpuLimit ? (cpuLimit as number) : undefined,
-      memory_limit: memoryLimit ? (memoryLimit as number) : undefined,
-    });
-    if (res.success) {
-      toast.success(`Database "${name}" created`);
-      setDatabases((prev) => [...prev, res.data]);
-      setShowForm(false);
-      resetForm();
-    } else {
-      toast.error(res.error_message || "Failed to create database");
+    try {
+      const res = await reqCreateDatabaseInstance({
+        name: name.trim(),
+        engine,
+        engine_version: engineVersion.trim() || undefined,
+        worker_id: workerId as number,
+        port: port ? (port as number) : undefined,
+        database_name: databaseName.trim(),
+        username: username.trim(),
+        password: password.trim() || undefined,
+        root_password: rootPassword.trim() || undefined,
+        cpu_limit: cpuLimit ? (cpuLimit as number) : undefined,
+        memory_limit: memoryLimit ? (memoryLimit as number) : undefined,
+      });
+      if (res.success) {
+        toast.success(`Database "${name}" created`);
+        setDatabases((prev) => [...prev, res.data]);
+        setShowForm(false);
+        resetForm();
+      } else {
+        toast.error(res.error_message || "Failed to create database");
+      }
+    } catch {
+      toast.error("Failed to create database");
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   const handleAction = async (db: DatabaseInstance, action: "start" | "stop" | "restart") => {
-    if (action === "stop") {
+    if (action === "stop" || action === "restart") {
       const confirmed = await showConfirm({
-        title: `Stop database "${db.name}"`,
+        title: `${action.charAt(0).toUpperCase() + action.slice(1)} database "${db.name}"`,
         message: "This will stop the database container. Any active connections will be terminated.",
-        confirmLabel: "Stop",
+        confirmLabel: action.charAt(0).toUpperCase() + action.slice(1),
         variant: "danger",
       });
       if (!confirmed) return;
     }
-    const res = await reqDatabaseAction(db.id, action);
-    if (res.success) {
-      toast.success(`${action.charAt(0).toUpperCase() + action.slice(1)} command sent to "${db.name}"`);
-      load();
-    } else {
-      toast.error(res.error_message || `Failed to ${action} database`);
+    try {
+      const res = await reqDatabaseAction(db.id, action);
+      if (res.success) {
+        toast.success(`${action.charAt(0).toUpperCase() + action.slice(1)} command sent to "${db.name}"`);
+        load();
+      } else {
+        toast.error(res.error_message || `Failed to ${action} database`);
+      }
+    } catch {
+      toast.error(`Failed to ${action} database`);
     }
   };
 
@@ -274,6 +292,19 @@ export default function DatabasesPage() {
                   If left blank, a secure password will be auto-generated.
                 </p>
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Input
+                  id="db-root-password"
+                  label="Root Password"
+                  type="password"
+                  placeholder="Leave blank to auto-generate"
+                  value={rootPassword}
+                  onChange={(e) => setRootPassword(e.target.value)}
+                />
+                <p className="text-[11px] text-muted">
+                  For MySQL/MariaDB root access. Leave blank to auto-generate.
+                </p>
+              </div>
               <Input
                 id="db-cpu-limit"
                 label="CPU Limit"
@@ -297,6 +328,7 @@ export default function DatabasesPage() {
             </div>
             <Button
               type="submit"
+              loading={submitting}
               disabled={
                 submitting ||
                 !name.trim() ||
@@ -311,7 +343,7 @@ export default function DatabasesPage() {
         )}
 
         {/* Filter row */}
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex flex-wrap items-center gap-3 mb-4">
           <div className="flex flex-col gap-1">
             <select
               value={filterEngine}
@@ -434,7 +466,7 @@ export default function DatabasesPage() {
                             </Button>
                           ) : db.status === "running" ? (
                             <Button
-                              variant="ghost"
+                              variant="destructive"
                               size="sm"
                               onClick={() => handleAction(db, "stop")}
                             >
@@ -455,6 +487,32 @@ export default function DatabasesPage() {
                               View
                             </Button>
                           </Link>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={async () => {
+                              const confirmed = await showConfirm({
+                                title: `Delete database "${db.name}"`,
+                                message: "This will permanently delete the database instance. This action cannot be undone.",
+                                confirmLabel: "Delete",
+                                variant: "danger",
+                              });
+                              if (!confirmed) return;
+                              try {
+                                const res = await reqDeleteDatabaseInstance(db.id);
+                                if (res.success) {
+                                  toast.success(`Database "${db.name}" deleted`);
+                                  setDatabases((prev) => prev.filter((d) => d.id !== db.id));
+                                } else {
+                                  toast.error(res.error_message || "Failed to delete database");
+                                }
+                              } catch {
+                                toast.error("Failed to delete database");
+                              }
+                            }}
+                          >
+                            Delete
+                          </Button>
                         </td>
                       )}
                     </tr>

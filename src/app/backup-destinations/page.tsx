@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import toast from "react-hot-toast";
 import type { BackupDestination, BackupDestinationType, Worker } from "@/types";
 import {
@@ -145,14 +145,7 @@ export default function BackupDestinationsPage() {
     return getRequiredFields(type).every((k) => config[k]?.trim());
   };
 
-  const isEditValid = () => {
-    if (!editName.trim()) return false;
-    // For edit, secret fields are optional (they keep existing values if blank)
-    const requiredNonSecret = configFieldsByType[editType]
-      .filter((f) => f.required && f.type !== "password")
-      .map((f) => f.key);
-    return requiredNonSecret.every((k) => editConfig[k]?.trim());
-  };
+  const isEditValid = () => editName.trim() !== "";
 
   const resetForm = () => {
     setName("");
@@ -257,7 +250,10 @@ export default function BackupDestinationsPage() {
     // If success, we wait for the WebSocket event
   };
 
-  const onlineWorkers = workers.filter((w) => w.status === "online");
+  const onlineWorkers = useMemo(
+    () => workers.filter((w) => w.status === "online"),
+    [workers],
+  );
 
   // --- Render config fields helper ---
   const renderConfigFields = (
@@ -356,6 +352,7 @@ export default function BackupDestinationsPage() {
 
             <Button
               type="submit"
+              loading={submitting}
               disabled={submitting || !isCreateValid()}
             >
               {submitting ? "Creating..." : "Create Destination"}
@@ -438,20 +435,23 @@ export default function BackupDestinationsPage() {
                               {testingId === dest.id ? "Testing..." : "Test"}
                             </Button>
                             {testWorkerSelecting === dest.id && (
-                              <div className="absolute right-0 top-full mt-1 z-10 bg-surface-elevated border border-border-strong rounded-lg shadow-lg py-1 min-w-[160px]">
-                                <div className="px-3 py-1.5 text-xs font-medium text-secondary uppercase tracking-wider">
-                                  Select Worker
+                              <>
+                                <div className="fixed inset-0 z-[5]" onClick={() => setTestWorkerSelecting(null)} />
+                                <div className="absolute right-0 top-full mt-1 z-10 bg-surface-elevated border border-border-strong rounded-lg shadow-lg py-1 min-w-[160px]">
+                                  <div className="px-3 py-1.5 text-xs font-medium text-secondary uppercase tracking-wider">
+                                    Select Worker
+                                  </div>
+                                  {onlineWorkers.map((w) => (
+                                    <button
+                                      key={w.id}
+                                      onClick={() => handleTest(dest.id, w.id)}
+                                      className="w-full text-left px-3 py-1.5 text-sm text-primary hover:bg-surface-active transition-colors cursor-pointer"
+                                    >
+                                      {w.name}
+                                    </button>
+                                  ))}
                                 </div>
-                                {onlineWorkers.map((w) => (
-                                  <button
-                                    key={w.id}
-                                    onClick={() => handleTest(dest.id, w.id)}
-                                    className="w-full text-left px-3 py-1.5 text-sm text-primary hover:bg-surface-active transition-colors cursor-pointer"
-                                  >
-                                    {w.name}
-                                  </button>
-                                ))}
-                              </div>
+                              </>
                             )}
                           </span>
                         )}
@@ -469,6 +469,9 @@ export default function BackupDestinationsPage() {
                     {canEdit(user) && editId === dest.id && (
                       <tr className="border-b border-border-subtle bg-background-alt">
                         <td colSpan={4} className="px-4 py-4">
+                          <p className="text-[11px] text-muted mb-3">
+                            Leave fields blank to keep their current values. Only filled fields will be updated.
+                          </p>
                           <div className="space-y-4 mb-3">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <Input
@@ -507,6 +510,7 @@ export default function BackupDestinationsPage() {
                           <div className="flex gap-2">
                             <Button
                               size="sm"
+                              loading={editSaving}
                               onClick={handleSaveEdit}
                               disabled={editSaving || !isEditValid()}
                             >

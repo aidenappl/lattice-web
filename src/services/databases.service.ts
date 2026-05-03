@@ -40,7 +40,7 @@ export const reqUpdateDatabaseInstance = (
     id: number,
     data: Partial<{
         name: string;
-        port: number;
+        port: number | null;
         cpu_limit: number | null;
         memory_limit: number | null;
         snapshot_schedule: string | null;
