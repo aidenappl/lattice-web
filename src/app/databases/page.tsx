@@ -1,19 +1,18 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import type { DatabaseInstance, DatabaseEngine, Worker } from "@/types";
 import {
   reqGetDatabaseInstances,
-  reqCreateDatabaseInstance,
   reqDatabaseAction,
   reqDeleteDatabaseInstance,
 } from "@/services/databases.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/badge";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { canEdit } from "@/lib/utils";
@@ -22,30 +21,16 @@ import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import WorkerBadge from "@/components/ui/worker-badge";
 
 export default function DatabasesPage() {
+  const router = useRouter();
   const user = useUser();
   const showConfirm = useConfirm();
   const [databases, setDatabases] = useState<DatabaseInstance[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
 
   // Filters
   const [filterEngine, setFilterEngine] = useState<"all" | DatabaseEngine>("all");
   const [filterStatus, setFilterStatus] = useState<"all" | "running" | "stopped" | "pending" | "error">("all");
-
-  // Create form
-  const [name, setName] = useState("");
-  const [engine, setEngine] = useState<DatabaseEngine>("postgres");
-  const [engineVersion, setEngineVersion] = useState("");
-  const [workerId, setWorkerId] = useState<number | "">("");
-  const [port, setPort] = useState<number | "">("");
-  const [databaseName, setDatabaseName] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [rootPassword, setRootPassword] = useState("");
-  const [cpuLimit, setCpuLimit] = useState<number | "">("");
-  const [memoryLimit, setMemoryLimit] = useState<number | "">("");
-  const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -86,11 +71,6 @@ export default function DatabasesPage() {
     [workers],
   );
 
-  const onlineWorkers = useMemo(
-    () => workers.filter((w) => w.status === "online"),
-    [workers],
-  );
-
   const filteredDatabases = useMemo(() => {
     return databases.filter((db) => {
       if (filterEngine !== "all" && db.engine !== filterEngine) return false;
@@ -98,53 +78,6 @@ export default function DatabasesPage() {
       return true;
     });
   }, [databases, filterEngine, filterStatus]);
-
-  const resetForm = () => {
-    setName("");
-    setEngine("postgres");
-    setEngineVersion("");
-    setWorkerId("");
-    setPort("");
-    setDatabaseName("");
-    setUsername("");
-    setPassword("");
-    setRootPassword("");
-    setCpuLimit("");
-    setMemoryLimit("");
-  };
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !databaseName.trim() || !username.trim() || !workerId) return;
-    setSubmitting(true);
-    try {
-      const res = await reqCreateDatabaseInstance({
-        name: name.trim(),
-        engine,
-        engine_version: engineVersion.trim() || undefined,
-        worker_id: workerId as number,
-        port: port ? (port as number) : undefined,
-        database_name: databaseName.trim(),
-        username: username.trim(),
-        password: password.trim() || undefined,
-        root_password: rootPassword.trim() || undefined,
-        cpu_limit: cpuLimit ? (cpuLimit as number) : undefined,
-        memory_limit: memoryLimit ? (memoryLimit as number) : undefined,
-      });
-      if (res.success) {
-        toast.success(`Database "${name}" created`);
-        setDatabases((prev) => [...prev, res.data]);
-        setShowForm(false);
-        resetForm();
-      } else {
-        toast.error(res.error_message || "Failed to create database");
-      }
-    } catch {
-      toast.error("Failed to create database");
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const handleAction = async (db: DatabaseInstance, action: "start" | "stop" | "restart") => {
     if (action === "stop" || action === "restart") {
@@ -180,168 +113,13 @@ export default function DatabasesPage() {
           <div className="page-subtitle">Manage your database instances</div>
         </div>
         {canEdit(user) && (
-          <Button
-            onClick={() => {
-              setShowForm(!showForm);
-              if (showForm) resetForm();
-            }}
-          >
-            {showForm ? "Cancel" : "New Database"}
+          <Button onClick={() => router.push("/databases/new")}>
+            New Database
           </Button>
         )}
       </div>
 
       <div className="py-6">
-        {/* Create form */}
-        {canEdit(user) && showForm && (
-          <form onSubmit={handleCreate} className="card p-6 mb-6 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <Input
-                id="db-name"
-                label="Name"
-                placeholder="my-database"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="db-engine"
-                  className="text-xs font-medium text-secondary uppercase tracking-wider"
-                >
-                  Engine
-                </label>
-                <select
-                  id="db-engine"
-                  value={engine}
-                  onChange={(e) => setEngine(e.target.value as DatabaseEngine)}
-                  className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
-                >
-                  <option value="postgres">PostgreSQL</option>
-                  <option value="mysql">MySQL</option>
-                  <option value="mariadb">MariaDB</option>
-                </select>
-              </div>
-              <Input
-                id="db-engine-version"
-                label="Engine Version"
-                placeholder="e.g. 16, 8.0, 11"
-                value={engineVersion}
-                onChange={(e) => setEngineVersion(e.target.value)}
-              />
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="db-worker"
-                  className="text-xs font-medium text-secondary uppercase tracking-wider"
-                >
-                  Worker
-                </label>
-                <select
-                  id="db-worker"
-                  value={workerId}
-                  onChange={(e) =>
-                    setWorkerId(e.target.value ? Number(e.target.value) : "")
-                  }
-                  required
-                  className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
-                >
-                  <option value="">Select a worker...</option>
-                  {onlineWorkers.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <Input
-                id="db-port"
-                label="Port"
-                type="number"
-                placeholder="Auto-assign"
-                value={port}
-                onChange={(e) =>
-                  setPort(e.target.value ? Number(e.target.value) : "")
-                }
-              />
-              <Input
-                id="db-database-name"
-                label="Database Name"
-                placeholder="app_production"
-                value={databaseName}
-                onChange={(e) => setDatabaseName(e.target.value)}
-                required
-              />
-              <Input
-                id="db-username"
-                label="Username"
-                placeholder="db_user"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-              <div className="flex flex-col gap-1.5">
-                <Input
-                  id="db-password"
-                  label="Password"
-                  type="password"
-                  placeholder="Leave blank to auto-generate"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <p className="text-[11px] text-muted">
-                  If left blank, a secure password will be auto-generated.
-                </p>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Input
-                  id="db-root-password"
-                  label="Root Password"
-                  type="password"
-                  placeholder="Leave blank to auto-generate"
-                  value={rootPassword}
-                  onChange={(e) => setRootPassword(e.target.value)}
-                />
-                <p className="text-[11px] text-muted">
-                  For MySQL/MariaDB root access. Leave blank to auto-generate.
-                </p>
-              </div>
-              <Input
-                id="db-cpu-limit"
-                label="CPU Limit"
-                type="number"
-                placeholder="e.g. 2"
-                value={cpuLimit}
-                onChange={(e) =>
-                  setCpuLimit(e.target.value ? Number(e.target.value) : "")
-                }
-              />
-              <Input
-                id="db-memory-limit"
-                label="Memory Limit (MB)"
-                type="number"
-                placeholder="e.g. 512"
-                value={memoryLimit}
-                onChange={(e) =>
-                  setMemoryLimit(e.target.value ? Number(e.target.value) : "")
-                }
-              />
-            </div>
-            <Button
-              type="submit"
-              loading={submitting}
-              disabled={
-                submitting ||
-                !name.trim() ||
-                !databaseName.trim() ||
-                !username.trim() ||
-                !workerId
-              }
-            >
-              {submitting ? "Creating..." : "Create Database"}
-            </Button>
-          </form>
-        )}
-
         {/* Filter row */}
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <div className="flex flex-col gap-1">
