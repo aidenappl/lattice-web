@@ -35,6 +35,7 @@ const navigation = [
   { name: "Networks", href: "/networks" },
   { name: "Registries", href: "/registries" },
   { name: "Audit Log", href: "/audit-log" },
+  { name: "AI Management", href: "/ai" },
   { name: "Settings", href: "/settings" },
 ];
 

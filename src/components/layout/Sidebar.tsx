@@ -24,6 +24,7 @@ import {
   faBell,
   faDatabase,
   faCloudArrowUp,
+  faRobot,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { useAuth } from "@/store/hooks";
@@ -70,6 +71,7 @@ const SIDEBAR_GROUPS: NavGroup[] = [
       { path: "/backup-destinations", label: "Backups", icon: faCloudArrowUp },
       { path: "/authentication", label: "Authentication", icon: faShieldHalved },
       { path: "/notifications", label: "Notifications", icon: faBell },
+      { path: "/ai", label: "AI Management", icon: faRobot },
       { path: "/settings", label: "Settings", icon: faGear },
     ],
   },

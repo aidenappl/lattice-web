@@ -16,6 +16,18 @@ export type SearchResults = {
     containers: { id: number; stack_id: number; name: string; image: string; tag: string; status: string }[];
 };
 
+export type ApiToken = {
+    id: number;
+    user_id: number;
+    name: string;
+    scopes: string | null;
+    expires_at: string | null;
+    last_used_at: string | null;
+    active: boolean;
+    updated_at: string;
+    inserted_at: string;
+};
+
 export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 
 export type ApiSuccess<T> = {

@@ -1,4 +1,4 @@
-import type { User, VersionInfo, OverviewData, FleetMetricsPoint, AuditLogEntry, WebhookConfig, GlobalEnvVar, HealthAnomaly, SearchResults } from "@/types";
+import type { User, VersionInfo, OverviewData, FleetMetricsPoint, AuditLogEntry, WebhookConfig, GlobalEnvVar, HealthAnomaly, SearchResults, ApiToken } from "@/types";
 import { fetchApi } from "./api.service";
 
 export const reqGetOverview = () =>
@@ -209,4 +209,25 @@ export const reqSearch = (q: string) =>
     fetchApi<SearchResults>({
         method: "GET",
         url: `/admin/search?q=${encodeURIComponent(q)}`,
+    });
+
+// --- API Tokens ---
+
+export const reqGetApiTokens = () =>
+    fetchApi<ApiToken[]>({
+        method: "GET",
+        url: "/admin/api-tokens",
+    });
+
+export const reqCreateApiToken = (data: { name: string; expires_in?: string }) =>
+    fetchApi<ApiToken & { token: string }>({
+        method: "POST",
+        url: "/admin/api-tokens",
+        data,
+    });
+
+export const reqDeleteApiToken = (id: number) =>
+    fetchApi<null>({
+        method: "DELETE",
+        url: `/admin/api-tokens/${id}`,
     });
