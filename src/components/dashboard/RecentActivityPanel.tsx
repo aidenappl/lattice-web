@@ -26,6 +26,30 @@ function activityDotClass(action: string): string {
   return key ? activityColors[key] : "muted";
 }
 
+function renderDetails(details: string) {
+  const commitMatch = details.match(/ @ ([a-f0-9]{7,40})$/);
+  if (!commitMatch) return details;
+  const text = details.slice(0, commitMatch.index);
+  const sha = commitMatch[1].slice(0, 7);
+  return (
+    <>
+      {text}
+      <span
+        className="mono"
+        style={{
+          marginLeft: 4,
+          padding: "0 4px",
+          background: "var(--surface-alt)",
+          borderRadius: 3,
+          fontSize: 10,
+        }}
+      >
+        {sha}
+      </span>
+    </>
+  );
+}
+
 export function RecentActivityPanel({ entries }: { entries: AuditLogEntry[] }) {
   const router = useRouter();
   const recent = entries.slice(0, 15);
@@ -89,7 +113,7 @@ export function RecentActivityPanel({ entries }: { entries: AuditLogEntry[] }) {
                   className="text-muted truncate"
                   style={{ fontSize: 10, marginTop: 1 }}
                 >
-                  {e.details}
+                  {renderDetails(e.details)}
                 </div>
               )}
             </div>
