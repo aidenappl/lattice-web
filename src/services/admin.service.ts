@@ -219,7 +219,7 @@ export const reqGetApiTokens = () =>
         url: "/admin/api-tokens",
     });
 
-export const reqCreateApiToken = (data: { name: string; expires_in?: string }) =>
+export const reqCreateApiToken = (data: { name: string; expires_in: string }) =>
     fetchApi<ApiToken & { token: string }>({
         method: "POST",
         url: "/admin/api-tokens",

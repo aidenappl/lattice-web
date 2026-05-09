@@ -32,8 +32,8 @@ const EXPIRATION_OPTIONS = [
 const MCP_CONFIG = `{
   "mcpServers": {
     "lattice": {
-      "command": "node",
-      "args": ["/path/to/lattice-mcp/index.js"],
+      "command": "npx",
+      "args": ["-y", "lattice-mcp"],
       "env": {
         "LATTICE_API_URL": "<your-lattice-api-url>",
         "LATTICE_API_TOKEN": "<paste-token-here>"
@@ -64,18 +64,22 @@ export default function AIManagementPage() {
 
   const loadTokens = async () => {
     const res = await reqGetApiTokens();
-    if (res.success) setTokens(res.data ?? []);
+    if (res.success) {
+      setTokens(res.data ?? []);
+    } else {
+      toast.error("Failed to load API tokens");
+    }
     setLoading(false);
   };
 
   const handleCreate = async () => {
     if (!tokenName.trim()) return;
+    setCreatedToken(null);
     setCreating(true);
-    const data: { name: string; expires_in?: string } = {
+    const res = await reqCreateApiToken({
       name: tokenName.trim(),
-    };
-    if (expiresIn !== "never") data.expires_in = expiresIn;
-    const res = await reqCreateApiToken(data);
+      expires_in: expiresIn,
+    });
     if (res.success) {
       setCreatedToken(res.data.token);
       setTokens((prev) => [
@@ -121,9 +125,13 @@ export default function AIManagementPage() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard");
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied to clipboard");
+    } catch {
+      toast.error("Failed to copy to clipboard");
+    }
   };
 
   const formatExpiry = (expiresAt: string | null) => {
@@ -177,7 +185,7 @@ export default function AIManagementPage() {
                   <select
                     value={expiresIn}
                     onChange={(e) => setExpiresIn(e.target.value)}
-                    className="h-9 rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
+                    className="form-select !h-9 !w-auto !text-sm cursor-pointer"
                   >
                     {EXPIRATION_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
