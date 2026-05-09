@@ -23,7 +23,7 @@ interface StackHeaderActionsProps {
     deleting: boolean;
     canEditUser: boolean;
     hasActiveDeployment: boolean;
-    onDeploy: () => void;
+    onDeploy: (containerIds?: number[], force?: boolean) => void;
     onCancelDeploy: () => void;
     onEdit: () => void;
     onDelete: () => void;
@@ -66,32 +66,52 @@ export function StackHeaderActions({
                     Cancel Deploy
                 </Button>
             ) : canEditUser && (
-                <Button
-                    onClick={onDeploy}
-                    disabled={isDeploying || !workerOnline}
-                    title={
-                        !workerOnline
-                            ? "Worker is offline -- cannot deploy"
-                            : undefined
-                    }
-                    onMouseEnter={() => showForce && setForceDeployHovered(true)}
-                    onMouseLeave={() => setForceDeployHovered(false)}
-                    className={
-                        showForce
-                            ? "opacity-50 hover:opacity-80 transition-opacity"
-                            : ""
-                    }
-                >
-                    {isDeploying
-                        ? "Deploying..."
-                        : forceDeployHovered
-                            ? "Force Re-deploy"
-                            : isFailed
-                                ? "Redeploy"
-                                : needsDeploy
-                                    ? "Deploy"
-                                    : "Re-deploy"}
-                </Button>
+                <>
+                    <Button
+                        onClick={() => onDeploy()}
+                        disabled={isDeploying || !workerOnline}
+                        title={
+                            !workerOnline
+                                ? "Worker is offline -- cannot deploy"
+                                : undefined
+                        }
+                        onMouseEnter={() => showForce && setForceDeployHovered(true)}
+                        onMouseLeave={() => setForceDeployHovered(false)}
+                        className={
+                            showForce
+                                ? "opacity-50 hover:opacity-80 transition-opacity"
+                                : ""
+                        }
+                    >
+                        {isDeploying
+                            ? "Deploying..."
+                            : forceDeployHovered
+                                ? "Force Re-deploy"
+                                : isFailed
+                                    ? "Redeploy"
+                                    : needsDeploy
+                                        ? "Deploy"
+                                        : "Re-deploy"}
+                    </Button>
+                    {isFailed && (
+                        <Button
+                            variant="destructive"
+                            onClick={async () => {
+                                const ok = await showConfirm({
+                                    title: "Force Redeploy",
+                                    message: `This will stop and remove ALL containers in "${stack.name}" and recreate them from scratch. Use this after a failed deployment left containers in a bad state.`,
+                                    confirmLabel: "Force Redeploy",
+                                    variant: "danger",
+                                });
+                                if (!ok) return;
+                                onDeploy(undefined, true);
+                            }}
+                            disabled={isDeploying || !workerOnline}
+                        >
+                            Force Redeploy
+                        </Button>
+                    )}
+                </>
             )}
             {canEditUser && (
                 <div className="flex items-center gap-1">

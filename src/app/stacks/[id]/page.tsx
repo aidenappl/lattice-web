@@ -324,9 +324,9 @@ export default function StackDetailPage() {
   );
   useAdminSocket(handleSocketEvent);
 
-  const handleDeploy = async (containerIds?: number[]) => {
+  const handleDeploy = async (containerIds?: number[], force?: boolean) => {
     setDeploying(true);
-    const res = await reqDeployStack(id, containerIds);
+    const res = await reqDeployStack(id, containerIds, force);
     if (res.success) {
       setHasPendingChanges(false);
       const stackRes = await reqGetStack(id);

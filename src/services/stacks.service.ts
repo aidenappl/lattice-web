@@ -33,11 +33,11 @@ export const reqDeleteStack = (id: number) =>
         url: `/admin/stacks/${id}`,
     });
 
-export const reqDeployStack = (id: number, containerIds?: number[]) =>
+export const reqDeployStack = (id: number, containerIds?: number[], force?: boolean) =>
     fetchApi<{ deployment_id: number }>({
         method: "POST",
         url: `/admin/stacks/${id}/deploy`,
-        data: containerIds?.length ? { container_ids: containerIds } : undefined,
+        data: (containerIds?.length || force) ? { container_ids: containerIds?.length ? containerIds : undefined, force: force || undefined } : undefined,
     });
 
 // --- Containers ---
