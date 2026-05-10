@@ -2149,11 +2149,27 @@ html {
   .env-var-missing { color: var(--color-failed); font-weight: 600; }
   .env-var-clickable { text-decoration-line: underline; text-decoration-style: dotted; cursor: pointer; }
 
-  /* Whitespace visualization */
+  /* Whitespace visualization — overlays dots/arrows via pseudo-elements
+     to keep original space/tab chars for pixel-perfect textarea alignment */
   .ws-dot, .ws-tab {
+    position: relative;
+    color: transparent;
+  }
+  .ws-dot::after {
+    content: '·';
+    position: absolute;
+    left: 0;
     color: var(--color-muted);
     opacity: 0.3;
-    font-style: normal;
+    pointer-events: none;
+  }
+  .ws-tab::after {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--color-muted);
+    opacity: 0.3;
+    pointer-events: none;
   }
 
   /* Error lines */

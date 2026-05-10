@@ -130,9 +130,10 @@ function renderWhitespace(html: string): string {
       return parts
         .map((part) => {
           if (part.startsWith("<")) return part; // HTML tag — leave alone
+          // Keep original whitespace characters — dots/arrows are overlaid via CSS pseudo-elements
           return part
-            .replace(/\t/g, '<span class="ws-tab">\u2192\u00A0</span>')
-            .replace(/ /g, '<span class="ws-dot">\u00B7</span>');
+            .replace(/\t/g, '<span class="ws-tab">\t</span>')
+            .replace(/ /g, '<span class="ws-dot"> </span>');
         })
         .join("");
     })
@@ -392,8 +393,7 @@ export function CodeEditor({
     const ta = ref.current;
     if (!ta) return;
     if (preRef.current) {
-      preRef.current.scrollTop = ta.scrollTop;
-      preRef.current.scrollLeft = ta.scrollLeft;
+      preRef.current.style.transform = `translate(${-ta.scrollLeft}px, ${-ta.scrollTop}px)`;
     }
     if (gutterRef.current) {
       gutterRef.current.scrollTop = ta.scrollTop;
@@ -836,11 +836,11 @@ export function CodeEditor({
             style={{ height: LINE_HEIGHT_PX, display: "none" }}
           />
 
-          {/* Highlighted underlay */}
+          {/* Highlighted underlay — full content height, translated to match textarea scroll */}
           <pre
             ref={preRef}
             aria-hidden
-            className={`code-editor-pre absolute inset-0 ${sharedStyles} overflow-auto pointer-events-none m-0`}
+            className={`code-editor-pre absolute top-0 left-0 right-0 ${sharedStyles} overflow-hidden pointer-events-none m-0`}
             style={{ tabSize: 2 }}
             dangerouslySetInnerHTML={{ __html: highlighted + "\n" }}
           />
