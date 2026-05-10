@@ -125,15 +125,29 @@ function renderWhitespace(html: string): string {
   return html
     .split("\n")
     .map((line) => {
-      // Split by HTML tags — only process text nodes
+      // Only visualize leading whitespace (indentation) — wrapping every space
+      // in a span causes thousands of extra DOM nodes and alignment issues.
+      // Find how many leading chars are whitespace in the visible text.
+      // We need to skip HTML tags to count only text-node whitespace.
       const parts = line.split(/(<[^>]*>)/);
+      let leadingDone = false;
       return parts
         .map((part) => {
-          if (part.startsWith("<")) return part; // HTML tag — leave alone
-          // Keep original whitespace characters — dots/arrows are overlaid via CSS pseudo-elements
-          return part
+          if (leadingDone) return part;
+          if (part.startsWith("<")) return part; // HTML tag — doesn't count as content
+          // Process leading whitespace in this text node
+          const wsMatch = part.match(/^([ \t]+)(.*)/);
+          if (!wsMatch) {
+            // No leading whitespace — we've hit content
+            if (part.length > 0) leadingDone = true;
+            return part;
+          }
+          const [, ws, rest] = wsMatch;
+          if (rest.length > 0) leadingDone = true;
+          const wsHtml = ws
             .replace(/\t/g, '<span class="ws-tab">\t</span>')
             .replace(/ /g, '<span class="ws-dot"> </span>');
+          return wsHtml + rest;
         })
         .join("");
     })
@@ -373,6 +387,7 @@ export function CodeEditor({
   const maxHeightPx = maxRows
     ? maxRows * LINE_HEIGHT_PX + PADDING_Y_PX * 2
     : undefined;
+  const minHeightPx = rows * LINE_HEIGHT_PX + PADDING_Y_PX * 2;
 
   // ── Scroll sync ──────────────────────────────────────────────────────────
 
@@ -407,8 +422,8 @@ export function CodeEditor({
     syncScroll();
   }, [value, syncScroll]);
 
-  // Native scroll listener — catches scroll events during text selection drag
-  // that React's onScroll may miss
+  // Native scroll listener — catches all scroll events including during
+  // text selection drag where React's onScroll can miss updates
   useEffect(() => {
     const ta = ref.current;
     if (!ta) return;
@@ -834,14 +849,20 @@ export function CodeEditor({
         className,
       )}
     >
-      <div className="flex" style={maxHeightPx ? { maxHeight: maxHeightPx } : undefined}>
-        {/* Gutter — line numbers */}
+      <div
+        className="flex"
+        style={{
+          minHeight: minHeightPx,
+          ...(maxHeightPx ? { maxHeight: maxHeightPx } : {}),
+        }}
+      >
+        {/* Gutter — line numbers. Ref is on the inner container so
+            gutter.children[n] directly accesses line number elements. */}
         <div
-          ref={gutterRef}
-          className="shrink-0 overflow-hidden border-r border-border-subtle bg-background-alt/50 font-mono text-xs text-muted/30"
+          className="shrink-0 overflow-hidden border-r border-border-subtle bg-background-alt/50 font-mono text-xs text-muted/30 py-2"
           style={{ minWidth: `${gutterDigits + 2}ch` }}
         >
-          <div className="py-2">{gutterLines}</div>
+          <div ref={gutterRef}>{gutterLines}</div>
         </div>
 
         {/* Editor area */}
@@ -865,7 +886,6 @@ export function CodeEditor({
           {/* Transparent textarea on top for editing */}
           <textarea
             ref={ref}
-            rows={rows}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -878,10 +898,9 @@ export function CodeEditor({
             onBlur={handleBlur}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
-            onScroll={syncScroll}
             placeholder={placeholder}
             spellCheck={false}
-            style={{ tabSize: 2, ...(maxHeightPx ? { maxHeight: maxHeightPx } : {}) }}
+            style={{ tabSize: 2 }}
             className={`code-editor-textarea relative w-full h-full bg-transparent ${sharedStyles} text-transparent caret-white placeholder:text-muted focus:outline-none resize-none selection:bg-[#264f78] selection:text-[#e4e4e7]`}
           />
         </div>

@@ -833,6 +833,7 @@ export default function StackDetailPage() {
               canEdit={canEdit(user)}
               highlightVar={highlightEnvVar}
               onClearHighlight={() => setHighlightEnvVar(undefined)}
+              composeYaml={composeYaml}
             />
           )}
 

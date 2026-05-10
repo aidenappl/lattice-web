@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { EnvVarEditor } from "@/components/ui/env-var-editor";
 import { Button } from "@/components/ui/button";
 import { reqGetGlobalEnvVars } from "@/services/admin.service";
@@ -14,6 +14,7 @@ interface StackEnvTabProps {
   canEdit: boolean;
   highlightVar?: string;
   onClearHighlight?: () => void;
+  composeYaml?: string;
 }
 
 export function StackEnvTab({
@@ -24,6 +25,7 @@ export function StackEnvTab({
   canEdit: userCanEdit,
   highlightVar,
   onClearHighlight,
+  composeYaml,
 }: StackEnvTabProps) {
   const [globalVars, setGlobalVars] = useState<GlobalEnvVar[]>([]);
   const [globalLoading, setGlobalLoading] = useState(true);
@@ -34,6 +36,23 @@ export function StackEnvTab({
       setGlobalLoading(false);
     });
   }, []);
+
+  // Extract all ${VAR} references from compose YAML + global var keys
+  const referencedVars = useMemo(() => {
+    const refs = new Set<string>();
+    if (composeYaml) {
+      const regex = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
+      let match;
+      while ((match = regex.exec(composeYaml)) !== null) {
+        refs.add(match[1]);
+      }
+    }
+    // Global vars are always "in use" — they're inherited, not stack-specific
+    for (const gv of globalVars) {
+      refs.add(gv.key);
+    }
+    return refs;
+  }, [composeYaml, globalVars]);
 
   return (
     <div className="card p-5">
@@ -82,7 +101,13 @@ export function StackEnvTab({
       <h2 className="text-sm font-medium text-primary mb-4">
         Stack Environment Variables
       </h2>
-      <EnvVarEditor value={envVars} onChange={onChange} highlightVar={highlightVar} onClearHighlight={onClearHighlight} />
+      <EnvVarEditor
+        value={envVars}
+        onChange={onChange}
+        highlightVar={highlightVar}
+        onClearHighlight={onClearHighlight}
+        referencedVars={referencedVars}
+      />
       {userCanEdit && (
         <div className="mt-3 flex justify-end">
           <Button size="sm" onClick={onSave} disabled={saving}>

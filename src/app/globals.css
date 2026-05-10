@@ -2172,11 +2172,9 @@ html {
     pointer-events: none;
   }
 
-  /* Error lines */
+  /* Error lines — inline (not inline-block) to avoid disrupting line height */
   .code-error-line {
     background: rgba(239, 68, 68, 0.1);
-    display: inline-block;
-    min-width: 100%;
     text-decoration: underline wavy rgba(239, 68, 68, 0.5);
     text-underline-offset: 3px;
   }
@@ -2184,8 +2182,6 @@ html {
   /* Warning lines */
   .code-warning-line {
     background: rgba(245, 158, 11, 0.06);
-    display: inline-block;
-    min-width: 100%;
     text-decoration: underline wavy rgba(245, 158, 11, 0.3);
     text-underline-offset: 3px;
   }

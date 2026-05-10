@@ -8,6 +8,7 @@ interface EnvVarEditorProps {
   onChange: (value: string) => void;
   highlightVar?: string;
   onClearHighlight?: () => void;
+  referencedVars?: Set<string>;
 }
 
 type Row = { key: string; value: string };
@@ -54,7 +55,7 @@ function isValidJson(raw: string): boolean {
   }
 }
 
-export function EnvVarEditor({ value, onChange, highlightVar, onClearHighlight }: EnvVarEditorProps) {
+export function EnvVarEditor({ value, onChange, highlightVar, onClearHighlight, referencedVars }: EnvVarEditorProps) {
   const [jsonMode, setJsonMode] = useState(false);
   // Separate state for JSON mode draft (only committed on switch back)
   const [jsonDraft, setJsonDraft] = useState(value);
@@ -164,16 +165,29 @@ export function EnvVarEditor({ value, onChange, highlightVar, onClearHighlight }
     }
   };
 
+  // ── Unused count ──────────────────────────────────────────────────────────
+
+  const unusedCount = referencedVars
+    ? rows.filter((r) => r.key.trim() && !referencedVars.has(r.key.trim())).length
+    : 0;
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div>
       {/* Mode toggle */}
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs text-muted">
-          Key-value pairs injected into all containers during deploy.
-          Container-level env vars override these.
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-muted">
+            Key-value pairs injected into all containers during deploy.
+            Container-level env vars override these.
+          </p>
+          {unusedCount > 0 && !jsonMode && (
+            <span className="text-[10px] font-medium text-amber-400/70 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5 shrink-0">
+              {unusedCount} unused
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2 shrink-0 ml-4">
           {jsonMode ? (
             <>
@@ -230,44 +244,63 @@ export function EnvVarEditor({ value, onChange, highlightVar, onClearHighlight }
             </div>
           )}
           <div>
-            {rows.map((row, i) => (
-              <div
-                key={i}
-                ref={(el) => {
-                  if (el && row.key) rowRefs.current.set(row.key, el);
-                }}
-                className={`grid grid-cols-[1fr_1fr_auto] items-center border-b border-border-subtle last:border-b-0 transition-colors duration-500 ${
-                  activeHighlight && row.key === activeHighlight
-                    ? "bg-info/10 ring-1 ring-info/30"
-                    : ""
-                }`}
-              >
-                <input
-                  type="text"
-                  value={row.key}
-                  onChange={(e) => setRow(i, "key", e.target.value)}
-                  placeholder="KEY"
-                  spellCheck={false}
-                  className="bg-transparent px-3 py-2 text-sm text-primary font-mono placeholder:text-muted focus:outline-none border-r border-border-subtle"
-                />
-                <input
-                  type="text"
-                  value={row.value}
-                  onChange={(e) => setRow(i, "value", e.target.value)}
-                  placeholder="value"
-                  spellCheck={false}
-                  className="bg-transparent px-3 py-2 text-sm text-secondary font-mono placeholder:text-muted focus:outline-none border-r border-border-subtle"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeRow(i)}
-                  className="px-3 text-dimmed hover:text-failed transition-colors text-base leading-none"
-                  aria-label="Remove"
+            {rows.map((row, i) => {
+              const isUnused = referencedVars && row.key.trim() && !referencedVars.has(row.key.trim());
+              return (
+                <div
+                  key={i}
+                  ref={(el) => {
+                    if (el && row.key) rowRefs.current.set(row.key, el);
+                  }}
+                  className={`grid grid-cols-[1fr_1fr_auto] items-center border-b border-border-subtle last:border-b-0 transition-colors duration-500 ${
+                    activeHighlight && row.key === activeHighlight
+                      ? "bg-info/10 ring-1 ring-info/30"
+                      : isUnused
+                        ? "bg-amber-500/[0.04]"
+                        : ""
+                  }`}
                 >
-                  ×
-                </button>
-              </div>
-            ))}
+                  <div className="flex items-center border-r border-border-subtle">
+                    <input
+                      type="text"
+                      value={row.key}
+                      onChange={(e) => setRow(i, "key", e.target.value)}
+                      placeholder="KEY"
+                      spellCheck={false}
+                      className={`bg-transparent px-3 py-2 text-sm font-mono placeholder:text-muted focus:outline-none flex-1 min-w-0 ${
+                        isUnused ? "text-amber-400/70" : "text-primary"
+                      }`}
+                    />
+                    {isUnused && (
+                      <span
+                        className="text-[9px] font-medium text-amber-400/60 uppercase tracking-wider pr-2 shrink-0"
+                        title={`$\{${row.key}\} is not referenced in the compose YAML`}
+                      >
+                        unused
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={row.value}
+                    onChange={(e) => setRow(i, "value", e.target.value)}
+                    placeholder="value"
+                    spellCheck={false}
+                    className={`bg-transparent px-3 py-2 text-sm font-mono placeholder:text-muted focus:outline-none border-r border-border-subtle ${
+                      isUnused ? "text-muted" : "text-secondary"
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeRow(i)}
+                    className="px-3 text-dimmed hover:text-failed transition-colors text-base leading-none"
+                    aria-label="Remove"
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
           </div>
           <button
             type="button"
