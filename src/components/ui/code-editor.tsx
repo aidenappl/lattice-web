@@ -345,7 +345,7 @@ interface CodeEditorProps {
   language?: "json" | "yaml" | "text";
   envVars?: Record<string, string>;
   wordWrap?: boolean;
-  onEnvVarClick?: () => void;
+  onEnvVarClick?: (varName: string) => void;
 }
 
 export function CodeEditor({
@@ -723,13 +723,17 @@ export function CodeEditor({
     const start = Math.max(0, pos - 50);
     const end = Math.min(ta.value.length, pos + 50);
     const snippet = ta.value.slice(start, end);
-    const regex = /\$\{[A-Za-z_][A-Za-z0-9_]*\}/g;
+    const regex = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
     let match;
     while ((match = regex.exec(snippet)) !== null) {
       const absStart = start + match.index;
       const absEnd = absStart + match[0].length;
-      if (pos >= absStart && pos <= absEnd) {
-        onEnvVarClick();
+      // Only navigate when clicking inside the braces (on the var name),
+      // not on $, {, or } characters at the edges
+      const braceOpen = absStart + 2;  // after "${"
+      const braceClose = absEnd - 1;   // the "}"
+      if (pos >= braceOpen && pos < braceClose) {
+        onEnvVarClick(match[1]);
         return;
       }
     }

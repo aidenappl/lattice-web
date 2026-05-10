@@ -12,6 +12,8 @@ interface StackEnvTabProps {
   onSave: () => void;
   saving: boolean;
   canEdit: boolean;
+  highlightVar?: string;
+  onClearHighlight?: () => void;
 }
 
 export function StackEnvTab({
@@ -20,6 +22,8 @@ export function StackEnvTab({
   onSave,
   saving,
   canEdit: userCanEdit,
+  highlightVar,
+  onClearHighlight,
 }: StackEnvTabProps) {
   const [globalVars, setGlobalVars] = useState<GlobalEnvVar[]>([]);
   const [globalLoading, setGlobalLoading] = useState(true);
@@ -78,7 +82,7 @@ export function StackEnvTab({
       <h2 className="text-sm font-medium text-primary mb-4">
         Stack Environment Variables
       </h2>
-      <EnvVarEditor value={envVars} onChange={onChange} />
+      <EnvVarEditor value={envVars} onChange={onChange} highlightVar={highlightVar} onClearHighlight={onClearHighlight} />
       {userCanEdit && (
         <div className="mt-3 flex justify-end">
           <Button size="sm" onClick={onSave} disabled={saving}>

@@ -142,6 +142,7 @@ export default function StackDetailPage() {
   // Tab state
   type StackTab = "containers" | "compose" | "env" | "logs";
   const [activeTab, setActiveTab] = useState<StackTab>("containers");
+  const [highlightEnvVar, setHighlightEnvVar] = useState<string | undefined>();
 
   // Mounted ref to prevent state updates after unmount
   const mountedRef = useRef(true);
@@ -803,7 +804,10 @@ export default function StackDetailPage() {
               onDismissError={() => setComposeError("")}
               canEdit={canEdit(user)}
               parsedEnvVars={parsedEnvVars}
-              onSwitchToEnv={() => setActiveTab("env")}
+              onSwitchToEnv={(varName) => {
+                setHighlightEnvVar(varName);
+                setActiveTab("env");
+              }}
             />
           )}
 
@@ -815,6 +819,8 @@ export default function StackDetailPage() {
               onSave={handleSaveEnvVars}
               saving={savingEnvVars}
               canEdit={canEdit(user)}
+              highlightVar={highlightEnvVar}
+              onClearHighlight={() => setHighlightEnvVar(undefined)}
             />
           )}
 

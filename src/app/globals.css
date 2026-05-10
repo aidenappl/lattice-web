@@ -2139,7 +2139,7 @@ html {
   /* Environment variables */
   .env-var-defined { color: var(--color-healthy); font-weight: 600; }
   .env-var-missing { color: var(--color-failed); font-weight: 600; }
-  .env-var-clickable { text-decoration-line: underline; text-decoration-style: dotted; }
+  .env-var-clickable { text-decoration-line: underline; text-decoration-style: dotted; cursor: pointer; }
 
   /* Whitespace visualization */
   .ws-dot, .ws-tab {

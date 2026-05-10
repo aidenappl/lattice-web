@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { CodeEditor } from "./code-editor";
 
 interface EnvVarEditorProps {
   value: string; // stored as JSON string e.g. '{"KEY":"val"}'
   onChange: (value: string) => void;
+  highlightVar?: string;
+  onClearHighlight?: () => void;
 }
 
 type Row = { key: string; value: string };
@@ -52,7 +54,7 @@ function isValidJson(raw: string): boolean {
   }
 }
 
-export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
+export function EnvVarEditor({ value, onChange, highlightVar, onClearHighlight }: EnvVarEditorProps) {
   const [jsonMode, setJsonMode] = useState(false);
   // Separate state for JSON mode draft (only committed on switch back)
   const [jsonDraft, setJsonDraft] = useState(value);
@@ -69,6 +71,39 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
   }
 
   const rows = localRows;
+
+  // ── Highlight + scroll to var ───────────────────────────────────────────
+  const [activeHighlight, setActiveHighlight] = useState<string | undefined>();
+  const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  useEffect(() => {
+    if (!highlightVar) return;
+    // Switch to KV mode if in JSON mode so we can scroll to the row
+    if (jsonMode) {
+      if (isValidJson(jsonDraft)) {
+        const committed = jsonDraft.trim() ? jsonDraft : "";
+        onChange(committed);
+        setLocalRows(parseToRows(committed));
+        setJsonError("");
+        setJsonMode(false);
+      }
+    }
+    setActiveHighlight(highlightVar);
+    // Scroll to the row after a brief delay for render
+    requestAnimationFrame(() => {
+      const el = rowRefs.current.get(highlightVar);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+    // Auto-clear highlight after 2s
+    const timer = setTimeout(() => {
+      setActiveHighlight(undefined);
+      onClearHighlight?.();
+    }, 2000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightVar]);
 
   // ── KV mode ──────────────────────────────────────────────────────────────
 
@@ -198,7 +233,14 @@ export function EnvVarEditor({ value, onChange }: EnvVarEditorProps) {
             {rows.map((row, i) => (
               <div
                 key={i}
-                className="grid grid-cols-[1fr_1fr_auto] items-center border-b border-border-subtle last:border-b-0"
+                ref={(el) => {
+                  if (el && row.key) rowRefs.current.set(row.key, el);
+                }}
+                className={`grid grid-cols-[1fr_1fr_auto] items-center border-b border-border-subtle last:border-b-0 transition-colors duration-500 ${
+                  activeHighlight && row.key === activeHighlight
+                    ? "bg-info/10 ring-1 ring-info/30"
+                    : ""
+                }`}
               >
                 <input
                   type="text"

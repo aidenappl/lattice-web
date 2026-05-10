@@ -17,7 +17,7 @@ interface StackComposeTabProps {
   onDismissError: () => void;
   canEdit: boolean;
   parsedEnvVars: Record<string, string>;
-  onSwitchToEnv?: () => void;
+  onSwitchToEnv?: (varName?: string) => void;
 }
 
 export function StackComposeTab({
@@ -125,7 +125,7 @@ export function StackComposeTab({
             language="yaml"
             envVars={parsedEnvVars}
             wordWrap={wordWrap}
-            onEnvVarClick={onSwitchToEnv}
+            onEnvVarClick={(varName) => onSwitchToEnv?.(varName)}
             placeholder={`version: "3"\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"`}
             className="border-0 rounded-none"
           />
@@ -177,20 +177,20 @@ export function StackComposeTab({
             </h3>
             {onSwitchToEnv && (
               <button
-                onClick={onSwitchToEnv}
+                onClick={() => onSwitchToEnv?.()}
                 className="text-[10px] text-info hover:underline"
               >
                 Edit in Environment tab
               </button>
             )}
           </div>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
             {[...envVarRefs].sort().map((key) => {
               const defined = key in parsedEnvVars && parsedEnvVars[key].trim() !== "";
               return (
                 <button
                   key={key}
-                  onClick={onSwitchToEnv}
+                  onClick={() => onSwitchToEnv?.(key)}
                   className={`text-[10px] font-mono px-2 py-0.5 rounded cursor-pointer transition-colors ${
                     defined
                       ? "bg-healthy/10 text-healthy hover:bg-healthy/20"
