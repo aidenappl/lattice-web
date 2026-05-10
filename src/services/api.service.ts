@@ -258,7 +258,7 @@ async function performScheduledRefresh() {
     // If refresh failed, the reactive 401 handler catches it on next request
 }
 
-function onVisibilityChange() {
+async function onVisibilityChange() {
     if (typeof document === "undefined" || document.visibilityState !== "visible") return;
     lastUserActivity = Date.now();
 
@@ -266,8 +266,17 @@ function onVisibilityChange() {
     const msUntilExpiry = tokenExpiresAt - Date.now();
 
     if (msUntilExpiry < REFRESH_BEFORE_EXPIRY_MS) {
-        // Token is close to or past expiry — refresh now
-        performScheduledRefresh();
+        // Token is close to or past expiry — refresh immediately (skip idle check)
+        refreshTimeoutId = null;
+        const result = await getRefreshPromise();
+        if (result) {
+            scheduleNextRefresh(result.expiresAt);
+        } else if (msUntilExpiry <= 0) {
+            // Token is fully expired and refresh failed — redirect to login
+            if (typeof window !== "undefined") {
+                window.location.href = "/login";
+            }
+        }
     }
 }
 
