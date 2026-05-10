@@ -407,6 +407,23 @@ export function CodeEditor({
     syncScroll();
   }, [value, syncScroll]);
 
+  // Native scroll listener — catches scroll events during text selection drag
+  // that React's onScroll may miss
+  useEffect(() => {
+    const ta = ref.current;
+    if (!ta) return;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(syncScroll);
+    };
+    ta.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      ta.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, [syncScroll]);
+
   // ── Active line tracking (imperative — no React re-renders) ──────────────
 
   const updateActiveLine = useCallback(() => {

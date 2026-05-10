@@ -38,6 +38,8 @@ import {
   reqGetDeploymentLogs,
 } from "@/services/deployments.service";
 import { reqGetWorkers } from "@/services/workers.service";
+import { reqGetGlobalEnvVars } from "@/services/admin.service";
+import type { GlobalEnvVar } from "@/types";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import { canEdit, timeAgo, workerStaleReason } from "@/lib/utils";
@@ -111,17 +113,25 @@ export default function StackDetailPage() {
   // Stack env vars
   const [stackEnvVars, setStackEnvVars] = useState("");
   const [savingEnvVars, setSavingEnvVars] = useState(false);
+  const [globalEnvVars, setGlobalEnvVars] = useState<GlobalEnvVar[]>([]);
 
   const parsedEnvVars = useMemo<Record<string, string>>(() => {
+    // Start with global env vars as base
+    const merged: Record<string, string> = {};
+    for (const g of globalEnvVars) {
+      merged[g.key] = g.is_secret ? "••••••" : g.value;
+    }
+    // Stack-level env vars override globals
     try {
       const obj = stackEnvVars ? JSON.parse(stackEnvVars) : {};
-      return typeof obj === "object" && !Array.isArray(obj) && obj !== null
-        ? obj
-        : {};
+      if (typeof obj === "object" && !Array.isArray(obj) && obj !== null) {
+        Object.assign(merged, obj);
+      }
     } catch {
-      return {};
+      // ignore parse errors
     }
-  }, [stackEnvVars]);
+    return merged;
+  }, [stackEnvVars, globalEnvVars]);
 
   // Compose editor
   const [composeYaml, setComposeYaml] = useState("");
@@ -163,12 +173,13 @@ export default function StackDetailPage() {
 
   useEffect(() => {
     const load = async () => {
-      const [stackRes, containersRes, deploymentsRes, workersRes] =
+      const [stackRes, containersRes, deploymentsRes, workersRes, globalEnvRes] =
         await Promise.all([
           reqGetStack(id),
           reqGetContainers(id),
           reqGetDeployments(),
           reqGetWorkers(),
+          reqGetGlobalEnvVars(),
         ]);
       if (!mountedRef.current) return;
       if (stackRes.success) {
@@ -176,6 +187,7 @@ export default function StackDetailPage() {
         setStackEnvVars(stackRes.data.env_vars ?? "");
         setComposeYaml(stackRes.data.compose_yaml ?? "");
       }
+      if (globalEnvRes.success) setGlobalEnvVars(globalEnvRes.data ?? []);
       const loadedContainers = containersRes.success
         ? (containersRes.data ?? [])
         : [];
