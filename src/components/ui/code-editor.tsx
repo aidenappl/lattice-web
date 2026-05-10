@@ -840,7 +840,7 @@ export function CodeEditor({
           <pre
             ref={preRef}
             aria-hidden
-            className={`code-editor-pre absolute inset-0 ${sharedStyles} overflow-hidden pointer-events-none m-0`}
+            className={`code-editor-pre absolute inset-0 ${sharedStyles} overflow-auto pointer-events-none m-0`}
             style={{ tabSize: 2 }}
             dangerouslySetInnerHTML={{ __html: highlighted + "\n" }}
           />
@@ -865,7 +865,7 @@ export function CodeEditor({
             placeholder={placeholder}
             spellCheck={false}
             style={{ tabSize: 2, ...(maxHeightPx ? { maxHeight: maxHeightPx } : {}) }}
-            className={`relative w-full bg-transparent ${sharedStyles} text-transparent caret-white placeholder:text-muted focus:outline-none resize-none selection:bg-[#264f78] selection:text-[#e4e4e7]`}
+            className={`code-editor-textarea relative w-full bg-transparent ${sharedStyles} text-transparent caret-white placeholder:text-muted focus:outline-none resize-none selection:bg-[#264f78] selection:text-[#e4e4e7]`}
           />
         </div>
       </div>

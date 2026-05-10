@@ -2121,7 +2121,15 @@ html {
 
 /* ─── Code Editor ───────────────────────────────────────────────────────── */
 
+.code-editor-textarea {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
 .code-editor-pre {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+
   /* JSON syntax */
   .json-key { color: #7aa2f7; }
   .json-string { color: #9ece6a; }
