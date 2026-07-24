@@ -63,7 +63,7 @@ Versions are pinned in `package.json` (`version: 0.0.2`, `private: true`).
 | Tests | **Vitest** + Testing Library | `vitest ^4.1.5`, `@testing-library/react ^16.3.2`, `jsdom ^29.0.2` | jsdom env, `src/test/setup.ts` |
 | Lint | **ESLint** + `eslint-config-next` | `eslint ^9`, config `16.1.6` | via `next lint` |
 
-> **README/CLAUDE.md drift note:** the current `README.md` and `CLAUDE.md` claim **ReactFlow 12**
+> **README drift note:** the current `README.md` claims **ReactFlow 12**
 > (`@xyflow/react`) and **Geist** fonts. Neither matches the code — topology uses **dagre + a
 > hand-rolled SVG board** (`src/components/topology/TopologyBoard.tsx` + `useTopologyData.ts`, no
 > `nodes/`/`edges/` subtree), and the fonts are **Inter Tight + JetBrains Mono**. They also list a
