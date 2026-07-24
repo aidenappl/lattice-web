@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import { Logo } from "@/components/ui/logo";
+import { LoadingSpinner } from "@/components/ui/loading";
 
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 
@@ -44,8 +45,10 @@ export default function LoginPage() {
   useEffect(() => {
     // Fetch SSO config (public endpoint)
     fetch(`${API_URL}/auth/sso/config`)
-      .then(res => res.json())
-      .then(data => setSsoConfig(data))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data.enabled === "boolean") setSsoConfig(data);
+      })
       .catch(() => {}); // SSO not available
   }, []);
 
@@ -81,6 +84,15 @@ export default function LoginPage() {
       return;
     }
 
+    // The lockout window has passed — clear it and reset the counter so
+    // attempts don't keep escalating across separate lockout cycles.
+    let baseAttempts = failedAttempts;
+    if (lockedUntil && lockedUntil <= now) {
+      setLockedUntil(0);
+      setFailedAttempts(0);
+      baseAttempts = 0;
+    }
+
     setError("");
     setLoading(true);
 
@@ -89,9 +101,11 @@ export default function LoginPage() {
     setPassword("");
 
     if (res.success) {
+      setFailedAttempts(0);
+      setLockedUntil(0);
       window.location.replace("/");
     } else {
-      const attempts = failedAttempts + 1;
+      const attempts = baseAttempts + 1;
       setFailedAttempts(attempts);
       if (attempts >= MAX_ATTEMPTS) {
         const lockoutMs = LOCKOUT_BASE_MS * Math.pow(2, Math.min(attempts - MAX_ATTEMPTS, 5));
@@ -105,7 +119,15 @@ export default function LoginPage() {
     setLoading(false);
   };
 
-  if (checking) return null;
+  if (checking)
+    return (
+      <div className="login-page">
+        <div className="flex flex-col items-center gap-4">
+          <Logo size="md" />
+          <LoadingSpinner size="sm" />
+        </div>
+      </div>
+    );
 
   return (
     <div className="login-page">

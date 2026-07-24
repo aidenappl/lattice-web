@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Template } from "@/types";
 import {
   reqGetTemplates,
@@ -11,13 +12,17 @@ import { reqImportStackExport } from "@/services/stacks.service";
 import type { StackImportPayload } from "@/types";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { PageLoader } from "@/components/ui/loading";
+import { LoadError } from "@/components/ui/load-error";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import toast from "react-hot-toast";
 
 export default function TemplatesPage() {
+  const router = useRouter();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [usingId, setUsingId] = useState<number | null>(null);
   const showConfirm = useConfirm();
 
   useEffect(() => {
@@ -25,8 +30,14 @@ export default function TemplatesPage() {
   }, []);
 
   const load = async () => {
+    setLoadError(false);
     const res = await reqGetTemplates();
-    if (res.success) setTemplates(res.data ?? []);
+    if (res.success) {
+      setTemplates(res.data ?? []);
+    } else {
+      setLoadError(true);
+      toast.error(res.error_message || "Failed to load templates");
+    }
     setLoading(false);
   };
 
@@ -52,16 +63,21 @@ export default function TemplatesPage() {
   };
 
   const handleCreateFromTemplate = async (t: Template) => {
+    if (usingId !== null) return; // guard against double-create
+    setUsingId(t.id);
     try {
       const config = JSON.parse(t.config) as StackImportPayload;
       const res = await reqImportStackExport(config);
       if (res.success) {
         toast.success(`Stack created from template "${t.name}"`);
+        router.push(res.data?.id ? `/stacks/${res.data.id}` : "/stacks");
       } else {
-        toast.error("Failed to create stack from template");
+        toast.error(res.error_message || "Failed to create stack from template");
       }
     } catch {
       toast.error("Invalid template configuration");
+    } finally {
+      setUsingId(null);
     }
   };
 
@@ -82,6 +98,16 @@ export default function TemplatesPage() {
       </div>
 
       <div className="py-6">
+        {loadError && templates.length === 0 ? (
+          <LoadError
+            title="Failed to load templates"
+            message="Could not reach lattice-api to load stack templates."
+            onRetry={() => {
+              setLoading(true);
+              load();
+            }}
+          />
+        ) : (
         <div className="panel">
           <table className="data-table">
             <thead>
@@ -111,6 +137,8 @@ export default function TemplatesPage() {
                           variant="secondary"
                           size="sm"
                           onClick={() => handleCreateFromTemplate(t)}
+                          loading={usingId === t.id}
+                          disabled={usingId !== null}
                         >
                           Use Template
                         </Button>
@@ -129,6 +157,7 @@ export default function TemplatesPage() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   );

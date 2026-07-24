@@ -20,16 +20,23 @@ interface DashboardLayoutProps {
 
 const publicPaths = ["/login", "/unauthorized", "/pending"];
 
+// Side-effect hooks that must only run on authenticated routes: they open the
+// admin WebSocket (notifications) and arm the idle-logout timer. Rendering this
+// component only inside the authed branch keeps those effects off public pages
+// (/login, /unauthorized, /pending), where there is no session to act on.
+function AuthedSideEffects() {
+  useNotifications();
+  useDesktopNotifications();
+  useIdleTimeout();
+  return null;
+}
+
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const isPublic = publicPaths.includes(pathname);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-
-  useNotifications();
-  useDesktopNotifications();
-  useIdleTimeout();
 
   // Load collapsed state from localStorage
   useEffect(() => {
@@ -75,6 +82,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <VersionCheckProvider>
+      <AuthedSideEffects />
       <div className={cn("app-grid", sidebarCollapsed && "sidebar-collapsed")}>
         <Sidebar
           collapsed={sidebarCollapsed}

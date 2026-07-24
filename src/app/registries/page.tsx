@@ -14,6 +14,7 @@ import {
   reqListRegistryTags,
 } from "@/services/registries.service";
 import { PageLoader } from "@/components/ui/loading";
+import { LoadError } from "@/components/ui/load-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate, canEdit } from "@/lib/utils";
@@ -26,6 +27,7 @@ export default function RegistriesPage() {
   const [registries, setRegistries] = useState<Registry[]>([]);
   const showConfirm = useConfirm();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
   // Create form
@@ -43,8 +45,10 @@ export default function RegistriesPage() {
   // Browse state
   const [browseId, setBrowseId] = useState<number | null>(null);
   const [repos, setRepos] = useState<string[]>([]);
+  const [reposError, setReposError] = useState<string | null>(null);
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
+  const [tagsError, setTagsError] = useState<string | null>(null);
   const [browseLoading, setBrowseLoading] = useState(false);
 
   // Edit state
@@ -59,8 +63,14 @@ export default function RegistriesPage() {
   const [editSaving, setEditSaving] = useState(false);
 
   const load = async () => {
+    setLoadError(false);
     const res = await reqGetRegistries();
-    if (res.success) setRegistries(res.data ?? []);
+    if (res.success) {
+      setRegistries(res.data ?? []);
+    } else {
+      setLoadError(true);
+      toast.error(res.error_message || "Failed to load registries");
+    }
     setLoading(false);
   };
 
@@ -99,6 +109,9 @@ export default function RegistriesPage() {
       setRegistries((prev) => [...prev, res.data]);
       setShowForm(false);
       resetForm();
+      toast.success("Registry created");
+    } else {
+      toast.error(res.error_message || "Failed to create registry");
     }
     setSubmitting(false);
   };
@@ -141,6 +154,9 @@ export default function RegistriesPage() {
         prev.map((r) => (r.id === editId ? res.data : r)),
       );
       setEditId(null);
+      toast.success("Registry updated");
+    } else {
+      toast.error(res.error_message || "Failed to update registry");
     }
     setEditSaving(false);
   };
@@ -157,12 +173,15 @@ export default function RegistriesPage() {
     const res = await reqDeleteRegistry(id);
     if (res.success) {
       setRegistries((prev) => prev.filter((r) => r.id !== id));
+      toast.success("Registry deleted");
       if (browseId === id) {
         setBrowseId(null);
         setRepos([]);
         setSelectedRepo(null);
         setTags([]);
       }
+    } else {
+      toast.error(res.error_message || "Failed to delete registry");
     }
   };
 
@@ -189,11 +208,15 @@ export default function RegistriesPage() {
     setBrowseLoading(true);
     setSelectedRepo(null);
     setTags([]);
+    setTagsError(null);
+    setReposError(null);
     const res = await reqListRegistryRepos(id);
     if (res.success) {
       setRepos(res.data ?? []);
     } else {
       setRepos([]);
+      setReposError(res.error_message || "Failed to load repositories");
+      toast.error(res.error_message || "Failed to load repositories");
     }
     setBrowseLoading(false);
   };
@@ -202,11 +225,14 @@ export default function RegistriesPage() {
     if (browseId === null) return;
     setSelectedRepo(repo);
     setBrowseLoading(true);
+    setTagsError(null);
     const res = await reqListRegistryTags(browseId, repo);
     if (res.success) {
       setTags(res.data ?? []);
     } else {
       setTags([]);
+      setTagsError(res.error_message || "Failed to load tags");
+      toast.error(res.error_message || "Failed to load tags");
     }
     setBrowseLoading(false);
   };
@@ -236,6 +262,17 @@ export default function RegistriesPage() {
       </div>
 
       <div className="py-6">
+      {loadError && registries.length === 0 ? (
+        <LoadError
+          title="Failed to load registries"
+          message="Could not reach lattice-api to load container registries."
+          onRetry={() => {
+            setLoading(true);
+            load();
+          }}
+        />
+      ) : (
+      <>
       {/* Create Form */}
       {canEdit(user) && showForm && (
         <form
@@ -518,6 +555,8 @@ export default function RegistriesPage() {
 
           {browseLoading && !selectedRepo ? (
             <p className="text-sm text-muted">Loading repositories...</p>
+          ) : reposError ? (
+            <Alert variant="error">{reposError}</Alert>
           ) : repos.length === 0 ? (
             <p className="text-sm text-muted">No repositories found</p>
           ) : (
@@ -553,6 +592,8 @@ export default function RegistriesPage() {
                     </p>
                     {browseLoading ? (
                       <p className="text-sm text-muted">Loading tags...</p>
+                    ) : tagsError ? (
+                      <Alert variant="error">{tagsError}</Alert>
                     ) : tags.length === 0 ? (
                       <p className="text-sm text-muted">No tags found</p>
                     ) : (
@@ -573,6 +614,8 @@ export default function RegistriesPage() {
             </div>
           )}
         </div>
+      )}
+      </>
       )}
       </div>
     </div>

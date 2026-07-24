@@ -43,6 +43,9 @@ export function useContainerLogs(): ContainerLogsState {
     const [streamFilter, setStreamFilter] = useState("all");
     const [logLimit, setLogLimit] = useState<LogLimit>(250);
     const logLimitRef = useRef<LogLimit>(250);
+    // Monotonic request id — guards against out-of-order responses clobbering
+    // newer logs (e.g. a slow request resolving after a newer one).
+    const loadSeqRef = useRef(0);
 
     useEffect(() => {
         logLimitRef.current = logLimit;
@@ -50,6 +53,7 @@ export function useContainerLogs(): ContainerLogsState {
 
     const loadLogs = useCallback(
         async (containerId: number, stream?: string, limit?: number) => {
+            const seq = ++loadSeqRef.current;
             setLogsLoading(true);
             setLogsError(null);
             const params: { limit: number; stream?: string } = {
@@ -60,6 +64,8 @@ export function useContainerLogs(): ContainerLogsState {
                 reqGetContainerLogs(containerId, params),
                 reqGetLifecycleLogs(containerId, { limit: params.limit }),
             ]);
+            // A newer loadLogs superseded this one — discard the stale result.
+            if (seq !== loadSeqRef.current) return;
             const dbLogs = logRes.success ? (logRes.data ?? []) : [];
             const lcLogs = lcRes.success
                 ? (lcRes.data ?? []).map(lifecycleToContainerLog)

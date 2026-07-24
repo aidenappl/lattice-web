@@ -198,9 +198,13 @@ export default function NewDatabasePage() {
         backup_destination_id: backupDestinationId ? (backupDestinationId as number) : undefined,
       });
 
-      if (res.success) {
+      if (res.success && res.data?.id) {
         toast.success(`Database "${name}" created`);
         router.push(`/databases/${res.data.id}`);
+      } else if (res.success) {
+        // Created but no id came back — don't navigate to /databases/undefined
+        toast.success(`Database "${name}" created`);
+        router.push("/databases");
       } else {
         toast.error(res.error_message || "Failed to create database");
       }

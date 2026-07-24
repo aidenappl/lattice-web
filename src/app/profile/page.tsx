@@ -180,6 +180,8 @@ export default function ProfilePage() {
                       dispatch(setUser(res.data as User));
                       setProfileImageUrl("");
                       setEditingAvatar(false);
+                    } else {
+                      toast.error(res.error_message || "Failed to remove picture");
                     }
                   }}
                 >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEllipsisVertical } from "@fortawesome/free-solid-svg-icons";
@@ -28,6 +28,54 @@ export function WorkerHeaderActions({
     onEdit,
 }: WorkerHeaderActionsProps) {
     const [actionsOpen, setActionsOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+
+    // Move focus to the first item when the menu opens.
+    useEffect(() => {
+        if (!actionsOpen) return;
+        const items = menuRef.current?.querySelectorAll<HTMLButtonElement>(
+            '[role="menuitem"]:not([disabled])',
+        );
+        items?.[0]?.focus();
+    }, [actionsOpen]);
+
+    const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        const items = Array.from(
+            menuRef.current?.querySelectorAll<HTMLButtonElement>(
+                '[role="menuitem"]:not([disabled])',
+            ) ?? [],
+        );
+        if (items.length === 0) return;
+        const currentIndex = items.indexOf(
+            document.activeElement as HTMLButtonElement,
+        );
+        switch (e.key) {
+            case "ArrowDown":
+                e.preventDefault();
+                items[(currentIndex + 1) % items.length]?.focus();
+                break;
+            case "ArrowUp":
+                e.preventDefault();
+                items[
+                    (currentIndex - 1 + items.length) % items.length
+                ]?.focus();
+                break;
+            case "Home":
+                e.preventDefault();
+                items[0]?.focus();
+                break;
+            case "End":
+                e.preventDefault();
+                items[items.length - 1]?.focus();
+                break;
+            case "Escape":
+                e.preventDefault();
+                setActionsOpen(false);
+                triggerRef.current?.focus();
+                break;
+        }
+    };
 
     return (
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap relative">
@@ -44,8 +92,11 @@ export function WorkerHeaderActions({
             {canEdit(user) && (
                 <div className="relative">
                     <button
+                        ref={triggerRef}
                         className="icon-btn"
                         aria-label="Worker actions menu"
+                        aria-haspopup="menu"
+                        aria-expanded={actionsOpen}
                         onClick={() => setActionsOpen(!actionsOpen)}
                     >
                         <FontAwesomeIcon
@@ -59,10 +110,17 @@ export function WorkerHeaderActions({
                                 className="fixed inset-0 z-20"
                                 onClick={() => setActionsOpen(false)}
                             />
-                            <div className="menu right-0 top-9">
+                            <div
+                                ref={menuRef}
+                                role="menu"
+                                aria-label="Worker actions"
+                                className="menu right-0 top-9"
+                                onKeyDown={handleMenuKeyDown}
+                            >
                                 {worker.status === "online" && (
                                     <>
                                         <button
+                                            role="menuitem"
                                             className="menu-item w-full text-left"
                                             onClick={() => {
                                                 setActionsOpen(false);
@@ -73,6 +131,7 @@ export function WorkerHeaderActions({
                                             Start All Containers
                                         </button>
                                         <button
+                                            role="menuitem"
                                             className="menu-item w-full text-left"
                                             onClick={() => {
                                                 setActionsOpen(false);
@@ -84,6 +143,7 @@ export function WorkerHeaderActions({
                                         </button>
                                         {isAdmin(user) && (
                                             <button
+                                                role="menuitem"
                                                 className="menu-item w-full text-left"
                                                 onClick={() => {
                                                     setActionsOpen(false);
@@ -96,6 +156,7 @@ export function WorkerHeaderActions({
                                         )}
                                         {isAdmin(user) && (
                                             <button
+                                                role="menuitem"
                                                 className="menu-item w-full text-left text-failed"
                                                 onClick={() => {
                                                     setActionsOpen(false);
@@ -110,6 +171,7 @@ export function WorkerHeaderActions({
                                     </>
                                 )}
                                 <button
+                                    role="menuitem"
                                     className="menu-item w-full text-left text-failed"
                                     onClick={() => {
                                         setActionsOpen(false);

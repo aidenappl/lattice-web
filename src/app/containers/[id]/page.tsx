@@ -75,9 +75,23 @@ export default function ContainerDetailPage() {
 
   // Mounted ref to prevent state updates after unmount
   const mountedRef = useRef(true);
+  // Track burst-poll timers so they can be cleared on unmount (otherwise they
+  // fire loadContainer/loadLogs after the component is gone → setState warnings).
+  const pollTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+      pollTimersRef.current.forEach((t) => clearTimeout(t));
+      pollTimersRef.current = [];
+    };
+  }, []);
+
+  const scheduleTimer = useCallback((fn: () => void, delay: number) => {
+    const t = setTimeout(() => {
+      if (mountedRef.current) fn();
+    }, delay);
+    pollTimersRef.current.push(t);
   }, []);
 
   // Container logs hook
@@ -176,12 +190,12 @@ export default function ContainerDetailPage() {
         if (workerID != null) {
           loadContainer();
           if (tab === "logs") {
-            setTimeout(loadLogsForContainer, 500);
+            scheduleTimer(loadLogsForContainer, 500);
           }
         }
       }
     },
-    [loadContainer, loadLogsForContainer, handleLogSocketEvent, tab],
+    [loadContainer, loadLogsForContainer, handleLogSocketEvent, tab, scheduleTimer],
   );
   useAdminSocket(handleSocketEvent);
 
@@ -275,9 +289,9 @@ export default function ContainerDetailPage() {
     }
 
     setActionLoading(null);
-    // Burst-poll to catch state + log changes
-    setTimeout(loadContainer, 2000);
-    [2000, 5000, 10000, 20000].forEach((d) => setTimeout(loadLogsForContainer, d));
+    // Burst-poll to catch state + log changes (timers cleared on unmount)
+    scheduleTimer(loadContainer, 2000);
+    [2000, 5000, 10000, 20000].forEach((d) => scheduleTimer(loadLogsForContainer, d));
   };
 
   const handleEditSave = () => {

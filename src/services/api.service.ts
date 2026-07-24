@@ -51,8 +51,24 @@ export const fetchApi = async <T>(
                 const refreshResult = await handle401Response<T>(config);
                 if (refreshResult) return refreshResult;
 
+                // Refresh failed — the session is genuinely gone. Rather than
+                // hard-navigating out of any editor with unsaved work, notify the
+                // app so it can warn / open a re-auth prompt, and only fall back
+                // to a redirect when nobody handles the event (or we're not
+                // already on an auth page, to avoid redirect loops).
                 if (typeof window !== "undefined") {
-                    window.location.href = "/login";
+                    const evt = new CustomEvent("lattice:session-expired", {
+                        cancelable: true,
+                    });
+                    const handled = !window.dispatchEvent(evt);
+                    const path = window.location.pathname;
+                    const onAuthPage =
+                        path === "/login" ||
+                        path === "/unauthorized" ||
+                        path === "/pending";
+                    if (!handled && !onAuthPage) {
+                        window.location.href = "/login";
+                    }
                 }
                 return response;
             }
@@ -340,6 +356,24 @@ const executeRequest = async <T>(
             status: response.status,
             message: response.data.message,
             data: response.data.data as T,
+        };
+    }
+
+    // A 2xx response with an empty/absent body is a success (e.g. a 204 from a
+    // DELETE, or a handler that returns no envelope). lattice-api normally wraps
+    // every response in { success, ... }, but empty-body 2xx must not be treated
+    // as a failure just because there is no `success` flag to read.
+    const isEmptyBody =
+        response.data == null ||
+        response.data === "" ||
+        (typeof response.data === "object" &&
+            Object.keys(response.data).length === 0);
+    if (response.status >= 200 && response.status < 300 && isEmptyBody) {
+        return {
+            success: true,
+            status: response.status,
+            message: "OK",
+            data: undefined as T,
         };
     }
 

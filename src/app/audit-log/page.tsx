@@ -1,11 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { reqGetAuditLog } from "@/services/admin.service";
 import { reqGetUsers } from "@/services/admin.service";
 import type { AuditLogEntry, User } from "@/types";
 import { PageLoader } from "@/components/ui/loading";
+import { LoadError } from "@/components/ui/load-error";
 import { formatDate } from "@/lib/utils";
+import toast from "react-hot-toast";
+
+// lattice-api returns a flat, server-capped slice of the audit log (no
+// limit/offset params yet). If the returned count lands on one of these common
+// LIMIT values we surface a "capped" hint so operators know older entries may
+// be hidden. NOTE: true pagination needs a lattice-api change (limit/offset).
+const LIKELY_CAPS = new Set([100, 200, 250, 500, 1000]);
 
 const actionColors: Record<string, string> = {
   create: "text-healthy",
@@ -28,6 +36,7 @@ export default function AuditLogPage() {
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [resourceFilter, setResourceFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
 
@@ -35,18 +44,25 @@ export default function AuditLogPage() {
     document.title = "Lattice - Audit Log";
   }, []);
 
-  useEffect(() => {
-    const load = async () => {
-      const [logRes, usersRes] = await Promise.all([
-        reqGetAuditLog(),
-        reqGetUsers(),
-      ]);
-      if (logRes.success) setEntries(logRes.data ?? []);
-      if (usersRes.success) setUsers(usersRes.data ?? []);
-      setLoading(false);
-    };
-    load();
+  const load = useCallback(async () => {
+    setLoadError(false);
+    const [logRes, usersRes] = await Promise.all([
+      reqGetAuditLog(),
+      reqGetUsers(),
+    ]);
+    if (logRes.success) {
+      setEntries(logRes.data ?? []);
+    } else {
+      setLoadError(true);
+      toast.error(logRes.error_message || "Failed to load audit log");
+    }
+    if (usersRes.success) setUsers(usersRes.data ?? []);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const userMap = new Map(users.map((u) => [u.id, u.name || u.email]));
   const resourceTypes = [
@@ -60,6 +76,8 @@ export default function AuditLogPage() {
     if (actionFilter !== "all" && e.action !== actionFilter) return false;
     return true;
   });
+
+  const capped = LIKELY_CAPS.has(entries.length);
 
   if (loading) return <PageLoader />;
 
@@ -102,6 +120,17 @@ export default function AuditLogPage() {
       </div>
 
       <div className="py-6">
+        {loadError && entries.length === 0 ? (
+          <LoadError
+            title="Failed to load audit log"
+            message="Could not reach lattice-api to load the audit trail."
+            onRetry={() => {
+              setLoading(true);
+              load();
+            }}
+          />
+        ) : (
+        <>
         <div className="panel">
           <table className="data-table">
             <thead>
@@ -162,6 +191,20 @@ export default function AuditLogPage() {
             </tbody>
           </table>
         </div>
+        <div className="mt-2 flex items-center justify-between px-1">
+          <span className="text-xs text-muted">
+            {filtered.length} entr{filtered.length === 1 ? "y" : "ies"}
+            {filtered.length !== entries.length ? ` of ${entries.length}` : ""}
+          </span>
+          {capped && (
+            <span className="text-xs text-pending">
+              Showing the most recent {entries.length} entries — older entries
+              may not be shown.
+            </span>
+          )}
+        </div>
+        </>
+        )}
       </div>
     </div>
   );

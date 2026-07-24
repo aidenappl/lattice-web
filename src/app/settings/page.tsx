@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { WebhookConfig } from "@/types";
 import {
   reqUpdateAPI,
@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
+import { LoadError } from "@/components/ui/load-error";
+import { LoadingSpinner } from "@/components/ui/loading";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faRotate,
@@ -42,7 +44,12 @@ import {
 
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 
-function waitForAPIRestart(toastId: string, onFail: () => void) {
+function waitForAPIRestart(
+  toastId: string,
+  onFail: () => void,
+  pollRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>,
+  mountedRef: React.MutableRefObject<boolean>,
+) {
   let attempts = 0;
   const poll = setInterval(async () => {
     attempts++;
@@ -52,18 +59,25 @@ function waitForAPIRestart(toastId: string, onFail: () => void) {
       });
       if (res.ok) {
         clearInterval(poll);
+        pollRef.current = null;
+        if (!mountedRef.current) return;
         toast.success("API restarted successfully.", { id: toastId });
-        setTimeout(() => window.location.reload(), 1500);
+        setTimeout(() => {
+          if (mountedRef.current) window.location.reload();
+        }, 1500);
       }
     } catch {
       // still down
     }
     if (attempts >= 60) {
       clearInterval(poll);
+      pollRef.current = null;
+      if (!mountedRef.current) return;
       toast.error("API did not come back within 60 seconds.", { id: toastId });
       onFail();
     }
   }, 1000);
+  pollRef.current = poll;
 }
 
 function VersionCheckSection({ adminUser }: { adminUser: boolean }) {
@@ -71,6 +85,21 @@ function VersionCheckSection({ adminUser }: { adminUser: boolean }) {
   const [refreshing, setRefreshing] = useState(false);
   const [updatingAPI, setUpdatingAPI] = useState(false);
   const [updatingWeb, setUpdatingWeb] = useState(false);
+
+  // Track update-poll intervals so they can be cleared on unmount, and guard
+  // any post-async setState / reload so nothing fires after the user navigates away.
+  const mountedRef = useRef(true);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -97,7 +126,14 @@ function VersionCheckSection({ adminUser }: { adminUser: boolean }) {
     } catch {
       // Container already restarting — expected.
     }
-    waitForAPIRestart(toastId, () => setUpdatingAPI(false));
+    waitForAPIRestart(
+      toastId,
+      () => {
+        if (mountedRef.current) setUpdatingAPI(false);
+      },
+      pollRef,
+      mountedRef,
+    );
   };
 
   const handleUpdateWeb = async () => {
@@ -116,22 +152,29 @@ function VersionCheckSection({ adminUser }: { adminUser: boolean }) {
           });
           if (r.ok) {
             clearInterval(poll);
+            pollRef.current = null;
+            if (!mountedRef.current) return;
             toast.success("Web updated successfully. Reloading...", {
               id: toastId,
             });
-            setTimeout(() => window.location.reload(), 1500);
+            setTimeout(() => {
+              if (mountedRef.current) window.location.reload();
+            }, 1500);
           }
         } catch {
           // still restarting
         }
         if (attempts >= 60) {
           clearInterval(poll);
+          pollRef.current = null;
+          if (!mountedRef.current) return;
           toast.error("Web did not come back within 60 seconds.", {
             id: toastId,
           });
           setUpdatingWeb(false);
         }
       }, 1000);
+      pollRef.current = poll;
     } else {
       toast.error(
         `Failed to update web: ${"error_message" in res ? res.error_message : "Unknown error"}`,
@@ -335,6 +378,7 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
   const showConfirm = useConfirm();
   const [webhooks, setWebhooks] = useState<WebhookConfig[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
@@ -345,8 +389,16 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
   const [error, setError] = useState("");
 
   const loadWebhooks = async () => {
+    setLoadError(false);
     const res = await reqGetWebhooks();
-    if (res.success) setWebhooks(res.data ?? []);
+    if (res.success) {
+      setWebhooks(res.data ?? []);
+    } else {
+      setLoadError(true);
+      toast.error(
+        "error_message" in res ? res.error_message : "Failed to load webhooks",
+      );
+    }
     setLoading(false);
   };
 
@@ -470,13 +522,24 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
     }
   };
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-primary">Webhooks</h2>
+        </div>
+        <div className="panel flex items-center justify-center py-12">
+          <LoadingSpinner size="md" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-primary">Webhooks</h2>
-        {adminUser && (
+        {adminUser && !loadError && (
           <Button
             onClick={() => {
               if (showForm) resetForm();
@@ -488,7 +551,18 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
         )}
       </div>
 
-      {adminUser && showForm && (
+      {loadError && (
+        <LoadError
+          title="Failed to load webhooks"
+          message="Could not reach lattice-api to load webhook configuration."
+          onRetry={() => {
+            setLoading(true);
+            loadWebhooks();
+          }}
+        />
+      )}
+
+      {!loadError && adminUser && showForm && (
         <form onSubmit={handleSubmit} className="card p-6 mb-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
@@ -554,6 +628,7 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
         </form>
       )}
 
+      {!loadError && (
       <div className="panel">
         <table className="w-full">
           <thead>
@@ -659,6 +734,7 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

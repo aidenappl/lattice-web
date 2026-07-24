@@ -125,11 +125,12 @@ export default function WorkerDetailPage() {
     const load = async () => {
       const { reqGetVersions } = await import("@/services/admin.service");
       const versionsRes = await reqGetVersions();
-      if (versionsRes.success) setLatestRunner(versionsRes.data.runner.latest);
+      if (versionsRes.success && mountedRef.current)
+        setLatestRunner(versionsRes.data?.runner?.latest ?? null);
     };
     const loadContainerStats = async () => {
       const res = await reqGetWorkerContainerStats(id);
-      if (res.success && res.data?.length > 0) {
+      if (res.success && res.data?.length > 0 && mountedRef.current) {
         setContainerStats(res.data.map((m) => ({
           name: m.container_name,
           cpu_percent: m.cpu_percent,
@@ -152,11 +153,19 @@ export default function WorkerDetailPage() {
     if (worker) document.title = `Lattice - ${worker.name}`;
   }, [worker]);
 
-  // Fetch volumes and networks when worker comes online
+  // Fetch volumes and networks when worker comes online. The responses arrive
+  // asynchronously over the admin WebSocket (list_volumes_response /
+  // list_networks_response); if they never come back, stop the infra panel from
+  // spinning forever by resolving it to an (empty) loaded state after a timeout.
   useEffect(() => {
     if (worker?.status === "online") {
+      setInfraLoaded(false);
       reqListVolumes(id);
       reqListNetworks(id);
+      const timeout = setTimeout(() => {
+        if (mountedRef.current) setInfraLoaded(true);
+      }, 10000);
+      return () => clearTimeout(timeout);
     }
   }, [worker?.status, id]);
 
@@ -335,14 +344,25 @@ export default function WorkerDetailPage() {
       if (!ok) return;
     }
     setActionLoading(action);
-    const actionMap: Record<string, (id: number) => Promise<{ success: boolean }>> = {
+    const actionMap: Record<
+      string,
+      (id: number) => Promise<{ success: boolean; error_message?: string }>
+    > = {
       reboot: reqRebootWorker,
       upgrade: reqUpgradeRunner,
       "stop-all": reqStopAllContainers,
       "start-all": reqStartAllContainers,
     };
     const fn = actionMap[action];
-    if (fn) await fn(id);
+    if (fn) {
+      const res = await fn(id);
+      const label = action.replace(/-/g, " ");
+      if (res.success) {
+        toast.success(`${label} command sent`);
+      } else {
+        toast.error(res.error_message || `Failed to ${label}`);
+      }
+    }
     setActionLoading(null);
   };
 
@@ -357,6 +377,8 @@ export default function WorkerDetailPage() {
     const res = await reqForceRemoveContainer(id, containerName);
     if (res.success) {
       toast.success(`Force remove command sent for ${containerName}`);
+    } else {
+      toast.error(res.error_message || "Failed to force remove container");
     }
   };
 
@@ -372,10 +394,13 @@ export default function WorkerDetailPage() {
     setDeleteLoading(true);
     const res = await reqDeleteWorker(id);
     if (res.success) {
+      toast.success("Worker deleted");
       // Invalidate related Redux state
       dispatch(fetchStacks());
       dispatch(fetchAllContainers());
       router.push("/workers");
+    } else {
+      toast.error(res.error_message || "Failed to delete worker");
     }
     setDeleteLoading(false);
   };

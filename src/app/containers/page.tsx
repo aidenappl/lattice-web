@@ -9,6 +9,8 @@ import {
 } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
+import { LoadError } from "@/components/ui/load-error";
+import toast from "react-hot-toast";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faRotate,
@@ -51,6 +53,7 @@ export default function ContainersPage() {
   const [stacks, setStacks] = useState<Stack[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   // Filters
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -67,8 +70,13 @@ export default function ContainersPage() {
       reqGetStacks(),
       reqGetWorkers(),
     ]);
-    if (cRes.success) setContainers(cRes.data ?? []);
-    else if (process.env.NODE_ENV === "development") console.error("[Containers] failed to load:", cRes.error_message);
+    if (cRes.success) {
+      setContainers(cRes.data ?? []);
+      setLoadError(false);
+    } else {
+      setLoadError(true);
+      toast.error(cRes.error_message || "Failed to load containers");
+    }
     if (sRes.success) setStacks(sRes.data ?? []);
     if (wRes.success) setWorkers(wRes.data ?? []);
     setLoading(false);
@@ -226,7 +234,16 @@ export default function ContainersPage() {
       </div>
 
       <div className="py-6">
-      {filtered.length === 0 ? (
+      {loadError && containers.length === 0 ? (
+        <LoadError
+          title="Failed to load containers"
+          message="Could not reach lattice-api to load the container list."
+          onRetry={() => {
+            setLoading(true);
+            load();
+          }}
+        />
+      ) : filtered.length === 0 ? (
         <div className="card p-12 text-center">
           <p className="text-sm text-muted">No containers found</p>
         </div>

@@ -47,6 +47,25 @@ export default function DeploymentDetailPage() {
   const showConfirm = useConfirm();
   const deployProgress = useDeploymentProgress();
 
+  // Synthetic (WS-streamed) log entries use monotonically-decreasing negative
+  // ids so they never collide with server DB ids (positive) or each other.
+  const syntheticIdRef = useRef(-1);
+
+  // Merge server logs (authoritative, positive ids) with any live WS-streamed
+  // lines (negative ids) that are newer than the last persisted line — so the
+  // 5s poll never wipes or duplicates streamed output.
+  const mergeServerLogs = useCallback((serverLogs: DeploymentLog[]) => {
+    setLogs((prev) => {
+      const lastServerTime = serverLogs.length
+        ? new Date(serverLogs[serverLogs.length - 1].recorded_at).getTime()
+        : 0;
+      const keptSynthetic = prev.filter(
+        (l) => l.id < 0 && new Date(l.recorded_at).getTime() > lastServerTime,
+      );
+      return [...serverLogs, ...keptSynthetic];
+    });
+  }, []);
+
   // Mounted ref to prevent state updates after unmount
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -72,11 +91,11 @@ export default function DeploymentDetailPage() {
     } else {
       setError(depRes.error_message ?? "Failed to load deployment");
     }
-    if (logsRes.success) setLogs(logsRes.data ?? []);
+    if (logsRes.success) mergeServerLogs(logsRes.data ?? []);
     if (stacksRes.success) setStacks(stacksRes.data ?? []);
     if (usersRes.success) setUsers(usersRes.data ?? []);
     setLoading(false);
-  }, [id]);
+  }, [id, mergeServerLogs]);
 
   useEffect(() => {
     loadDeployment();
@@ -120,7 +139,7 @@ export default function DeploymentDetailPage() {
         setLogs((prev) => [
           ...prev,
           {
-            id: Date.now(),
+            id: syntheticIdRef.current--,
             deployment_id: id,
             level: (payload["level"] as string) ?? "info",
             stage: (payload["stage"] as string) ?? null,
@@ -150,10 +169,10 @@ export default function DeploymentDetailPage() {
         reqGetDeploymentLogs(id),
       ]);
       if (depRes.success) setDeployment(depRes.data);
-      if (logsRes.success) setLogs(logsRes.data ?? []);
+      if (logsRes.success) mergeServerLogs(logsRes.data ?? []);
     }, 5000);
     return () => clearInterval(interval);
-  }, [deployment?.status, id]);
+  }, [deployment?.status, id, mergeServerLogs]);
 
   const stackName = stacks.find((s) => s.id === deployment?.stack_id)?.name;
   const triggeredByUser = users.find((u) => u.id === deployment?.triggered_by);
@@ -422,7 +441,7 @@ export default function DeploymentDetailPage() {
             <p className="text-muted text-center py-8">No logs yet</p>
           ) : (
             logs.map((log, i) => (
-              <div key={log.id}>
+              <div key={`${log.id}-${log.recorded_at}`}>
                 {i > 0 &&
                   new Date(log.recorded_at).getTime() -
                     new Date(logs[i - 1].recorded_at).getTime() >

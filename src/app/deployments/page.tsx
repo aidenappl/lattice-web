@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import toast from "react-hot-toast";
 import type { Deployment, Stack } from "@/types";
 import { reqGetDeployments } from "@/services/deployments.service";
 import { reqGetStacks } from "@/services/stacks.service";
 import { PageLoader } from "@/components/ui/loading";
+import { LoadError } from "@/components/ui/load-error";
 import { StatusBadge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
+import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 
 const statusOptions = [
   "all",
@@ -23,25 +26,62 @@ export default function DeploymentsPage() {
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [stacks, setStacks] = useState<Stack[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [stackFilter, setStackFilter] = useState<string>("all");
+
+  // Debounce socket-driven refreshes so a burst of deployment_progress
+  // events doesn't hammer the list endpoints.
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const load = useCallback(async () => {
+    const [depRes, stacksRes] = await Promise.all([
+      reqGetDeployments(),
+      reqGetStacks(),
+    ]);
+    if (depRes.success) {
+      setDeployments(depRes.data ?? []);
+      setLoadError(false);
+    } else {
+      setLoadError(true);
+      toast.error(depRes.error_message || "Failed to load deployments");
+    }
+    if (stacksRes.success) setStacks(stacksRes.data ?? []);
+    setLoading(false);
+  }, []);
+
+  const loadRef = useRef(load);
+  loadRef.current = load;
+
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => loadRef.current(), 1500);
+  }, []);
 
   useEffect(() => {
     document.title = "Lattice - Deployments";
   }, []);
 
   useEffect(() => {
-    const load = async () => {
-      const [depRes, stacksRes] = await Promise.all([
-        reqGetDeployments(),
-        reqGetStacks(),
-      ]);
-      if (depRes.success) setDeployments(depRes.data ?? []);
-      if (stacksRes.success) setStacks(stacksRes.data ?? []);
-      setLoading(false);
-    };
     load();
-  }, []);
+    return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
+  }, [load]);
+
+  // Live refresh on deployment progress events
+  const handleSocketEvent = useCallback(
+    (event: AdminSocketEvent) => {
+      if (
+        event.type === "deployment_progress" ||
+        event.type === "deployment_status"
+      ) {
+        scheduleRefresh();
+      }
+    },
+    [scheduleRefresh],
+  );
+  useAdminSocket(handleSocketEvent);
 
   const filtered = deployments.filter((d) => {
     if (statusFilter !== "all" && d.status !== statusFilter) return false;
@@ -93,6 +133,16 @@ export default function DeploymentsPage() {
       </div>
 
       <div className="py-6">
+      {loadError && deployments.length === 0 ? (
+        <LoadError
+          title="Failed to load deployments"
+          message="Could not reach lattice-api to load deployment history."
+          onRetry={() => {
+            setLoading(true);
+            load();
+          }}
+        />
+      ) : (
       <div className="panel">
         <table className="data-table">
           <thead>
@@ -150,6 +200,7 @@ export default function DeploymentsPage() {
           </tbody>
         </table>
       </div>
+      )}
       </div>
     </div>
   );

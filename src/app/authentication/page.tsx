@@ -53,21 +53,21 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
     tokenUrl: "https://oauth2.googleapis.com/token",
     userinfoUrl: "https://www.googleapis.com/oauth2/v3/userinfo",
-    scopes: "openid email profile", userIdentifier: "email", comingSoon: true,
+    scopes: "openid email profile", userIdentifier: "email",
   },
   {
     id: "github", name: "GitHub", icon: "", color: "#333",
     authorizeUrl: "https://github.com/login/oauth/authorize",
     tokenUrl: "https://github.com/login/oauth/access_token",
     userinfoUrl: "https://api.github.com/user",
-    scopes: "user:email", userIdentifier: "email", comingSoon: true,
+    scopes: "user:email", userIdentifier: "email",
   },
   {
     id: "microsoft", name: "Microsoft", icon: "", color: "#00A4EF",
     authorizeUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
     tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
     userinfoUrl: "https://graph.microsoft.com/v1.0/me",
-    scopes: "openid email profile", userIdentifier: "email", comingSoon: true,
+    scopes: "openid email profile", userIdentifier: "email",
   },
   {
     id: "custom", name: "Custom OAuth2", icon: "", color: "#6366f1",
@@ -297,6 +297,15 @@ function SSOTab() {
   const [autoProvision, setAutoProvision] = useState(true);
   const [postLoginUrl, setPostLoginUrl] = useState("");
   const [showSecret, setShowSecret] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (field: string) =>
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
 
   const loadConfig = async () => {
     const res = await reqGetSSOConfig();
@@ -328,6 +337,25 @@ function SSOTab() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Guard against saving a broken SSO config that could lock admins out:
+    // when SSO is enabled, the OAuth2 essentials must all be present.
+    if (enabled) {
+      const errs: Record<string, string> = {};
+      if (!clientId.trim()) errs.clientId = "Client ID is required";
+      if (!authorizeUrl.trim())
+        errs.authorizeUrl = "Authorization URL is required";
+      if (!tokenUrl.trim()) errs.tokenUrl = "Token URL is required";
+      if (!userinfoUrl.trim()) errs.userinfoUrl = "UserInfo URL is required";
+      if (!redirectUrl.trim()) errs.redirectUrl = "Redirect URL is required";
+      if (Object.keys(errs).length > 0) {
+        setFieldErrors(errs);
+        toast.error("Fill in all required SSO fields before enabling");
+        return;
+      }
+    }
+    setFieldErrors({});
+
     setSaving(true);
     const data: Partial<SSOConfigData> = {
       enabled, client_id: clientId, authorize_url: authorizeUrl,
@@ -414,7 +442,8 @@ function SSOTab() {
             <label className="text-xs font-medium text-secondary uppercase tracking-wider block mb-3">Client Credentials</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input id="sso-client-id" label="Client ID" placeholder="your-client-id"
-                value={clientId} onChange={(e) => setClientId(e.target.value)} />
+                value={clientId} error={fieldErrors.clientId}
+                onChange={(e) => { setClientId(e.target.value); clearFieldError("clientId"); }} />
               <div className="relative">
                 <Input id="sso-client-secret" label="Client Secret" type={showSecret ? "text" : "password"}
                   placeholder={config?.client_secret ? "Enter new secret to change" : "your-client-secret"}
@@ -431,13 +460,17 @@ function SSOTab() {
             <label className="text-xs font-medium text-secondary uppercase tracking-wider block mb-3">Endpoints</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input id="sso-authorize-url" label="Authorization URL" type="url" placeholder="https://idp.example.com/authorize"
-                value={authorizeUrl} onChange={(e) => setAuthorizeUrl(e.target.value)} />
+                value={authorizeUrl} error={fieldErrors.authorizeUrl}
+                onChange={(e) => { setAuthorizeUrl(e.target.value); clearFieldError("authorizeUrl"); }} />
               <Input id="sso-token-url" label="Token URL" type="url" placeholder="https://idp.example.com/token"
-                value={tokenUrl} onChange={(e) => setTokenUrl(e.target.value)} />
+                value={tokenUrl} error={fieldErrors.tokenUrl}
+                onChange={(e) => { setTokenUrl(e.target.value); clearFieldError("tokenUrl"); }} />
               <Input id="sso-userinfo-url" label="UserInfo URL" type="url" placeholder="https://idp.example.com/userinfo"
-                value={userinfoUrl} onChange={(e) => setUserinfoUrl(e.target.value)} />
+                value={userinfoUrl} error={fieldErrors.userinfoUrl}
+                onChange={(e) => { setUserinfoUrl(e.target.value); clearFieldError("userinfoUrl"); }} />
               <Input id="sso-redirect-url" label="Redirect URL" placeholder="https://lattice-api.example.com/auth/sso/callback"
-                value={redirectUrl} onChange={(e) => setRedirectUrl(e.target.value)} />
+                value={redirectUrl} error={fieldErrors.redirectUrl}
+                onChange={(e) => { setRedirectUrl(e.target.value); clearFieldError("redirectUrl"); }} />
               <Input id="sso-logout-url" label="Logout URL (optional)" type="url" placeholder="https://idp.example.com/logout"
                 value={logoutUrl} onChange={(e) => setLogoutUrl(e.target.value)} />
               <Input id="sso-post-login-url" label="Post-Login Redirect URL" type="url"

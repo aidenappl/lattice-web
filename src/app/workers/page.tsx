@@ -21,6 +21,10 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowUp, faPlus } from "@fortawesome/free-solid-svg-icons";
 import toast from "react-hot-toast";
 
+// Optional: exposes each worker's hostname as a link to its metrics endpoint.
+// Unset → render the hostname as plain text (no hardcoded port assumption).
+const WORKER_METRICS_PORT = process.env.NEXT_PUBLIC_WORKER_METRICS_PORT;
+
 export default function WorkersPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +40,7 @@ export default function WorkersPage() {
   // Post-create token reveal
   const [createdWorker, setCreatedWorker] = useState<Worker | null>(null);
   const [createdToken, setCreatedToken] = useState<string | null>(null);
+  const [regeneratingToken, setRegeneratingToken] = useState(false);
 
   useEffect(() => {
     document.title = "Lattice - Workers";
@@ -48,7 +53,8 @@ export default function WorkersPage() {
         reqGetVersions(),
       ]);
       if (workersRes.success) setWorkers(workersRes.data ?? []);
-      if (versionsRes.success) setLatestRunner(versionsRes.data.runner.latest);
+      if (versionsRes.success)
+        setLatestRunner(versionsRes.data?.runner?.latest ?? null);
       setLoading(false);
     };
     load();
@@ -114,10 +120,30 @@ export default function WorkersPage() {
     setWorkers((prev) => [workerRes.data, ...prev]);
     setCreatedWorker(workerRes.data);
     setCreatedToken(tokenRes.success ? tokenRes.data.token : null);
+    if (!tokenRes.success) {
+      toast.error(
+        `Worker created, but token generation failed: ${
+          tokenRes.error_message || "unknown error"
+        }. Use "Regenerate token" below.`,
+      );
+    }
     setShowForm(false);
     setName("");
     setHostname("");
     setSubmitting(false);
+  };
+
+  const handleRegenerateToken = async () => {
+    if (!createdWorker) return;
+    setRegeneratingToken(true);
+    const tokenRes = await reqCreateWorkerToken(createdWorker.id, "default");
+    if (tokenRes.success) {
+      setCreatedToken(tokenRes.data.token);
+      toast.success("New token generated");
+    } else {
+      toast.error(tokenRes.error_message || "Failed to generate token");
+    }
+    setRegeneratingToken(false);
   };
 
   const dismissCreated = () => {
@@ -183,7 +209,7 @@ export default function WorkersPage() {
         )}
 
         {/* Post-create token reveal */}
-        {createdWorker && createdToken && (
+        {createdWorker && (
           <div className="rounded-lg border border-healthy/30 bg-healthy/5 p-6 mb-6">
             <div className="flex items-start justify-between mb-3">
               <div>
@@ -191,14 +217,30 @@ export default function WorkersPage() {
                   Worker &quot;{createdWorker.name}&quot; created
                 </h3>
                 <p className="text-xs text-secondary mt-1">
-                  Copy the token below and configure it on your runner. It will
-                  not be shown again.
+                  {createdToken
+                    ? "Copy the token below and configure it on your runner. It will not be shown again."
+                    : "The worker was created, but its access token could not be generated. Regenerate one below to finish setup."}
                 </p>
               </div>
               <Button variant="ghost" size="sm" onClick={dismissCreated}>
                 Dismiss
               </Button>
             </div>
+            {!createdToken ? (
+              <div className="rounded-lg bg-background border border-border p-4">
+                <p className="text-xs text-secondary mb-3">
+                  No token is available for this worker yet. Generate one to get
+                  the install command.
+                </p>
+                <Button
+                  size="sm"
+                  onClick={handleRegenerateToken}
+                  loading={regeneratingToken}
+                >
+                  Regenerate token
+                </Button>
+              </div>
+            ) : (
             <div className="rounded-lg bg-background border border-border p-4 space-y-3">
               <div>
                 <p className="form-label">Quick Install (run on the worker VM)</p>
@@ -224,6 +266,7 @@ WORKER_NAME=${createdWorker.name}`}
                 </p>
               </div>
             </div>
+            )}
           </div>
         )}
 
@@ -258,14 +301,20 @@ WORKER_NAME=${createdWorker.name}`}
                       <WorkerBadge id={worker.id} name={worker.name} />
                     </td>
                     <td className="mono hidden sm:table-cell">
-                      <Link
-                        href={`http://${worker.hostname}:9100`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:text-info transition-colors truncate max-w-[200px] inline-block"
-                      >
-                        {worker.hostname}
-                      </Link>
+                      {WORKER_METRICS_PORT ? (
+                        <Link
+                          href={`http://${worker.hostname}:${WORKER_METRICS_PORT}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:text-info transition-colors truncate max-w-[200px] inline-block"
+                        >
+                          {worker.hostname}
+                        </Link>
+                      ) : (
+                        <span className="text-primary truncate max-w-[200px] inline-block">
+                          {worker.hostname}
+                        </span>
+                      )}
                     </td>
                     <td>
                       <StatusBadge status={worker.status} />

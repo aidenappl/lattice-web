@@ -12,6 +12,7 @@ import { useUser } from "@/store/hooks";
 import { isAdmin, formatDate } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { PageLoader, LoadingSpinner } from "@/components/ui/loading";
+import { LoadError } from "@/components/ui/load-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,7 @@ export default function EnvVarsPage() {
   const [revealedIds, setRevealedIds] = useState<Set<number>>(new Set());
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [reloading, setReloading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     document.title = "Lattice - Environment Variables";
@@ -44,8 +46,14 @@ export default function EnvVarsPage() {
 
   const loadEnvVars = async (isReload = false) => {
     if (isReload) setReloading(true);
+    setLoadError(false);
     const res = await reqGetGlobalEnvVars();
-    if (res.success) setEnvVars(res.data ?? []);
+    if (res.success) {
+      setEnvVars(res.data ?? []);
+    } else {
+      setLoadError(true);
+      toast.error(res.error_message || "Failed to load environment variables");
+    }
     setLoading(false);
     setReloading(false);
   };
@@ -210,6 +218,17 @@ export default function EnvVarsPage() {
           </form>
         )}
 
+        {loadError && envVars.length === 0 ? (
+          <LoadError
+            title="Failed to load environment variables"
+            message="Could not reach lattice-api to load global environment variables."
+            onRetry={() => {
+              setLoading(true);
+              loadEnvVars();
+            }}
+            retrying={reloading}
+          />
+        ) : (
         <div className="panel relative">
           {reloading && (
             <div className="absolute top-3 right-3 z-10">
@@ -311,6 +330,7 @@ export default function EnvVarsPage() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   );

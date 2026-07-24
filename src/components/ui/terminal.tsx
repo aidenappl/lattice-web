@@ -62,10 +62,23 @@ export function Terminal({
     if (!termRef.current || startedRef.current) return;
     startedRef.current = true;
 
+    // Fresh exec command id for each (re)opened session so output from a
+    // previous container/worker can't leak into this one.
+    commandIdRef.current = `exec-${containerId}-${crypto.randomUUID()}`;
+
+    // Resolve the JetBrains Mono family from the CSS variable (next/font),
+    // falling back to a generic monospace if it isn't set.
+    const monoFont =
+      (typeof document !== "undefined" &&
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--font-jetbrains-mono")
+          .trim()) ||
+      "monospace";
+
     const term = new XTerm({
       cursorBlink: true,
       fontSize: 13,
-      fontFamily: "'Geist Mono', monospace",
+      fontFamily: `${monoFont}, monospace`,
       theme: {
         background: "#0a0a0a",
         foreground: "#e4e4e7",
@@ -143,6 +156,11 @@ export function Terminal({
         payload: { worker_id: workerId },
       });
       term.dispose();
+      xtermRef.current = null;
+      fitRef.current = null;
+      // Allow the effect to re-initialise when containerId/workerId changes
+      // (and to correctly re-init under React StrictMode double-invoke).
+      startedRef.current = false;
     };
   }, [containerName, workerId, containerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
