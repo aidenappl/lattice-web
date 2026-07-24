@@ -29,8 +29,17 @@ import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import WorkerBadge from "@/components/ui/worker-badge";
 import { useConfirm } from "@/components/ui/confirm-modal";
+import toast from "react-hot-toast";
 
 type Tab = "networks" | "ports";
+
+// Sort key for a host port string. Unresolved (${VAR}) or non-numeric ports
+// parseInt to NaN, which makes Array.sort's comparator undefined — push those
+// to the end deterministically instead.
+const portSortKey = (hostPort: string): number => {
+  const n = parseInt(hostPort, 10);
+  return Number.isNaN(n) ? Number.MAX_SAFE_INTEGER : n;
+};
 
 export default function NetworksPage() {
   const [tab, setTab] = useState<Tab>("networks");
@@ -211,7 +220,12 @@ function NetworksTab({
     });
     if (!ok) return;
     const res = await reqDeleteNetworkByID(n.id);
-    if (res.success) onDelete();
+    if (res.success) {
+      toast.success("Orphaned network removed");
+      onDelete();
+    } else {
+      toast.error(res.error_message || "Failed to remove network");
+    }
   };
 
   return (
@@ -456,7 +470,7 @@ function PortsTab({
     workerGroups.push({
       worker: w,
       ports: ports.sort(
-        (a, b) => parseInt(a.hostPort, 10) - parseInt(b.hostPort, 10),
+        (a, b) => portSortKey(a.hostPort) - portSortKey(b.hostPort),
       ),
     });
   }
