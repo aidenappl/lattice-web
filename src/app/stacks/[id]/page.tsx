@@ -161,6 +161,17 @@ export default function StackDetailPage() {
     return () => { mountedRef.current = false; };
   }, []);
 
+  // Pause background polling while the tab is hidden
+  const [docVisible, setDocVisible] = useState(true);
+  useEffect(() => {
+    const onVisibility = () =>
+      setDocVisible(document.visibilityState === "visible");
+    onVisibility();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
   // Deploy button state
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
 
@@ -261,8 +272,8 @@ export default function StackDetailPage() {
     if (res.success) setContainers(res.data ?? []);
   }, [id]);
 
-  // Periodic lightweight container status refresh (every 8s)
-  usePoll(refreshContainers, 8000);
+  // Periodic lightweight container status refresh (every 8s, paused when tab hidden)
+  usePoll(refreshContainers, 8000, docVisible);
 
   // WebSocket: refresh containers on any sync/status event for this stack's containers
   const containerNamesRef = useRef<Set<string>>(new Set());
@@ -399,6 +410,8 @@ export default function StackDetailPage() {
     if (res.success) {
       setContainers((prev) => [...prev, res.data]);
       setHasPendingChanges(true);
+    } else {
+      toast.error(res.error_message || "Failed to create container");
     }
   };
 
@@ -421,6 +434,8 @@ export default function StackDetailPage() {
     if (res.success) {
       setStack(res.data);
       setEditingStack(false);
+    } else {
+      toast.error(res.error_message || "Failed to save stack");
     }
   };
 
@@ -539,6 +554,8 @@ export default function StackDetailPage() {
     if (res.success) {
       setStack(res.data);
       setHasPendingChanges(true);
+    } else {
+      toast.error(res.error_message || "Failed to save environment variables");
     }
     setSavingEnvVars(false);
   };
