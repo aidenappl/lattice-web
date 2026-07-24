@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { Alert } from "@/components/ui/alert";
 import { useConfirm } from "@/components/ui/confirm-modal";
+import toast from "react-hot-toast";
 import yaml from "js-yaml";
 
 type EnvRow = { id: number; key: string; value: string };
@@ -222,15 +223,25 @@ export default function NewStackPage() {
     if (res.success) {
       const stackId = res.data.id;
 
-      // Save env vars to the stack record.
+      // The stack now exists — from here we surface follow-up failures via toast
+      // (so the user can finish configuration on the detail page) rather than
+      // stranding them on this form, which would risk a duplicate import.
       if (Object.keys(envVarMap).length > 0) {
-        await reqUpdateStack(stackId, {
+        // Save env vars to the stack record.
+        const envRes = await reqUpdateStack(stackId, {
           env_vars: JSON.stringify(envVarMap),
         });
-      }
+        if (!envRes.success) {
+          toast.error(
+            envRes.error_message ||
+              "Stack created, but saving environment variables failed — set them on the stack page.",
+          );
+          router.push(`/stacks/${stackId}`);
+          setSubmitting(false);
+          return;
+        }
 
-      // Resolve ${KEY} placeholders in each container's env_vars.
-      if (Object.keys(envVarMap).length > 0) {
+        // Resolve ${KEY} placeholders in each container's env_vars.
         const containersRes = await reqGetContainers(stackId);
         if (containersRes.success && containersRes.data) {
           const PLACEHOLDER = /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/;
@@ -251,9 +262,18 @@ export default function NewStackPage() {
               }
             }
             if (changed) {
-              await reqUpdateContainer(container.id, {
+              const updRes = await reqUpdateContainer(container.id, {
                 env_vars: JSON.stringify(envObj),
               });
+              if (!updRes.success) {
+                toast.error(
+                  updRes.error_message ||
+                    `Stack created, but applying env vars to "${container.name}" failed — check the stack page.`,
+                );
+                router.push(`/stacks/${stackId}`);
+                setSubmitting(false);
+                return;
+              }
             }
           }
         }
