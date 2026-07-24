@@ -1,122 +1,146 @@
 # lattice-web
 
-Management frontend for the Lattice orchestrator platform. Provides a real-time dashboard for managing workers, stacks, containers, deployments, and registries.
+Real-time admin dashboard for the Lattice container-orchestration platform.
+
+> **Appleby Cloud platform** · Next.js app · `lattice.appleby.cloud` (self-hosted via Lattice/Portainer)
 
 ---
 
-## Tech Stack
+## Overview
 
-- **Next.js 16** with App Router
-- **React 19** + **TypeScript 5**
-- **Redux Toolkit** — state management (auth, overview, workers, stacks, containers)
-- **Axios** — API client with automatic auth refresh
-- **Tailwind CSS v4** — styling with CSS custom properties
-- **ReactFlow 12** — topology visualization
-- **WebSocket** — real-time updates via admin socket
+`lattice-web` is the browser admin console for **Lattice**, the container-orchestration platform
+that runs every `appleby.cloud` service. It renders the fleet dashboard (topology graph, KPI row,
+live event stream, fleet resource charts) and full CRUD + lifecycle management for workers, stacks,
+containers, deployments, databases, registries, networks, volumes, backup destinations, global env
+vars, templates, webhooks, users, API tokens, and instance config.
 
----
+It is a **pure client of [`lattice-api`](https://github.com/aidenappl/lattice-api)** — no BFF, no
+database, no business logic. Every view and mutation is an HTTP call (plus a live admin WebSocket).
+Whatever an operator sees — validation, deployment mechanics, pagination — is produced by the API.
 
-## Environment Variables
+## Role in the Appleby Cloud ecosystem
 
-| Variable                    | Required | Description                                         |
-| --------------------------- | -------- | --------------------------------------------------- |
-| `NEXT_PUBLIC_LATTICE_API`   | Yes      | Lattice API base URL (e.g. `http://localhost:8000`) |
-| `NEXT_PUBLIC_APP_VERSION`   | No       | Displayed version string                            |
+- **[`lattice-api`](https://github.com/aidenappl/lattice-api)** — the backend this dashboard drives
+  (`/admin/*`, `/auth/*`, `/ws/admin`). Its route table is the source of truth for every service call.
+- **[`lattice-mcp`](https://github.com/aidenappl/lattice-mcp)** — the Model Context Protocol sibling
+  over the *same* API, for Claude Code. This repo is the human-facing counterpart.
+- **[`lattice-runner`](https://github.com/aidenappl/lattice-runner)** — agent on each worker VM;
+  the "upgrade runner" / worker actions here ultimately drive it.
+- **Forta** — `appleby.cloud` OAuth2 identity provider; Lattice runs its own session auth but can
+  federate SSO. **Keyring** — supplies the CI build secrets (registry creds + API URL).
 
----
+## Tech stack
 
-## Features
+- **Next.js 16** (App Router, `output: "standalone"`) + **React 19** + **TypeScript 5** (strict)
+- **Redux Toolkit** — global state (auth, overview, workers, stacks, containers)
+- **Axios** — one `fetchApi<T>` wrapper with cookie session, CSRF header, reactive + proactive refresh
+- **Tailwind CSS v4** — CSS custom properties, **dark-default** (light/system toggle)
+- **Custom SVG topology board + Dagre** (`dagre`) for hierarchical layout — **not** ReactFlow
+- **Recharts** (metric charts) · **xterm.js** (container terminal) · **js-yaml** (compose editor)
+- **Font Awesome** free-solid packages (icons; not the FA Kit)
+- **React Hot Toast** (notifications) · admin **WebSocket** for real-time updates
+- **Fonts:** Inter Tight + JetBrains Mono (via `next/font/google`)
+- **Vitest** + Testing Library (jsdom) for tests
 
-- **Real-time dashboard** — Topology graph, fleet KPIs with sparklines, live event stream, fleet resource charts
-- **Dual authentication** — Local email/password login + SSO (OAuth2)
-- **Worker management** — Live metrics (CPU, memory, disk, network), volumes, networks, tokens, upgrade/reboot
-- **Stack management** — Create, configure, deploy, compose YAML editor, environment variables
-- **Container management** — Full lifecycle (start, stop, kill, restart, pause, recreate, remove), live logs, health checks, terminal
-- **Deployment tracking** — Live deployment progress, approve/rollback controls
-- **Registry management** — Configure and test Docker registries with repository/tag browsing
-- **User management** — Create local users, manage roles (admin/editor/viewer)
-- **Audit log** — Track administrative actions with filtering
-- **Network view** — Port mapping overview across all workers
-- **Dark/light theme** — System-aware with manual toggle
+## Getting started
 
----
+### Prerequisites
 
-## Quick Start
+- Node 20+ and npm
+- A reachable `lattice-api` instance
+- For HTTPS local dev (needed for secure cross-subdomain cookies / auth): `mkcert` and a hosts entry
+  for `lattice.local.appleby.cloud` — run `dev setup-local` to do all of it in one step
+
+### Setup
 
 ```bash
-# Install dependencies
 npm install
 
-# Set environment
+# Set the API URL (never commit .env* — it is git-ignored)
 echo 'NEXT_PUBLIC_LATTICE_API=http://localhost:8000' > .env.local
 
-# Start development server (HTTPS)
-npm run dev
+# One-time HTTPS setup: mkcert certs + /etc/hosts entry
+dev setup-local
 
-# Or start with HTTP
-npm run dev-http
+# Start the HTTPS dev server
+npm run dev:ssl        # https://lattice.local.appleby.cloud:3030
 ```
 
----
+Plain `npm run dev` serves HTTP on port 3000, but secure cookies won't work there, so **auth
+breaks** — use `dev:ssl` for anything involving login.
 
-## Pages
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXT_PUBLIC_LATTICE_API` | Yes | `lattice-api` base URL (e.g. `http://localhost:8000`). Also derives the WebSocket origin and tightens the CSP. Baked at **build time** |
+| `NEXT_PUBLIC_APP_VERSION` | No | Displayed version string; defaults to `dev` |
 
-| Route                   | Description                                              |
-| ----------------------- | -------------------------------------------------------- |
-| `/`                     | Dashboard: topology, KPIs, event stream, fleet resources |
-| `/login`                | Dual auth login (local + SSO)                            |
-| `/workers`              | Worker list with status and metrics                      |
-| `/workers/[id]`         | Worker detail, tokens, metrics, volumes, networks        |
-| `/workers/[id]/metrics` | Full metrics view with charts                            |
-| `/stacks`               | Stack list with status overview                          |
-| `/stacks/new`           | Create new stack                                         |
-| `/stacks/[id]`          | Stack detail, containers, compose, env, logs             |
-| `/containers`           | Global container list with actions                       |
-| `/containers/[id]`      | Container detail, logs, health, terminal, actions        |
-| `/deployments`          | Deployment history with filters                          |
-| `/deployments/[id]`     | Deployment detail with live logs                         |
-| `/registries`           | Docker registry management                               |
-| `/networks`             | Port mapping overview across workers                     |
-| `/audit-log`            | Audit trail viewer with filters                          |
-| `/settings`             | User management + version checks + updates               |
+## Development
 
----
+| Command | What it does |
+|---------|--------------|
+| `npm run dev` | Next.js dev server, **HTTP** on port 3000 (cross-subdomain cookies won't work) |
+| `npm run dev:ssl` | **HTTPS** dev server via `server.js` + mkcert on `lattice.local.appleby.cloud:3030` |
+| `npm run build` | Production build (standalone output) |
+| `npm start` | Run the production build |
+| `npm test` | Run the Vitest suite once |
+| `npm run lint` | ESLint |
+| `dev dev` / `dev dev-http` | `dev` CLI: HTTPS (`dev:ssl`) / HTTP dev server |
+| `dev setup-local` | One-time mkcert + `/etc/hosts` setup for local HTTPS |
+| `dev check` | ESLint + Prettier check + `tsc --noEmit` |
 
-## Architecture
+### Features
 
-### State Management
+- **Real-time dashboard** — custom SVG topology, fleet KPIs with sparklines, live event stream, fleet resource charts, anomaly/failing-stack banners
+- **Dual authentication** — local email/password + SSO (OAuth2), with role-gated UI (admin/editor/viewer/pending)
+- **Worker management** — live metrics (CPU/memory/disk/network), volumes, networks, tokens, reboot/upgrade
+- **Stack management** — create/import, deploy, compose YAML editor, env vars, deploy tokens, dependency graph
+- **Container management** — full lifecycle (start/stop/kill/restart/pause/unpause/remove/recreate), live logs, health, terminal
+- **Deployment tracking** — live progress, approve/rollback
+- **Databases** — managed DB instances: provision, credentials, snapshots, start/stop/restart/remove, restore
+- **Registries** — configure/test Docker registries, browse repositories/tags
+- **Networks, volumes, backup destinations, global env vars, templates, webhooks**
+- **Users & API tokens** — user CRUD + roles; API tokens for `lattice-mcp` / AI agents (the `/ai` page)
+- **Audit log**, **SSO/SMTP config**, **notification prefs**, **version checks & service updates**
+- **Dark-default theme** — light/system toggle, persisted across `.appleby.cloud` subdomains
 
-Redux Toolkit manages global state across 5 slices:
-- **auth** — Login status, current user
-- **overview** — Dashboard data, fleet metrics, audit log
-- **workers** — Worker list, current worker, metrics, tokens
-- **stacks** — Stack list, current stack
-- **containers** — Global container list, per-stack containers
-
-### Custom Hooks
-
-- `usePoll` — Generic interval polling with auto-cleanup
-- `useContainerLogs` — Log fetching, filtering, WebSocket streaming, downloading
-- `useAdminSocket` — Singleton WebSocket connection with subscriber pattern
-- `useWorkerLiveness` — Real-time worker online/offline detection
-- `useVersionCheck` — Version polling with update detection
-
-### Component Architecture
-
-Detail pages (workers, stacks, containers) follow an orchestrator pattern:
-- The page handles data loading, WebSocket events, and state coordination
-- Sub-components in `components/{entity}/` handle rendering
-- Shared UI components in `components/ui/`
-
----
-
-## Version Check
-
-The web app exposes its version via an API route:
+## Project structure
 
 ```
-GET /api/version
-{"version":"v1.0.17"}
+src/
+  app/                  # App Router — one folder per route (dashboard, workers, stacks, containers,
+                        #   deployments, databases, networks, registries, env-vars, templates,
+                        #   backup-destinations, audit-log, authentication, notifications, ai,
+                        #   settings, profile, login, pending, unauthorized) + api/health, api/version
+  components/           # ui/ primitives (kebab-case) + dashboard/ workers/ stacks/ containers/
+                        #   layout/ topology/ feature components (PascalCase)
+  services/             # {entity}.service.ts — all call fetchApi<T>; api.service.ts is the client
+  store/                # Redux Toolkit: 5 slices, typed hooks, singleton StoreProvider
+  hooks/                # useAdminSocket, useContainerLogs, usePoll, useVersionCheck, useIdleTimeout, …
+  lib/                  # utils (cn, isAdmin, canEdit, formatBytes, …), version, deployment-progress
+  types/                # domain types + ApiResponse<T>
 ```
 
-The dashboard displays both the web version and the API version (fetched from the backend).
+**Auth flow (summary):** `StoreProvider` boots the session via `/auth/self`; a 401 triggers a
+deduplicated `/auth/refresh` (reactive) and there is an activity-aware proactive refresh ~60s before
+expiry; `error_code 4003` → `/unauthorized`, `4004` (or role `pending`) → `/pending`; mutations send
+the `lattice-csrf` cookie back as an `X-CSRF-Token` header. Full detail in [`AGENTS.md`](./AGENTS.md).
+
+## Deployment
+
+Not Vercel. CI (`.github/workflows/build-and-deploy.yml`) builds a multi-stage `node:20-alpine`
+standalone image (non-root `nextjs` user, port 3000, `wget /api/health` healthcheck) and pushes it
+to `registry.appleby.cloud/lattice-web:latest` — registry creds and `NEXT_PUBLIC_LATTICE_API` are
+injected from **Keyring** via `keyring-actions`. It runs on the fleet via **Lattice/Portainer**.
+Because `NEXT_PUBLIC_*` is baked at build time, changing the API URL requires a rebuild.
+
+## Contributing & further reading
+
+- **[`AGENTS.md`](./AGENTS.md)** — the authoritative deep reference: full page map, service map,
+  Redux store shape, auth model, operations, and conventions. Read it before making changes.
+- Related repos: [`lattice-api`](https://github.com/aidenappl/lattice-api) ·
+  [`lattice-mcp`](https://github.com/aidenappl/lattice-mcp) ·
+  [`lattice-runner`](https://github.com/aidenappl/lattice-runner)
+- **Verify before "done":** `npm run build` (fix all TS errors) and `npm test` must pass. Docs ship
+  with the code — update `AGENTS.md` in the same change when structure, routes, services, or the
+  API contract change.
+</content>
