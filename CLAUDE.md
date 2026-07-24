@@ -5,22 +5,24 @@ Management dashboard for the Lattice container orchestration platform. Connects 
 ## Commands
 
 ```bash
-npm run dev       # Next.js dev server (HTTPS via custom server.js + mkcert)
-npm run dev-http  # Next.js dev server (HTTP, port 3000)
+npm run dev       # Next.js dev server (HTTP, port 3000 — cross-subdomain cookies won't work)
+npm run dev:ssl   # HTTPS dev server via custom server.js + mkcert (lattice.local.appleby.cloud:3030)
 npm run build     # Production build (standalone output)
+npm run test      # Vitest run
 npm run lint      # ESLint
 ```
 
-Dev CLI (`Devfile.yaml`): `dev` runs HTTPS mode by default.
+Dev CLI (`Devfile.yaml`): `dev dev` runs HTTPS mode (`dev:ssl`); `dev dev-http` is plain HTTP.
 
 ## Tech Stack
 
 - Next.js 16 (App Router) + React 19 + TypeScript 5
 - Redux Toolkit (auth + overview + workers + stacks + containers state)
 - Axios (API client with auto-refresh)
-- Tailwind CSS v4 with CSS custom properties (dark/light/system theme)
-- ReactFlow 12 (@xyflow/react) + Dagre (topology visualization)
-- Font Awesome (icons via FA Kit)
+- Tailwind CSS v4 with CSS custom properties (dark-default, light/system theme)
+- Custom SVG topology board + Dagre (`dagre`) for hierarchical layout (NOT ReactFlow)
+- Recharts (metric charts) + xterm.js (container terminal) + js-yaml (compose editor)
+- Font Awesome free-solid packages (icons; not the FA Kit)
 - React Hot Toast (notifications)
 
 ## Project Structure
@@ -31,7 +33,9 @@ src/
     layout.tsx              # Root layout: Redux + Theme + DashboardLayout
     page.tsx                # Dashboard — topology, KPIs, event stream, fleet resources
     login/page.tsx          # Email/password + SSO login
-    unauthorized/page.tsx   # Grant revocation landing
+    unauthorized/page.tsx   # Grant revocation landing (error_code 4003)
+    pending/page.tsx        # Account-awaiting-approval landing (role "pending" / 4004)
+    profile/page.tsx        # Self profile: name, password, avatar
     workers/
       page.tsx              # Worker list with token management
       [id]/page.tsx         # Worker detail: orchestrates sub-components
@@ -46,9 +50,18 @@ src/
     deployments/
       page.tsx              # Deployment history list
       [id]/page.tsx         # Deployment detail: timeline, logs, approve/rollback
+    databases/page.tsx      # Managed DB instance list
+    databases/new/page.tsx  # Provision a DB instance
+    databases/[id]/page.tsx # DB detail: credentials, snapshots, start/stop/restart/remove, restore
     registries/page.tsx     # Registry CRUD, test connectivity, browse repos/tags
-    networks/page.tsx       # Port mapping viewer (reads from container port configs)
+    networks/page.tsx       # Compose networks / port mapping across workers
+    env-vars/page.tsx       # Global (cross-stack) env variables, incl. secrets
+    templates/page.tsx      # Stack templates (create from stack/config, delete)
+    backup-destinations/page.tsx # Backup destination CRUD + test
     audit-log/page.tsx      # Audit trail viewer
+    authentication/page.tsx # SSO config + SMTP config + test
+    notifications/page.tsx  # Notification prefs + webhooks
+    ai/page.tsx             # API-token management (tokens for lattice-mcp / AI agents)
     settings/page.tsx       # User management + version check + API/web/runner updates
     api/
       health/route.ts       # GET /api/health — Docker healthcheck
@@ -89,13 +102,8 @@ src/
       UpdateBanner.tsx      # Sticky banner when API/web/runner updates available
       RunnerUpgradePanel.tsx # Per-worker upgrade UI with WebSocket status tracking
     topology/
-      TopologyBoard.tsx     # ReactFlow graph with 4 view modes + node scale selector
-      useTopologyData.ts    # Hook: fetches workers/stacks/containers, builds nodes/edges
-      ViewModeSelector.tsx  # System/Worker/Stack/Container radio buttons
-      layout.ts             # Dagre layout calculation with node dimension scaling
-      types.ts              # TypeScript types for topology nodes/edges
-      nodes/                # SystemNode, WorkerNode, StackNode, ContainerNode
-      edges/DataFlowEdge.tsx # Animated connection edges
+      TopologyBoard.tsx     # Custom SVG topology graph: 4 view modes, node scale selector, drag positions
+      useTopologyData.ts    # Hook: fetches workers/stacks/containers, builds nodes/edges (Dagre layout)
     ui/
       button.tsx            # Variants: primary, secondary, ghost, warning, destructive
       input.tsx             # Text input
@@ -116,15 +124,18 @@ src/
     ThemeProvider.tsx        # Dark/light/system theme context, stores in cookie + localStorage
 
   services/
-    api.service.ts          # fetchApi<T> wrapper: Axios, withCredentials, 401 auto-refresh, 403 redirect
-    auth.service.ts         # reqGetSelf, reqLogin, reqLogout
-    admin.service.ts        # reqGetOverview, reqGetFleetMetrics, reqGetAuditLog, reqGetUsers, reqCreateUser, reqUpdateUser, reqDeleteUser, reqGetVersions, reqRefreshVersions, reqUpdateAPI, reqUpdateWeb
-    workers.service.ts      # reqGetWorkers, reqGetWorker, reqCreateWorker, reqUpdateWorker, reqDeleteWorker, reqGetWorkerTokens, reqCreateWorkerToken, reqDeleteWorkerToken, reqGetWorkerMetrics, reqRebootWorker, reqUpgradeRunner, reqStopAllContainers, reqStartAllContainers
-    stacks.service.ts       # reqGetStacks, reqGetStack, reqCreateStack, reqUpdateStack, reqDeleteStack, reqDeployStack, reqGetAllContainers, reqGetContainers, reqCreateContainer, reqUpdateContainer, reqDeleteContainer, reqGetContainerLogs, reqGetLifecycleLogs, req{Start,Stop,Kill,Restart,Pause,Unpause,Remove,Recreate}Container, reqImportCompose, reqUpdateCompose, reqSyncCompose
+    api.service.ts          # fetchApi<T> wrapper: Axios, withCredentials, GET-retry, CSRF header, 401 auto-refresh (reactive + proactive), 403 redirect
+    auth.service.ts         # reqGetSelf, reqLogin, reqLogout, reqUpdateSelf
+    admin.service.ts        # overview/fleet-metrics/anomalies/audit-log, user CRUD, versions + reqUpdateAPI/reqUpdateWeb, webhook CRUD+test, global env-var CRUD, SMTP get/update/test, notification prefs, SSO get/update, reqSearch, API-token CRUD
+    workers.service.ts      # worker CRUD, token CRUD, reqGetWorkerMetrics, reqRebootWorker, reqUpgradeRunner, reqStopAllContainers, reqStartAllContainers, reqGetWorkerContainerStats, reqForceRemoveContainer
+    stacks.service.ts       # stack CRUD, reqDeployStack, reqGetAllContainers/reqGetContainer/reqGetContainers, container CRUD, reqGetContainerLogs/reqGetLifecycleLogs/reqGetContainerMetrics, req{Start,Stop,Kill,Restart,Pause,Unpause,Remove,Recreate}Container, reqImportCompose/reqUpdateCompose/reqSyncCompose, stack start/stop/restart, reqExportStack/reqImportStackExport, deploy-token CRUD
     deployments.service.ts  # reqGetDeployments, reqGetDeployment, reqGetDeploymentLogs, reqApproveDeployment, reqRollbackDeployment
+    databases.service.ts    # instance CRUD, reqDatabaseAction(start|stop|restart|remove), reqGetDatabaseCredentials, snapshot list/create/restore/delete
     registries.service.ts   # reqGetRegistries, reqGetRegistry, reqCreateRegistry, reqUpdateRegistry, reqDeleteRegistry, reqTestRegistry, reqTestRegistryInline, reqListRegistryRepos, reqListRegistryTags
-    volumes.service.ts      # reqListVolumes, reqCreateVolume, reqDeleteVolume
-    networks.service.ts     # reqListNetworks, reqCreateNetwork, reqDeleteNetwork
+    templates.service.ts    # reqGetTemplates, reqCreateTemplateFromStack, reqCreateTemplate, reqDeleteTemplate
+    backup-destinations.service.ts # destination CRUD + reqTestBackupDestination
+    volumes.service.ts      # reqListVolumes, reqCreateVolume, reqDeleteVolume (per worker)
+    networks.service.ts     # reqListAllNetworks, per-worker list/create/delete, reqDeleteNetworkByID
 
   store/
     index.ts                # Redux store: auth + overview + workers + stacks + containers reducers
@@ -134,7 +145,7 @@ src/
       authSlice.ts          # State: is_logged, is_loading, user
       overviewSlice.ts      # State: overview data, fleet metrics history, audit log
       workersSlice.ts       # State: worker list, current worker, metrics, tokens
-      stacksSlice.ts        # State: stack list, current stack, stack name map
+      stacksSlice.ts        # State: stack list, current stack (+ memoized name-map selector)
       containersSlice.ts    # State: container list, stack containers
 
   hooks/
@@ -142,6 +153,10 @@ src/
     useAdminSocket.ts       # Singleton WebSocket to /ws/admin, shared by all subscribers, auto-reconnect
     useWorkerLiveness.ts    # Real-time worker online/offline via WebSocket + 90s heartbeat timeout
     useNotifications.ts     # Toast notification integration
+    useDesktopNotifications.ts # Browser desktop notifications
+    useIdleTimeout.ts       # Auto-logout after inactivity
+    useContainerActions.ts  # Container lifecycle action handlers + refresh
+    useDeploymentProgress.ts # Per-deployment progress from WS events
     usePoll.ts              # Generic interval polling hook with auto-cleanup
     useContainerLogs.ts     # Container log state: fetching, filtering, WS streaming, downloading
 
@@ -150,7 +165,7 @@ src/
     worker.types.ts         # Worker, WorkerToken, WorkerMetrics
     stack.types.ts          # Stack, Container, ComposeNetwork, Registry, ContainerLog, LifecycleLog
     deployment.types.ts     # Deployment, DeploymentLog
-    user.types.ts           # User (auth_type: oauth|local, role: admin|editor|viewer) — SSO users identified by email
+    user.types.ts           # User (auth_type: oauth|local|sso, role: admin|editor|viewer|pending)
     version.types.ts        # VersionInfo, WorkerVersionInfo
     volume.types.ts         # DockerVolume, DockerNetwork
     admin.types.ts          # OverviewData, WorkerMetricsSummary, AuditLogEntry, FleetMetricsPoint
@@ -175,10 +190,11 @@ src/
 1. `StoreProvider` calls `/auth/self` on mount
 2. If authenticated: sets `is_logged=true`, stores user in Redux
 3. If 401: redirects to `/login`
-4. If 403 with error_code 4003: redirects to `/unauthorized`
-5. Login form POSTs to `/auth/login` with email/password
-6. 401 responses auto-trigger `/auth/refresh` with deduplication via singleton promise
-7. Logout links to `${API_URL}/auth/logout`
+4. If 403 error_code 4003: redirects to `/unauthorized`; error_code 4004 (or role "pending"): redirects to `/pending`
+5. Login form POSTs to `/auth/login` (email/password); SSO via public `/auth/sso/config` → `login_url`
+6. 401 responses auto-trigger `/auth/refresh` with deduplication via singleton promise (reactive); proactive activity-aware refresh ~60s before expiry
+7. POST/PUT/DELETE send the `lattice-csrf` cookie back as `X-CSRF-Token` (double-submit)
+8. Logout links to `${API_URL}/auth/logout`
 
 ## Redux State Management
 
@@ -200,13 +216,13 @@ Each slice uses `createAsyncThunk` for API calls and exposes selectors for commo
 
 ## Topology Dashboard
 
-ReactFlow-based graph on the home page with 4 view modes:
+Custom SVG graph on the home page with 4 view modes:
 - **System**: single overview node -> workers -> stacks -> containers
 - **Workers**: worker nodes -> their stacks -> containers
 - **Stacks**: stack nodes -> their containers
 - **Containers**: flat container view
 
-Node scale selector (Small 0.85x / Medium 1x / Large 1.2x). Dagre for hierarchical layout. Preserves user drag positions on data refresh.
+Node scale selector. Dagre (`dagre`) computes hierarchical layout; nodes/edges render as hand-rolled SVG (no ReactFlow). Preserves user drag positions on data refresh.
 
 ## Key Patterns
 
@@ -227,12 +243,16 @@ Node scale selector (Small 0.85x / Medium 1x / Large 1.2x). Dagre for hierarchic
 # Multi-stage: node:20-alpine, output: standalone
 # Build args: NEXT_PUBLIC_LATTICE_API, NEXT_PUBLIC_APP_VERSION
 # Runs as nextjs user (UID 1001), port 3000
-# Healthcheck: curl /api/health
+# Healthcheck: wget /api/health
 ```
+
+Deploy target: CI (`.github/workflows/build-and-deploy.yml`) builds and pushes the image to
+`registry.appleby.cloud/lattice-web:latest` (Keyring-injected creds), run via Lattice/Portainer —
+NOT Vercel. See `AGENTS.md` for the full operations detail.
 
 ## Styling
 
-Tailwind v4 with CSS custom properties for theming. Dark and light mode supported via `.dark` class with `@custom-variant`. Colors defined as CSS variables in `globals.css` (background, surface, border, text, accent, destructive, success, warning). Font: Geist Sans + Geist Mono.
+Tailwind v4 with CSS custom properties for theming. Dark-default (dark tokens on `:root`); light via `.dark`-absence with `@custom-variant dark (&:where(.dark, .dark *))` and `@theme inline` token mapping. Colors defined as CSS variables in `globals.css` (background, surface, border, text, accent, destructive, success, warning). Fonts: Inter Tight + JetBrains Mono (via `next/font/google`).
 
 Responsive breakpoints:
 - Default: 6-column KPI row, desktop sidebar
