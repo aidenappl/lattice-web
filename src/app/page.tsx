@@ -17,6 +17,7 @@ import {
 import { fetchStacks, selectStackNameMap } from "@/store/slices/stacksSlice";
 import { usePoll } from "@/hooks/usePoll";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { TopologyBoard } from "@/components/topology/TopologyBoard";
 import { DashboardKPIRow } from "@/components/dashboard/DashboardKPIRow";
 import { EventStream } from "@/components/dashboard/EventStream";
@@ -309,6 +310,10 @@ export default function DashboardPage() {
   const netTimestamps = netH.timestamps;
   const containerTimestamps = containerH.timestamps;
 
+  // Narrow layout stacks topology over the event stream; wide uses a split.
+  // Matches the ≤1200px CSS breakpoint so only one instance is ever mounted.
+  const isNarrow = useMediaQuery("(max-width: 1200px)");
+
   return (
     <div className="dash-page">
       {/* Health anomaly banner */}
@@ -333,35 +338,38 @@ export default function DashboardPage() {
         containerTimestamps={containerTimestamps}
       />
 
-      {/* Topology + Event Stream (resizable) */}
-      <div className="dash-topology-split">
-        <ResizableSplit
-          leftMin={400}
-          rightMin={260}
-          defaultRightWidth={360}
-          storageKey="lattice-dash-topo-split"
-          height={540}
-          left={
-            <div
-              className="panel"
-              style={{ height: "100%", overflow: "hidden" }}
-            >
-              <TopologyBoard />
-            </div>
-          }
-          right={<EventStream />}
-        />
-      </div>
-
-      {/* Mobile: stacked topology + events */}
-      <div className="dash-topology-stacked">
-        <div className="panel" style={{ height: 360, overflow: "hidden" }}>
-          <TopologyBoard />
+      {/* Topology + Event Stream — one instance, reflowed by breakpoint.
+          Rendered conditionally (not CSS-toggled) so the heavy TopologyBoard +
+          EventStream WebSocket consumers don't mount twice. */}
+      {isNarrow ? (
+        <div className="dash-topology-stacked">
+          <div className="panel" style={{ height: 360, overflow: "hidden" }}>
+            <TopologyBoard />
+          </div>
+          <div style={{ height: 300 }}>
+            <EventStream />
+          </div>
         </div>
-        <div style={{ height: 300 }}>
-          <EventStream />
+      ) : (
+        <div className="dash-topology-split">
+          <ResizableSplit
+            leftMin={400}
+            rightMin={260}
+            defaultRightWidth={360}
+            storageKey="lattice-dash-topo-split"
+            height={540}
+            left={
+              <div
+                className="panel"
+                style={{ height: "100%", overflow: "hidden" }}
+              >
+                <TopologyBoard />
+              </div>
+            }
+            right={<EventStream />}
+          />
         </div>
-      </div>
+      )}
 
       {/* Deployment Timeline + Fleet Resources + Activity */}
       <div className="dash-bottom-grid">
