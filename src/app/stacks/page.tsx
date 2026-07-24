@@ -21,6 +21,9 @@ export default function StacksPage() {
   const [loading, setLoading] = useState(true);
   const importRef = useRef<HTMLInputElement>(null);
 
+  // Debounce socket-driven refreshes (many events arrive per deploy)
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const load = useCallback(async () => {
     const [sRes, cRes, wRes] = await Promise.all([
       reqGetStacks(),
@@ -32,12 +35,24 @@ export default function StacksPage() {
     if (wRes.success) setWorkers(wRes.data ?? []);
   }, []);
 
+  // Use a ref for load to avoid stale closure in scheduleRefresh
+  const loadRef = useRef(load);
+  loadRef.current = load;
+
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => loadRef.current(), 1500);
+  }, []);
+
   useEffect(() => {
     document.title = "Lattice - Stacks";
   }, []);
 
   useEffect(() => {
     load().then(() => setLoading(false));
+    return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
   }, [load]);
 
   const handleSocketEvent = useCallback(
@@ -47,10 +62,10 @@ export default function StacksPage() {
         event.type === "container_sync" ||
         event.type === "deployment_progress"
       ) {
-        load();
+        scheduleRefresh();
       }
     },
-    [load],
+    [scheduleRefresh],
   );
   useAdminSocket(handleSocketEvent);
 
