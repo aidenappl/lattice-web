@@ -134,8 +134,8 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 | `/deployments` | `deployments/page.tsx` | Deployment history |
 | `/deployments/[id]` | `deployments/[id]/page.tsx` | Deployment detail + live logs, approve/rollback |
 | `/databases` | `databases/page.tsx` | Managed database instance list |
-| `/databases/new` | `databases/new/page.tsx` | Provision a database instance |
-| `/databases/[id]` | `databases/[id]/page.tsx` | DB instance detail: credentials, snapshots, start/stop/restart/remove, restore |
+| `/databases/new` | `databases/new/page.tsx` | Provision a database instance (live host-port availability against the chosen worker) |
+| `/databases/[id]` | `databases/[id]/page.tsx` | DB instance detail: overview/snapshots/logs/history/settings tabs, failure banner, SQL console, credentials, start/stop/restart/remove, restore |
 | `/networks` | `networks/page.tsx` | Compose networks / port-mapping overview across workers |
 | `/registries` | `registries/page.tsx` | Docker registry config, test, repo/tag browsing |
 | `/env-vars` | `env-vars/page.tsx` | Global (cross-stack) environment variables, incl. secrets |
@@ -165,7 +165,7 @@ The `data<T>` you receive is `lattice-api`'s `data` field, already unwrapped by 
 | `workers.service.ts` | Workers | `reqGetWorkers`/`reqGetWorker`/`reqCreateWorker`/`reqUpdateWorker`/`reqDeleteWorker`, tokens CRUD, `reqGetWorkerMetrics`, `reqRebootWorker`, `reqUpgradeRunner`, `reqStopAllContainers`/`reqStartAllContainers`, `reqGetWorkerContainerStats`, `reqForceRemoveContainer` |
 | `stacks.service.ts` | Stacks + containers | stack CRUD, `reqDeployStack`, `reqGetAllContainers`/`reqGetContainer`/`reqGetContainers`, container CRUD, `reqGetContainerLogs`/`reqGetLifecycleLogs`/`reqGetContainerMetrics`, 8 lifecycle actions (`reqStart/Stop/Kill/Restart/Pause/Unpause/Remove/RecreateContainer`), `reqImportCompose`/`reqUpdateCompose`/`reqSyncCompose`, stack start/stop/restart, `reqExportStack`/`reqImportStackExport`, deploy-token CRUD |
 | `deployments.service.ts` | Deployments | `reqGetDeployments`/`reqGetDeployment`/`reqGetDeploymentLogs`, `reqApproveDeployment`, `reqRollbackDeployment` |
-| `databases.service.ts` | Managed DBs | instance CRUD, `reqDatabaseAction("start"\|"stop"\|"restart"\|"remove")`, `reqGetDatabaseCredentials`, snapshot list/create/restore/delete |
+| `databases.service.ts` | Managed DBs | instance CRUD, `reqDatabaseAction("start"\|"stop"\|"restart"\|"remove")`, `reqGetDatabaseConnection`, `reqRevealDatabaseCredentials` (audited — prefer over the deprecated `reqGetDatabaseCredentials`), `reqGetDatabaseEvents`/`reqGetDatabaseLogs`/`reqGetDatabaseLifecycleLogs`, `reqOpenDatabaseConsole`, `reqGetWorkerPortAvailability`/`reqCheckWorkerPort`, snapshot list/create/restore/delete |
 | `registries.service.ts` | Registries | registry CRUD, `reqTestRegistry`/`reqTestRegistryInline`, `reqListRegistryRepos`/`reqListRegistryTags` |
 | `networks.service.ts` | Networks | `reqListAllNetworks`, per-worker list/create/delete, `reqDeleteNetworkByID` |
 | `volumes.service.ts` | Volumes | per-worker `reqListVolumes`/`reqCreateVolume`/`reqDeleteVolume` |
@@ -338,6 +338,26 @@ Five reducers registered in `store/index.ts` under `{ auth, overview, workers, s
 | `stacks` | `list`, `current`, `loading`, `error` | `fetchStacks`, `fetchStack` | Stack list + focused stack (has a `createSelector` memoised selector) |
 | `containers` | `list`, `stackContainers`, `loading`, `error` | `fetchAllContainers`, `fetchContainersByStack` | Global container list + per-stack containers |
 
+### Managed database screens
+
+`DatabaseStatus` and `DatabaseHealth` in `types/database.types.ts` mirror the Go
+`structs.DatabaseStatus`/`DatabaseHealth` enums — **keep them in step**, and remember that any new
+status token also needs an entry in `components/ui/badge.tsx`, or it silently renders as an
+unstyled grey badge.
+
+An instance in `error` or `degraded` always carries `last_error` (`code`, `message`, `occurred_at`,
+`retryable`). The detail page renders it as a banner with links into the Logs and History tabs; the
+list page shows it as a hover-titled warning icon.
+
+Logs, lifecycle messages and the console all address the container by **name and worker**, not by
+`containers.id` — managed databases have no row in `containers`. The console is authorised
+server-side first (`reqOpenDatabaseConsole`), which returns the SQL client argv; the shared
+`<Terminal>` component takes that as its `cmd` prop and the browser never handles credentials.
+
+The create form deliberately does **not** pre-fill a host port: leaving it blank has the control
+plane allocate a free one, which is why a second database on the same worker no longer collides on
+3306.
+
 Screens that don't map cleanly to a slice (databases, registries, networks, templates, backups,
 deployments, env-vars, webhooks, SSO/SMTP, API tokens) fetch **directly via services into local
 component state** — Redux is reserved for the shared, frequently-re-read fleet data.
@@ -434,6 +454,14 @@ dev check          # optional but recommended: eslint + prettier --check + tsc -
 - If you changed a **slice** or a **`lib/` helper**, its sibling `*.test.ts` must still pass (extend
   it if you changed behaviour).
 - **Never report work complete on a failing build.**
+- CI enforces the first two: `build-and-deploy.yml` has a **`test` job** (`npx tsc --noEmit` +
+  `npm test`) that `build-and-push` depends on, so a type error or a failing test blocks the image
+  entirely — nothing is published.
+- **Commit messages reach the shell.** The `resolve-version` job reads the message to detect
+  `[release-*]`. It takes it via a `env: MSG:` binding *on purpose*: interpolated inline as
+  `MSG="${{ github.event.head_commit.message }}"`, a message containing a quote or paren is pasted
+  in as shell source and the job dies at `resolve-version` with exit 127 — no image, no release, and
+  a failure that looks nothing like its cause. Never move that back inline.
 
 ## Keeping this file updated
 
