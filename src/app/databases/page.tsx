@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCircleExclamation } from "@fortawesome/free-solid-svg-icons";
 import type { DatabaseInstance, DatabaseEngine, Worker } from "@/types";
 import {
   reqGetDatabaseInstances,
@@ -227,14 +229,24 @@ export default function DatabasesPage() {
                         {db.port}
                       </td>
                       <td>
-                        <StatusBadge status={db.status} />
+                        <div className="flex items-center gap-1.5">
+                          <StatusBadge status={db.status} />
+                          {db.last_error && (
+                            <span
+                              title={`${db.last_error.code}: ${db.last_error.message}`}
+                              className="text-[#ef4444] cursor-help"
+                            >
+                              <FontAwesomeIcon icon={faCircleExclamation} className="h-3 w-3" />
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="hidden lg:table-cell">
                         <StatusBadge status={db.health_status} />
                       </td>
                       {canEdit(user) && (
                         <td className="text-right space-x-1">
-                          {db.status === "stopped" || db.status === "error" ? (
+                          {db.status === "stopped" || db.status === "error" || db.status === "degraded" ? (
                             <Button
                               variant="ghost"
                               size="sm"

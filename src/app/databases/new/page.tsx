@@ -13,8 +13,18 @@ import {
   faCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import toast from "react-hot-toast";
-import type { Worker, BackupDestination, DatabaseEngine } from "@/types";
-import { reqCreateDatabaseInstance } from "@/services/databases.service";
+import type {
+  Worker,
+  BackupDestination,
+  DatabaseEngine,
+  PortAvailability,
+  SinglePortAvailability,
+} from "@/types";
+import {
+  reqCheckWorkerPort,
+  reqCreateDatabaseInstance,
+  reqGetWorkerPortAvailability,
+} from "@/services/databases.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { reqGetBackupDestinations } from "@/services/backup-destinations.service";
 import { Button } from "@/components/ui/button";
@@ -127,9 +137,50 @@ export default function NewDatabasePage() {
 
   const [submitting, setSubmitting] = useState(false);
 
+  // Port availability for the chosen worker. Surfacing a collision here is the
+  // difference between a clear message before submitting and an instance that
+  // fails to provision for a reason nothing explains.
+  const [portAvailability, setPortAvailability] = useState<PortAvailability | null>(null);
+  const [portCheck, setPortCheck] = useState<SinglePortAvailability | null>(null);
+
   useEffect(() => {
     document.title = "Lattice - New Database";
   }, []);
+
+  // Reload the claimed-port set whenever the target worker changes.
+  useEffect(() => {
+    if (!workerId) {
+      setPortAvailability(null);
+      return;
+    }
+    let cancelled = false;
+    reqGetWorkerPortAvailability(workerId as number).then((res) => {
+      if (cancelled) return;
+      setPortAvailability(res.success ? res.data : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [workerId]);
+
+  // Debounced check of the specific port the user typed.
+  useEffect(() => {
+    if (!workerId || !port) {
+      setPortCheck(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      reqCheckWorkerPort(workerId as number, port as number).then((res) => {
+        if (cancelled) return;
+        setPortCheck(res.success ? res.data : null);
+      });
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [workerId, port]);
 
   useEffect(() => {
     Promise.all([reqGetWorkers(), reqGetBackupDestinations()]).then(
@@ -161,8 +212,12 @@ export default function NewDatabasePage() {
       if (!engineVersion || engineVersion === currentEngine?.defaultVersion) {
         setEngineVersion(option.defaultVersion);
       }
-      if (!port || port === currentEngine?.defaultPort) {
-        setPort(option.defaultPort);
+      // Deliberately does not pre-fill the port. Defaulting to 3306/5432 means
+      // the second database on any worker collides, and the control plane can
+      // pick a free port from its managed range far more reliably than a
+      // hardcoded default can.
+      if (port === currentEngine?.defaultPort) {
+        setPort("");
       }
     },
     [engine, engineVersion, port],
@@ -386,14 +441,42 @@ export default function NewDatabasePage() {
                       id="db-port"
                       label="Host Port"
                       type="number"
-                      placeholder={String(selectedEngine?.defaultPort)}
+                      placeholder={portAvailability?.suggested_port ? String(portAvailability.suggested_port) : "auto"}
                       value={port}
                       onChange={(e) => setPort(e.target.value ? Number(e.target.value) : "")}
                     />
                     <div className="sm:col-span-2 flex items-end pb-2">
-                      <p className="text-[11px] text-muted">
-                        The port exposed on the worker host. Default: {selectedEngine?.defaultPort}
-                      </p>
+                      <div className="text-[11px] space-y-1">
+                        {!workerId ? (
+                          <p className="text-muted">
+                            Select a worker to check which host ports are free.
+                          </p>
+                        ) : portCheck && !portCheck.available ? (
+                          <p className="text-[#ef4444]">
+                            Port {portCheck.port} is already used on this worker by{" "}
+                            {portCheck.conflict?.kind}{" "}
+                            <span className="font-mono">{portCheck.conflict?.name}</span>. Pick
+                            another, or leave this blank to be assigned one automatically.
+                          </p>
+                        ) : portCheck?.available ? (
+                          <p className="text-[#22c55e]">Port {portCheck.port} is free on this worker.</p>
+                        ) : (
+                          <p className="text-muted">
+                            Leave blank to be assigned a free port automatically
+                            {portAvailability?.suggested_port
+                              ? ` (next available: ${portAvailability.suggested_port})`
+                              : ""}
+                            .
+                          </p>
+                        )}
+                        {portAvailability && portAvailability.claimed.length > 0 && (
+                          <p className="text-muted">
+                            {portAvailability.claimed.length} port
+                            {portAvailability.claimed.length === 1 ? "" : "s"} already claimed on
+                            this worker.
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -54,6 +54,9 @@ type StatusType =
   | "restarting"
   | "completed"
   | "uploading"
+  | "provisioning"
+  | "degraded"
+  | "deleting"
   | "none";
 
 const statusVariantMap: Record<
@@ -78,6 +81,10 @@ const statusVariantMap: Record<
   starting: "warning",
   restarting: "error",
   uploading: "warning",
+  provisioning: "warning",
+  // Degraded is impaired-but-present, not dead — warning, not error.
+  degraded: "warning",
+  deleting: "warning",
   stopped: "default",
   maintenance: "default",
   rolled_back: "default",
@@ -104,6 +111,9 @@ const statusDotMap: Record<StatusType, string> = {
   starting: "bg-[#eab308]",
   restarting: "bg-[#ef4444]",
   uploading: "bg-[#eab308]",
+  provisioning: "bg-[#eab308]",
+  degraded: "bg-[#f97316]",
+  deleting: "bg-[#eab308]",
   stopped: "bg-[#888888]",
   maintenance: "bg-[#888888]",
   rolled_back: "bg-[#888888]",

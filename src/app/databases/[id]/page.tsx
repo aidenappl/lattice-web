@@ -15,7 +15,8 @@ import {
   faEyeSlash,
   faCamera,
   faClockRotateLeft,
-
+  faTerminal,
+  faCircleExclamation,
   faFloppyDisk,
   faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
@@ -24,12 +25,20 @@ import type {
   DatabaseInstance,
   DatabaseCredentials,
   DatabaseSnapshot,
+  DatabaseInstanceEvent,
+  DatabaseConsoleSession,
   BackupDestination,
+  ContainerLog,
+  LifecycleLog,
 } from "@/types";
 import {
   reqGetDatabaseInstance,
   reqDatabaseAction,
-  reqGetDatabaseCredentials,
+  reqRevealDatabaseCredentials,
+  reqGetDatabaseEvents,
+  reqGetDatabaseLogs,
+  reqGetDatabaseLifecycleLogs,
+  reqOpenDatabaseConsole,
   reqGetDatabaseSnapshots,
   reqCreateDatabaseSnapshot,
   reqRestoreDatabaseSnapshot,
@@ -42,6 +51,13 @@ import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/badge";
+import { Terminal } from "@/components/ui/terminal";
+import {
+  LogViewer,
+  sortLogs,
+  downloadLogsAsTxt,
+  type LogLimit,
+} from "@/components/ui/log-viewer";
 import { formatDate, formatBytes, timeAgo, canEdit } from "@/lib/utils";
 import { useUser } from "@/store/hooks";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
@@ -54,7 +70,40 @@ const ENGINE_LABELS: Record<string, string> = {
   mariadb: "MariaDB",
 };
 
-type DatabaseTab = "overview" | "snapshots" | "logs" | "settings";
+/** Badge colour for an event whose row carries no status of its own. */
+const EVENT_KIND_STATUS: Record<string, string> = {
+  requested: "pending",
+  accepted: "pending",
+  transition: "active",
+  health: "healthy",
+  failed: "error",
+  reconciled: "active",
+  console_open: "active",
+  reveal: "active",
+};
+
+/**
+ * Folds worker lifecycle messages into the container log stream so provisioning
+ * progress and container output read as one timeline. Lifecycle entries are
+ * flagged so the viewer can distinguish them.
+ */
+function mergeLifecycleIntoLogs(
+  logs: ContainerLog[],
+  lifecycle: LifecycleLog[],
+): ContainerLog[] {
+  const asLogs: ContainerLog[] = lifecycle.map((l) => ({
+    id: l.id,
+    container_id: l.container_id,
+    container_name: l.container_name,
+    worker_id: l.worker_id,
+    stream: "lifecycle",
+    message: `[${l.event}] ${l.message}`,
+    recorded_at: l.recorded_at,
+  })) as unknown as ContainerLog[];
+  return sortLogs([...logs, ...asLogs]);
+}
+
+type DatabaseTab = "overview" | "snapshots" | "logs" | "events" | "settings";
 
 export default function DatabaseDetailPage() {
   const params = useParams();
@@ -66,6 +115,20 @@ export default function DatabaseDetailPage() {
   const [db, setDb] = useState<DatabaseInstance | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<DatabaseTab>("overview");
+
+  // Observability: container output, worker-emitted lifecycle messages, and the
+  // control plane's own transition history. These were all being recorded
+  // already but had no read path addressed by database instance.
+  const [logs, setLogs] = useState<ContainerLog[]>([]);
+  const [lifecycleLogs, setLifecycleLogs] = useState<LifecycleLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logLimit, setLogLimit] = useState<LogLimit>(500);
+  const [events, setEvents] = useState<DatabaseInstanceEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+
+  // Console session, authorised server-side before the terminal opens.
+  const [consoleSession, setConsoleSession] = useState<DatabaseConsoleSession | null>(null);
+  const [consoleLoading, setConsoleLoading] = useState(false);
 
   // Action state
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -143,6 +206,39 @@ export default function DatabaseDetailPage() {
   useEffect(() => {
     if (activeTab === "settings") loadBackupDestinations();
   }, [activeTab, loadBackupDestinations]);
+
+  const loadLogs = useCallback(async () => {
+    setLogsLoading(true);
+    const [logRes, lifecycleRes] = await Promise.all([
+      reqGetDatabaseLogs(id, { limit: logLimit }),
+      reqGetDatabaseLifecycleLogs(id, { limit: 200 }),
+    ]);
+    if (!mountedRef.current) return;
+    if (logRes.success) setLogs(sortLogs([...(logRes.data ?? [])]));
+    if (lifecycleRes.success) setLifecycleLogs(lifecycleRes.data ?? []);
+    setLogsLoading(false);
+  }, [id, logLimit]);
+
+  const loadEvents = useCallback(async () => {
+    setEventsLoading(true);
+    const res = await reqGetDatabaseEvents(id, { limit: 200 });
+    if (!mountedRef.current) return;
+    if (res.success) setEvents(res.data ?? []);
+    setEventsLoading(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (activeTab === "logs") loadLogs();
+  }, [activeTab, loadLogs]);
+
+  const mergedLogs = useMemo(
+    () => mergeLifecycleIntoLogs(logs, lifecycleLogs),
+    [logs, lifecycleLogs],
+  );
+
+  useEffect(() => {
+    if (activeTab === "events") loadEvents();
+  }, [activeTab, loadEvents]);
 
   // Sync settings form when db loads
   useEffect(() => {
@@ -249,7 +345,9 @@ export default function DatabaseDetailPage() {
       return;
     }
     setCredentialsLoading(true);
-    const res = await reqGetDatabaseCredentials(id);
+    // Root is deliberately not requested here — the application user is what
+    // you want for routine access, and every reveal is audited server-side.
+    const res = await reqRevealDatabaseCredentials(id, false);
     if (res.success) {
       setCredentials(res.data);
       setShowPassword(true);
@@ -257,6 +355,19 @@ export default function DatabaseDetailPage() {
       toast.error(res.error_message ?? "Failed to load credentials");
     }
     setCredentialsLoading(false);
+  };
+
+  // ─── Console ─────────────────────────────────────────────────────────────────
+
+  const handleOpenConsole = async () => {
+    setConsoleLoading(true);
+    const res = await reqOpenDatabaseConsole(id);
+    if (res.success) {
+      setConsoleSession(res.data);
+    } else {
+      toast.error(res.error_message ?? "Failed to open console");
+    }
+    setConsoleLoading(false);
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -494,6 +605,16 @@ export default function DatabaseDetailPage() {
                 Restart
               </Button>
               <Button
+                variant="secondary"
+                size="sm"
+                disabled={!isRunning || !!actionLoading}
+                loading={consoleLoading}
+                onClick={handleOpenConsole}
+              >
+                <FontAwesomeIcon icon={faTerminal} className="h-3 w-3 mr-1.5" />
+                Console
+              </Button>
+              <Button
                 variant="destructive"
                 size="sm"
                 disabled={!!actionLoading}
@@ -508,10 +629,57 @@ export default function DatabaseDetailPage() {
         </div>
       </div>
 
+      {/* Failure detail. An instance in error or degraded always carries a
+          reason — surfacing it here is the difference between "it broke" and
+          knowing what to do about it. */}
+      {db.last_error && (db.status === "error" || db.status === "degraded") && (
+        <div className="panel border-l-2 border-l-[#ef4444] p-4">
+          <div className="flex items-start gap-3">
+            <FontAwesomeIcon
+              icon={faCircleExclamation}
+              className="h-4 w-4 text-[#ef4444] mt-0.5 shrink-0"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-medium text-primary">
+                  {db.status === "degraded" ? "Database is impaired" : "Database failed"}
+                </h3>
+                <code className="font-mono text-[11px] text-secondary bg-surface-elevated px-1.5 py-0.5 rounded">
+                  {db.last_error.code}
+                </code>
+                {db.last_error.retryable && (
+                  <span className="text-[11px] text-muted">retryable</span>
+                )}
+              </div>
+              <p className="text-sm text-secondary mt-1 break-words">
+                {db.last_error.message}
+              </p>
+              <div className="flex items-center gap-3 mt-2">
+                <span className="text-[11px] text-muted">
+                  {timeAgo(db.last_error.occurred_at)}
+                </span>
+                <button
+                  onClick={() => setActiveTab("logs")}
+                  className="text-[11px] text-info hover:underline"
+                >
+                  View logs
+                </button>
+                <button
+                  onClick={() => setActiveTab("events")}
+                  className="text-[11px] text-info hover:underline"
+                >
+                  View history
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tab navigation */}
       <div className="panel">
         <div className="tabs-bar !px-4 !gap-0" role="tablist">
-          {(["overview", "snapshots", "logs", "settings"] as DatabaseTab[]).map((t) => (
+          {(["overview", "snapshots", "logs", "events", "settings"] as DatabaseTab[]).map((t) => (
             <button
               key={t}
               role="tab"
@@ -526,7 +694,9 @@ export default function DatabaseDetailPage() {
                   ? "Snapshots"
                   : t === "logs"
                     ? "Logs"
-                    : "Settings"}
+                    : t === "events"
+                      ? "History"
+                      : "Settings"}
             </button>
           ))}
         </div>
@@ -816,21 +986,86 @@ export default function DatabaseDetailPage() {
         {/* ─── Logs Tab ───────────────────────────────────────────────────── */}
         {activeTab === "logs" && (
           <div className="p-4 space-y-3">
-            <h3 className="text-sm font-medium text-primary">Container Logs</h3>
-            <p className="text-sm text-muted">
-              View container logs for{" "}
-              <code className="font-mono text-xs text-secondary bg-surface-elevated px-1.5 py-0.5 rounded">
-                {db.container_name}
-              </code>{" "}
-              on the containers page.
-            </p>
-            <Link
-              href={`/containers?search=${encodeURIComponent(db.container_name)}`}
-              className="inline-flex items-center gap-1.5 text-sm text-info hover:underline"
-            >
-              View container logs
-              <FontAwesomeIcon icon={faChevronRight} className="h-3 w-3" />
-            </Link>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-primary">Container Logs</h3>
+                <p className="text-[11px] text-muted mt-0.5">
+                  <code className="font-mono text-secondary">{db.container_name}</code> on worker{" "}
+                  {db.worker_id}
+                </p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={loadLogs} loading={logsLoading}>
+                <FontAwesomeIcon icon={faRotateRight} className="h-3 w-3 mr-1.5" />
+                Refresh
+              </Button>
+            </div>
+            <LogViewer
+              logs={mergedLogs}
+              logLimit={logLimit}
+              onLimitChange={setLogLimit}
+              onDownloadVisible={() => downloadLogsAsTxt(mergedLogs, `${db.name}-logs.txt`)}
+              onDownloadLastRun={() => {
+                // Everything since the container last started — the useful
+                // window when diagnosing a database that came up wrong.
+                const since = db.started_at ? new Date(db.started_at).getTime() : 0;
+                downloadLogsAsTxt(
+                  mergedLogs.filter((l) => new Date(l.recorded_at).getTime() >= since),
+                  `${db.name}-last-run.txt`,
+                );
+              }}
+              onDownloadAll={async () => {
+                const res = await reqGetDatabaseLogs(id, { limit: 1000 });
+                const all = res.success ? sortLogs([...(res.data ?? [])]) : logs;
+                downloadLogsAsTxt(
+                  mergeLifecycleIntoLogs(all, lifecycleLogs),
+                  `${db.name}-logs-all.txt`,
+                );
+              }}
+              loading={logsLoading}
+            />
+          </div>
+        )}
+
+        {/* ─── Events Tab ─────────────────────────────────────────────────── */}
+        {activeTab === "events" && (
+          <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-primary">Lifecycle History</h3>
+                <p className="text-[11px] text-muted mt-0.5">
+                  Every state change, failure and access, newest first — this is what explains how
+                  the instance reached its current state.
+                </p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={loadEvents} loading={eventsLoading}>
+                <FontAwesomeIcon icon={faRotateRight} className="h-3 w-3 mr-1.5" />
+                Refresh
+              </Button>
+            </div>
+
+            {events.length === 0 ? (
+              <p className="text-sm text-muted py-6 text-center">
+                {eventsLoading ? "Loading history…" : "No events recorded yet."}
+              </p>
+            ) : (
+              <div className="divide-y divide-border-subtle">
+                {events.map((ev) => (
+                  <div key={ev.id} className="py-2.5 flex items-start gap-3">
+                    <span className="shrink-0 mt-0.5">
+                      <StatusBadge status={ev.status ?? EVENT_KIND_STATUS[ev.kind] ?? "none"} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-primary break-words">{ev.message}</p>
+                      <p className="text-[11px] text-muted mt-0.5">
+                        {ev.kind}
+                        {ev.code ? ` · ${ev.code}` : ""}
+                        {ev.actor ? ` · ${ev.actor}` : ""} · {formatDate(ev.recorded_at)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -972,6 +1207,35 @@ export default function DatabaseDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Interactive console. The session is authorised server-side first —
+          the terminal only ever receives a container name, a worker and the
+          command to run, never credentials. */}
+      {consoleSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-5xl">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-white/70 font-mono">
+                {ENGINE_LABELS[consoleSession.engine] ?? consoleSession.engine} ·{" "}
+                {consoleSession.database_name} · {consoleSession.container_name}
+              </p>
+              <button
+                onClick={() => setConsoleSession(null)}
+                className="text-xs text-white/70 hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+            <Terminal
+              containerId={`db-${db.id}`}
+              containerName={consoleSession.container_name}
+              workerId={consoleSession.worker_id}
+              cmd={consoleSession.cmd}
+              onClose={() => setConsoleSession(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

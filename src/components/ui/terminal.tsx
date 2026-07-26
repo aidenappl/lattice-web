@@ -12,9 +12,16 @@ import {
 } from "@/hooks/useAdminSocket";
 
 type TerminalProps = {
-  containerId: number;
+  /** Only used to build a unique command_id — never sent to the runner. */
+  containerId: number | string;
   containerName: string;
   workerId: number;
+  /**
+   * Command to exec. Omit for an interactive shell (`/bin/sh`); managed
+   * databases pass their engine's SQL client so the session opens straight
+   * into a query prompt.
+   */
+  cmd?: string[];
   onClose: () => void;
 };
 
@@ -22,6 +29,7 @@ export function Terminal({
   containerId,
   containerName,
   workerId,
+  cmd,
   onClose,
 }: TerminalProps) {
   const termRef = useRef<HTMLDivElement>(null);
@@ -118,6 +126,7 @@ export function Terminal({
       payload: {
         worker_id: workerId,
         container_name: containerName,
+        ...(cmd && cmd.length > 0 ? { cmd } : {}),
       },
     });
 
