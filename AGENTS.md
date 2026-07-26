@@ -299,6 +299,16 @@ provider it configures under `/auth/sso/*`).
      button linking to `login_url` (validated to start with `/` to prevent open-redirect /
      `javascript:` injection). SSO error codes returned on the redirect (`sso_denied`,
      `sso_no_account`, `sso_state_expired`, …) are mapped to friendly messages.
+  - The page uses the **shared Appleby Cloud login layout** — the same structure as
+    `forta-login`, `monitor-web` and `openbucket-web`: full-screen centred `<main>`, a brand
+    row (40px logo tile + product name + hairline + "Appleby Cloud"), a bordered card holding
+    "Sign in to continue" → labelled fields → primary button → `or continue with` divider →
+    SSO button, and a `© <year> Appleby Cloud` footer. Colours come from Lattice's own tokens
+    (`--brand` green, `--surface-*`, `--border-*`); **the structure and spacing must not
+    diverge** — change it in all four repos or not at all. The page-local `Field`,
+    `ErrorAlert`, `Divider` and `InlineLoading` helpers exist so the login form matches that
+    shared shape rather than the app-wide `ui/input` + `ui/alert` house style (uppercase
+    labels, dot-marker alerts); don't "consolidate" them back.
 - **Session identity** is `reqGetSelf` → `/auth/self`, returning a `User`
   (`auth_type: "oauth" | "local" | "sso"`, `role`).
 - **CSRF:** for `POST`/`PUT`/`DELETE`, `executeRequest` reads the `lattice-csrf` cookie and sends

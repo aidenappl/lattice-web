@@ -2,11 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { reqLogin } from "@/services/auth.service";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Alert } from "@/components/ui/alert";
 import { Logo } from "@/components/ui/logo";
-import { LoadingSpinner } from "@/components/ui/loading";
 
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 
@@ -24,7 +20,7 @@ export default function LoginPage() {
   const [ssoConfig, setSsoConfig] = useState<{ enabled: boolean; button_label: string; login_url: string } | null>(null);
 
   useEffect(() => {
-    document.title = "Lattice - Login";
+    document.title = "Sign in | Lattice";
   }, []);
 
   // Redirect to dashboard if already authenticated
@@ -119,84 +115,173 @@ export default function LoginPage() {
     setLoading(false);
   };
 
-  if (checking)
-    return (
-      <div className="login-page">
-        <div className="flex flex-col items-center gap-4">
-          <Logo size="md" />
-          <LoadingSpinner size="sm" />
-        </div>
-      </div>
-    );
+  const ssoHref = ssoConfig?.login_url?.startsWith("/")
+    ? `${API_URL}${ssoConfig.login_url}`
+    : "#";
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-          {/* Logo */}
-          <div className="flex items-center justify-center gap-3.5 mb-8">
-            <Logo size="md" />
-            <div className="flex flex-col leading-none">
-              <span className="page-title text-xl tracking-tight">
-                Lattice
-              </span>
-              <span className="text-xs text-muted font-medium">
-                Sign in to continue
-              </span>
+    <main className="min-h-screen flex flex-col items-center justify-center p-8 bg-background">
+      <div className="w-full max-w-sm flex flex-col items-center">
+        <div className="flex items-center gap-3 mb-6">
+          <Logo size="md" className="w-10 h-10 shadow-md rounded-xl" />
+          <span className="text-xl font-semibold tracking-tight text-primary">
+            Lattice
+          </span>
+          <span className="h-4 w-px bg-border-strong" />
+          <span className="text-sm text-muted">Appleby Cloud</span>
+        </div>
+
+        <div className="w-full bg-background-alt rounded-xl p-6 shadow-sm border border-border">
+          <p className="text-sm text-muted text-center mb-5">
+            Sign in to continue
+          </p>
+
+          {checking ? (
+            <InlineLoading message="Checking session…" />
+          ) : (
+            <div className="flex flex-col gap-5">
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                <Field
+                  id="email"
+                  label="Email"
+                  type="email"
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  value={email}
+                  onChange={setEmail}
+                />
+                <Field
+                  id="password"
+                  label="Password"
+                  type="password"
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={setPassword}
+                />
+
+                {error && <ErrorAlert message={error} />}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="cursor-pointer bg-brand text-black rounded-lg py-2.5 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[var(--brand-muted)] transition-colors"
+                >
+                  {loading ? "Signing in…" : "Sign in"}
+                </button>
+              </form>
+
+              {ssoConfig?.enabled && (
+                <>
+                  <Divider />
+                  {/* Validate login_url starts with / to prevent javascript: or open redirect */}
+                  <a
+                    href={ssoHref}
+                    className="cursor-pointer w-full flex items-center justify-center gap-2.5 border border-border-strong rounded-lg py-2.5 text-sm font-medium text-primary hover:bg-surface-elevated hover:border-border-emphasis transition-all"
+                  >
+                    <SSOIcon />
+                    {ssoConfig.button_label}
+                  </a>
+                </>
+              )}
             </div>
-          </div>
-
-          {/* Login Form */}
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <Input
-              id="email"
-              label="Email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <Input
-              id="password"
-              label="Password"
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-
-            {error && <Alert variant="error">{error}</Alert>}
-
-            <Button
-              type="submit"
-              size="lg"
-              className="w-full mt-2"
-              disabled={loading}
-            >
-              {loading ? "Signing in..." : "Sign In"}
-            </Button>
-          </form>
-
-          {ssoConfig?.enabled && (
-            <>
-              {/* Divider */}
-              <div className="flex items-center gap-3 my-6">
-                <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted">or</span>
-                <div className="flex-1 h-px bg-border" />
-              </div>
-
-              {/* SSO — validate login_url starts with / to prevent javascript: or open redirect */}
-              <a
-                href={ssoConfig.login_url?.startsWith("/") ? `${API_URL}${ssoConfig.login_url}` : "#"}
-                className="btn btn-secondary w-full justify-center !h-10"
-              >
-                {ssoConfig.button_label}
-              </a>
-            </>
           )}
+        </div>
       </div>
+
+      <footer className="absolute bottom-6 text-xs text-dimmed">
+        © {new Date().getFullYear()} Appleby Cloud
+      </footer>
+    </main>
+  );
+}
+
+// Sub-components
+
+function Field({
+  id,
+  label,
+  type,
+  placeholder,
+  autoComplete,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  type: string;
+  placeholder: string;
+  autoComplete: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm font-medium text-secondary">
+        {label}
+      </label>
+      <input
+        id={id}
+        type={type}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required
+        className="border border-border-strong bg-surface-elevated text-primary placeholder:text-muted rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent transition-shadow"
+      />
+    </div>
+  );
+}
+
+function ErrorAlert({ message }: { message: string }) {
+  return (
+    <div className="flex items-start gap-2 text-sm text-failed bg-[var(--failed-bg)] border border-[#ef4444]/20 rounded-lg p-3">
+      <svg
+        className="w-4 h-4 mt-0.5 shrink-0"
+        fill="currentColor"
+        viewBox="0 0 20 20"
+      >
+        <path
+          fillRule="evenodd"
+          d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+          clipRule="evenodd"
+        />
+      </svg>
+      <span>{message}</span>
+    </div>
+  );
+}
+
+function Divider() {
+  return (
+    <div className="flex items-center gap-3 my-4">
+      <div className="flex-1 h-px bg-border" />
+      <span className="text-xs text-dimmed uppercase tracking-wide">
+        or continue with
+      </span>
+      <div className="flex-1 h-px bg-border" />
+    </div>
+  );
+}
+
+function SSOIcon() {
+  return (
+    <svg className="w-4 h-4 text-brand" fill="currentColor" viewBox="0 0 20 20">
+      <path
+        fillRule="evenodd"
+        d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function InlineLoading({ message = "Loading…" }: { message?: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-8 gap-3">
+      <div className="w-5 h-5 border-2 border-border-strong border-t-brand rounded-full animate-spin" />
+      <p className="text-sm text-muted">{message}</p>
     </div>
   );
 }

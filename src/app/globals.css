@@ -1193,25 +1193,6 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Login ─────────────────────────────────────────────────────── */
-.login-page {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  background: var(--background);
-  position: relative;
-  overflow: hidden;
-}
-.login-card {
-  width: 400px;
-  padding: 40px 36px;
-  background: var(--background-alt);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  position: relative;
-  z-index: 1;
-}
-
 /* ── Segmented control ───────────────────────────────────────────── */
 .segmented {
   display: inline-flex;
@@ -1928,13 +1909,6 @@ html {
   }
   .event-ts {
     font-size: 10px;
-  }
-
-  /* Login */
-  .login-card {
-    width: calc(100vw - 32px);
-    max-width: 400px;
-    padding: 28px 24px;
   }
 
   /* Command palette */
