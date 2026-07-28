@@ -392,10 +392,26 @@ component state** — Redux is reserved for the shared, frequently-re-read fleet
 
 - **Deployment target: self-hosted Docker, NOT Vercel.** CI
   (`.github/workflows/build-and-deploy.yml`) builds a multi-stage image and pushes it to the private
-  registry (`registry.appleby.cloud/lattice-web:latest`), then Lattice/Portainer runs it. Version is
+  registry (`registry.appleby.cloud/lattice-web:latest`). Version is
   resolved from the commit (`[release-patch|minor|major]` tags cut a GitHub release; otherwise the
   short SHA), injected as `NEXT_PUBLIC_APP_VERSION`. Registry creds + `NEXT_PUBLIC_LATTICE_API` come
   from **Keyring** via `keyring-actions`.
+- **CI stops at the registry — it does NOT deploy.** Unlike every other web app in the ecosystem,
+  this repo has **no `Deploy to Lattice` step** and there is **no Lattice-managed container** for it
+  (it will not appear in `lattice_list_containers` / `lattice_search`). Do not "standardise" a deploy
+  trigger in here: there is no stack or deploy token for it to call.
+- **How it actually ships: Lattice self-update.** `lattice-web` is a service in the orchestrator's
+  own `docker-compose.yml` (alongside `lattice-api`, at `$DOCKER_COMPOSE_DIR`, i.e. `/opt/lattice`),
+  so it is part of the platform, not a workload the platform manages. Rolling it out means calling
+  `POST /admin/update/web` on `lattice-api` — `routers/HandleSelfUpdate.router.go:HandleUpdateWeb`,
+  which runs `docker compose pull <WEB_SERVICE_NAME>` then recreates the service. Three ways to
+  trigger it: the **Updates available banner** in this dashboard, the `lattice_update_web` MCP tool,
+  or the endpoint directly. `WEB_SERVICE_NAME` defaults to `lattice-web`.
+  So after a green CI run the new image sits in the registry until someone triggers that update —
+  a push alone changes nothing in production.
+  ⚠️ Production compose **must** use `image: registry.appleby.cloud/lattice-web:latest`, not
+  `build: ../lattice-web`; with `build:` the pull is a no-op and self-update silently does nothing
+  (see the comment at `lattice-api/docker-compose.yml:41-43`).
 - **Container:** `node:20-alpine`, two-stage build, `output: "standalone"`, non-root `nextjs`
   user (UID 1001), `EXPOSE 3000`, `PORT=3000`, `HOSTNAME=0.0.0.0`, `CMD ["node", "server.js"]` (the
   Next.js **standalone** `server.js`, distinct from the repo-root dev `server.js`).
