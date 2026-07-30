@@ -60,7 +60,12 @@ export default function DatabasesPage() {
   // Real-time updates
   const handleSocketEvent = useCallback(
     (event: AdminSocketEvent) => {
-      if (event.type === "db_status" || event.type === "db_health_status") {
+      if (
+        event.type === "db_status" ||
+        event.type === "db_health_status" ||
+        event.type === "db_instance_changed" ||
+        event.type === "db_instance_deleted"
+      ) {
         load();
       }
     },
@@ -101,6 +106,45 @@ export default function DatabasesPage() {
       }
     } catch {
       toast.error(`Failed to ${action} database`);
+    }
+  };
+
+  // Delete destroys the container and the data volume on the worker, and the
+  // record is only retired once the worker confirms — so the row is reloaded
+  // rather than dropped optimistically. Dropping it hid failed teardowns, which
+  // then reappeared on the next load with nothing explaining why.
+  const handleDelete = async (db: DatabaseInstance) => {
+    const confirmed = await showConfirm({
+      title: `Delete database "${db.name}"`,
+      message: `This destroys the container and the data volume ${db.volume_name} on worker ${db.worker_id}. Every table in "${db.database_name}" goes with it and cannot be recovered — only existing snapshots, which are kept.`,
+      confirmLabel: "Delete permanently",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+
+    try {
+      let res = await reqDeleteDatabaseInstance(db.id);
+
+      // 409: the worker is offline, so nothing can actually be destroyed.
+      if (!res.success && res.status === 409) {
+        const forceOk = await showConfirm({
+          title: `Worker ${db.worker_id} is offline`,
+          message: `The container and data volume cannot be destroyed while the worker is disconnected. Delete the record anyway? ${db.container_name} and ${db.volume_name} will be left on the worker and nothing in Lattice will point at them.`,
+          confirmLabel: "Delete record anyway",
+          variant: "danger",
+        });
+        if (!forceOk) return;
+        res = await reqDeleteDatabaseInstance(db.id, true);
+      }
+
+      if (res.success) {
+        toast.success(res.message ?? `Deleting database "${db.name}"`);
+        load();
+      } else {
+        toast.error(res.error_message || "Failed to delete database");
+      }
+    } catch {
+      toast.error("Failed to delete database");
     }
   };
 
@@ -280,26 +324,7 @@ export default function DatabasesPage() {
                           <Button
                             variant="destructive"
                             size="sm"
-                            onClick={async () => {
-                              const confirmed = await showConfirm({
-                                title: `Delete database "${db.name}"`,
-                                message: "This will permanently delete the database instance. This action cannot be undone.",
-                                confirmLabel: "Delete",
-                                variant: "danger",
-                              });
-                              if (!confirmed) return;
-                              try {
-                                const res = await reqDeleteDatabaseInstance(db.id);
-                                if (res.success) {
-                                  toast.success(`Database "${db.name}" deleted`);
-                                  setDatabases((prev) => prev.filter((d) => d.id !== db.id));
-                                } else {
-                                  toast.error(res.error_message || "Failed to delete database");
-                                }
-                              } catch {
-                                toast.error("Failed to delete database");
-                              }
-                            }}
+                            onClick={() => handleDelete(db)}
                           >
                             Delete
                           </Button>

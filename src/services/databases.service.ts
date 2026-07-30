@@ -65,12 +65,29 @@ export const reqUpdateDatabaseInstance = (
         data,
     });
 
-export const reqDeleteDatabaseInstance = (id: number) =>
+/**
+ * Destroy a database for good: the container *and* its data volume are removed
+ * on the worker, and the record is retired once the worker confirms. Async —
+ * the instance sits in `deleting` until then, and a failure leaves it visible in
+ * `error` rather than silently orphaning a full volume.
+ *
+ * Snapshots are never touched; they are the only recovery path afterwards.
+ *
+ * `force` is for a worker that is gone for good: it retires the record and
+ * abandons the container and volume on disk. Without it, deleting a database on
+ * a disconnected worker returns 409 rather than leaking resources.
+ */
+export const reqDeleteDatabaseInstance = (id: number, force = false) =>
     fetchApi<void>({
         method: "DELETE",
-        url: `/admin/database-instances/${id}`,
+        url: `/admin/database-instances/${id}${force ? "?force=true" : ""}`,
     });
 
+/**
+ * Lifecycle actions on the container only. `remove` destroys the container but
+ * preserves the data volume, so the database can be started again — it is not
+ * a delete. See reqDeleteDatabaseInstance for that.
+ */
 export const reqDatabaseAction = (id: number, action: "start" | "stop" | "restart" | "remove") =>
     fetchApi<void>({
         method: "POST",

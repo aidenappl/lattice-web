@@ -274,9 +274,17 @@ export default function DatabaseDetailPage() {
 
       if (
         event.type === "db_status" ||
-        event.type === "db_health_status"
+        event.type === "db_health_status" ||
+        event.type === "db_instance_changed"
       ) {
         loadDatabase();
+      }
+
+      // The worker finished destroying this instance while the page was open —
+      // there is nothing left to show.
+      if (event.type === "db_instance_deleted") {
+        toast.success("Database deleted");
+        router.push("/databases");
       }
 
       if (event.type === "db_snapshot_status" || event.type === "db_restore_status") {
@@ -284,7 +292,7 @@ export default function DatabaseDetailPage() {
         if (activeTab === "snapshots") loadSnapshots();
       }
     },
-    [id, loadDatabase, loadSnapshots, activeTab],
+    [id, loadDatabase, loadSnapshots, activeTab, router],
   );
   useAdminSocket(handleSocketEvent);
 
@@ -307,9 +315,10 @@ export default function DatabaseDetailPage() {
 
     if (action === "remove") {
       const ok = await showConfirm({
-        title: `Remove ${db.name}`,
-        message: "Are you sure you want to remove this database container? The data volume will be preserved.",
-        confirmLabel: "Remove",
+        title: `Remove ${db.name}'s container`,
+        message:
+          "This destroys the container but keeps the data volume, so you can start the database again with its data intact. To destroy the data too, use Delete database in Settings.",
+        confirmLabel: "Remove container",
         variant: "danger",
       });
       if (!ok) return;
@@ -322,10 +331,10 @@ export default function DatabaseDetailPage() {
       const res = await reqDatabaseAction(id, action);
       if (res.success) {
         toast.success(`${label} command sent to ${db.name}`, { id: toastId });
-        if (action === "remove") {
-          router.push("/databases");
-          return;
-        }
+        // Deliberately stays on the page after a remove. Navigating away used
+        // to read as "deleted" when the instance is still very much here —
+        // stopped, with its data volume — which is exactly how a removed
+        // container came to look like a ghost row in the list.
         setTimeout(loadDatabase, 2000);
       } else {
         toast.error(`${label} failed: ${res.error_message ?? "Unknown error"}`, { id: toastId });
@@ -473,18 +482,40 @@ export default function DatabaseDetailPage() {
   };
 
   const handleDeleteDatabase = async () => {
+    if (!db) return;
+
     const ok = await showConfirm({
-      title: "Delete database",
-      message: "Are you sure you want to permanently delete this database instance? This action cannot be undone.",
-      confirmLabel: "Delete",
+      title: `Delete ${db.name}`,
+      message:
+        `This destroys the container and the data volume ${db.volume_name} on worker ${db.worker_id}. Every table and row in "${db.database_name}" goes with it and cannot be recovered — only existing snapshots, which are kept.`,
+      confirmLabel: "Delete permanently",
       variant: "danger",
     });
     if (!ok) return;
 
     setDeletingDb(true);
-    const res = await reqDeleteDatabaseInstance(id);
+    let res = await reqDeleteDatabaseInstance(id);
+
+    // 409 means the worker is offline, so nothing can actually be destroyed.
+    // Deleting anyway is a real choice — it abandons a container and a full
+    // volume on disk — so it is asked for explicitly rather than assumed.
+    if (!res.success && res.status === 409) {
+      const forceOk = await showConfirm({
+        title: `Worker ${db.worker_id} is offline`,
+        message:
+          `The container and data volume cannot be destroyed while the worker is disconnected. Delete the record anyway? ${db.container_name} and ${db.volume_name} will be left on the worker and nothing in Lattice will point at them.`,
+        confirmLabel: "Delete record anyway",
+        variant: "danger",
+      });
+      if (!forceOk) {
+        setDeletingDb(false);
+        return;
+      }
+      res = await reqDeleteDatabaseInstance(id, true);
+    }
+
     if (res.success) {
-      toast.success("Database deleted");
+      toast.success(res.message ?? "Deleting database");
       router.push("/databases");
     } else {
       toast.error(res.error_message ?? "Failed to delete database");
@@ -614,15 +645,18 @@ export default function DatabaseDetailPage() {
                 <FontAwesomeIcon icon={faTerminal} className="h-3 w-3 mr-1.5" />
                 Console
               </Button>
+              {/* Container-only teardown, distinct from Delete in Settings.
+                  Stays enabled while stopped: removing the container of a
+                  stopped database is legitimate, and the command is idempotent. */}
               <Button
                 variant="destructive"
                 size="sm"
-                disabled={!!actionLoading}
+                disabled={!!actionLoading || db.status === "deleting"}
                 loading={actionLoading === "remove"}
                 onClick={() => runAction("remove")}
               >
                 <FontAwesomeIcon icon={faTrash} className="h-3 w-3 mr-1.5" />
-                Remove
+                Remove container
               </Button>
             </div>
           )}
@@ -1190,8 +1224,10 @@ export default function DatabaseDetailPage() {
               <div className="border-t border-border-subtle pt-6 mt-6">
                 <h3 className="text-sm font-medium text-destructive-soft mb-2">Danger Zone</h3>
                 <p className="text-xs text-muted mb-4">
-                  Permanently delete this database instance. This will remove the database container
-                  and all associated configuration. Data volumes may be preserved depending on worker settings.
+                  Permanently delete this database. The container <span className="font-mono">{db.container_name}</span>{" "}
+                  and its data volume <span className="font-mono">{db.volume_name}</span> are destroyed on worker{" "}
+                  {db.worker_id}, and every table in <span className="font-mono">{db.database_name}</span> goes with
+                  them. Snapshots are kept. To tear down the container but keep the data, use Remove container instead.
                 </p>
                 <Button
                   variant="destructive"

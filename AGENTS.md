@@ -135,7 +135,7 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 | `/deployments/[id]` | `deployments/[id]/page.tsx` | Deployment detail + live logs, approve/rollback |
 | `/databases` | `databases/page.tsx` | Managed database instance list |
 | `/databases/new` | `databases/new/page.tsx` | Provision a database instance (live host-port availability against the chosen worker) |
-| `/databases/[id]` | `databases/[id]/page.tsx` | DB instance detail: overview/snapshots/logs/history/settings tabs, failure banner, SQL console, credentials, start/stop/restart/remove, restore |
+| `/databases/[id]` | `databases/[id]/page.tsx` | DB instance detail: overview/snapshots/logs/history/settings tabs, failure banner, SQL console, credentials, start/stop/restart/remove-container, delete (Settings danger zone), restore |
 | `/networks` | `networks/page.tsx` | Compose networks / port-mapping overview across workers |
 | `/registries` | `registries/page.tsx` | Docker registry config, test, repo/tag browsing |
 | `/env-vars` | `env-vars/page.tsx` | Global (cross-stack) environment variables, incl. secrets |
@@ -165,7 +165,7 @@ The `data<T>` you receive is `lattice-api`'s `data` field, already unwrapped by 
 | `workers.service.ts` | Workers | `reqGetWorkers`/`reqGetWorker`/`reqCreateWorker`/`reqUpdateWorker`/`reqDeleteWorker`, tokens CRUD, `reqGetWorkerMetrics`, `reqRebootWorker`, `reqUpgradeRunner`, `reqStopAllContainers`/`reqStartAllContainers`, `reqGetWorkerContainerStats`, `reqForceRemoveContainer` |
 | `stacks.service.ts` | Stacks + containers | stack CRUD, `reqDeployStack`, `reqGetAllContainers`/`reqGetContainer`/`reqGetContainers`, container CRUD, `reqGetContainerLogs`/`reqGetLifecycleLogs`/`reqGetContainerMetrics`, 8 lifecycle actions (`reqStart/Stop/Kill/Restart/Pause/Unpause/Remove/RecreateContainer`), `reqImportCompose`/`reqUpdateCompose`/`reqSyncCompose`, stack start/stop/restart, `reqExportStack`/`reqImportStackExport`, deploy-token CRUD |
 | `deployments.service.ts` | Deployments | `reqGetDeployments`/`reqGetDeployment`/`reqGetDeploymentLogs`, `reqApproveDeployment`, `reqRollbackDeployment` |
-| `databases.service.ts` | Managed DBs | instance CRUD, `reqDatabaseAction("start"\|"stop"\|"restart"\|"remove")`, `reqGetDatabaseConnection`, `reqRevealDatabaseCredentials` (audited — prefer over the deprecated `reqGetDatabaseCredentials`), `reqGetDatabaseEvents`/`reqGetDatabaseLogs`/`reqGetDatabaseLifecycleLogs`, `reqOpenDatabaseConsole`, `reqGetWorkerPortAvailability`/`reqCheckWorkerPort`, snapshot list/create/restore/delete |
+| `databases.service.ts` | Managed DBs | instance CRUD, `reqDatabaseAction("start"\|"stop"\|"restart"\|"remove")` (container-only — `remove` keeps the data volume), `reqDeleteDatabaseInstance(id, force?)` (destroys container **and** volume; `force` only for an offline worker), `reqGetDatabaseConnection`, `reqRevealDatabaseCredentials` (audited — prefer over the deprecated `reqGetDatabaseCredentials`), `reqGetDatabaseEvents`/`reqGetDatabaseLogs`/`reqGetDatabaseLifecycleLogs`, `reqOpenDatabaseConsole`, `reqGetWorkerPortAvailability`/`reqCheckWorkerPort`, snapshot list/create/restore/delete |
 | `registries.service.ts` | Registries | registry CRUD, `reqTestRegistry`/`reqTestRegistryInline`, `reqListRegistryRepos`/`reqListRegistryTags` |
 | `networks.service.ts` | Networks | `reqListAllNetworks`, per-worker list/create/delete, `reqDeleteNetworkByID` |
 | `volumes.service.ts` | Volumes | per-worker `reqListVolumes`/`reqCreateVolume`/`reqDeleteVolume` |
@@ -357,6 +357,24 @@ server-side first (`reqOpenDatabaseConsole`), which returns the SQL client argv;
 The create form deliberately does **not** pre-fill a host port: leaving it blank has the control
 plane allocate a free one, which is why a second database on the same worker no longer collides on
 3306.
+
+**Remove container ≠ Delete database, and the UI must never blur them.** The header's *Remove
+container* button (`reqDatabaseAction(id, "remove")`) destroys the container and **keeps the data
+volume**, so the database can be started again with its data; the instance stays in the list as
+`stopped`. Deleting is the *Danger Zone* button in Settings and the list row's *Delete*
+(`reqDeleteDatabaseInstance`), which destroys the container **and** the data volume. Both confirm
+dialogs name the volume, the worker and the database being destroyed rather than saying "this cannot
+be undone" — the two operations were previously both called "Remove"/"Delete" with wording that fit
+neither, and Remove navigated back to the list on success, which read as a delete while the instance
+was still very much there.
+
+Deletion is **asynchronous**: the API answers once the worker has been asked, the instance sits in
+`deleting`, and the row disappears only when the worker confirms the volume is gone
+(`db_instance_deleted` over the admin socket, which both database screens listen for). So never drop
+the row optimistically — reload, or a failed teardown vanishes and then reappears unexplained. A
+delete against an offline worker comes back **409**; both screens then ask a second, explicit
+question before retrying with `force`, because forcing abandons a container and a full data volume on
+the worker.
 
 Screens that don't map cleanly to a slice (databases, registries, networks, templates, backups,
 deployments, env-vars, webhooks, SSO/SMTP, API tokens) fetch **directly via services into local
