@@ -142,7 +142,7 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 | `/templates` | `templates/page.tsx` | Stack templates (create from stack / from config, delete) |
 | `/backup-destinations` | `backup-destinations/page.tsx` | Backup destination CRUD + test |
 | `/audit-log` | `audit-log/page.tsx` | Administrative audit trail |
-| `/authentication` | `authentication/page.tsx` | SSO config + SMTP config + test |
+| `/authentication` | `authentication/page.tsx` | SSO config (provider presets, OAuth2/OIDC endpoints, introspection, claim mapping) + SMTP config + test |
 | `/notifications` | `notifications/page.tsx` | Notification preferences + webhooks |
 | `/ai` | `ai/page.tsx` | **API-token management** (the tokens that power `lattice-mcp` / AI agents) — create/list/delete |
 | `/settings` | `settings/page.tsx` | User management (create/role/deactivate) + version checks + service updates |
@@ -325,6 +325,20 @@ provider it configures under `/auth/sso/*`).
 - **403 handling:** `error_code 4003` → redirect `/unauthorized` (grant revoked); `error_code
   4004` → redirect `/pending` (account not yet approved).
 - **Idle timeout:** `useIdleTimeout` (wired in `DashboardLayout`) logs the user out after inactivity.
+
+**Provider presets (`/authentication`).** `PROVIDER_PRESETS` fills the OAuth2 endpoints for
+Forta, Google, GitHub, Microsoft and Custom. Two rules govern it:
+
+- **Only the Forta preset sets `introspect_url`**, because Forta is the only one of these that
+  implements RFC 7662. That endpoint is what makes revocation take effect — without it a session
+  survives until its token expires even after the grant is withdrawn upstream. Google, Microsoft
+  and GitHub genuinely do not offer it, so their presets leave it blank rather than guessing a URL
+  that would fail closed on every check.
+- **`introspect_url` and `logout_url` are applied UNCONDITIONALLY** when a preset is chosen, while
+  the other fields use the guarded `if (p.x)` form. The guard means "an empty preset value keeps
+  what you typed", which is right for Custom and wrong for these two: switching Forta → Google
+  would otherwise keep Forta's introspection URL, and every revocation check would become a
+  request to the wrong provider about a token it never issued.
 
 ### Redux store shape
 

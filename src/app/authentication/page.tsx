@@ -45,10 +45,42 @@ interface ProviderPreset {
   userinfoUrl: string;
   scopes: string;
   userIdentifier: string;
+  /** RFC 7662 introspection endpoint, where the provider has one. */
+  introspectUrl?: string;
+  /** RP-initiated logout endpoint (OIDC Session Management). */
+  logoutUrl?: string;
   comingSoon?: boolean;
 }
 
 const PROVIDER_PRESETS: ProviderPreset[] = [
+  {
+    // ⚠️ FORTA IS FIRST, AND IT IS THE ONLY PRESET THAT FILLS AN INTROSPECTION
+    // URL — because it is the only one of these providers that implements
+    // RFC 7662.
+    //
+    // That endpoint is what makes revocation take effect: without it a session
+    // here survives until its token expires even after the grant is withdrawn
+    // at the identity provider. Leaving an administrator to find and type
+    // /oauth/introspect by hand is how lattice ran for months with an
+    // introspection checkpoint that never once fired.
+    //
+    // Google, Microsoft and GitHub genuinely do not offer RFC 7662, so their
+    // presets leave the field blank rather than guessing a URL that would fail
+    // closed on every check.
+    //
+    // Values taken from https://auth.appleby.cloud/.well-known/openid-configuration.
+    id: "forta", name: "Forta", icon: "F", color: "#3b82f6",
+    authorizeUrl: "https://auth.appleby.cloud/oauth/authorize",
+    tokenUrl: "https://auth.appleby.cloud/oauth/token",
+    userinfoUrl: "https://auth.appleby.cloud/oauth/userinfo",
+    introspectUrl: "https://auth.appleby.cloud/oauth/introspect",
+    logoutUrl: "https://auth.appleby.cloud/oauth/logout",
+    scopes: "openid email profile",
+    // `sub` and not `email`: Forta issues a stable UUID subject. Matching on an
+    // address means anyone who can get the provider to assert one claims the
+    // local account with it.
+    userIdentifier: "sub",
+  },
   {
     id: "google", name: "Google", icon: "G", color: "#4285F4",
     authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
@@ -335,6 +367,18 @@ function SSOTab() {
     if (p.userinfoUrl) setUserinfoUrl(p.userinfoUrl);
     if (p.scopes) setScopes(p.scopes);
     if (p.userIdentifier) setUserIdentifier(p.userIdentifier);
+
+    // ⚠️ THESE TWO ARE SET UNCONDITIONALLY, unlike the fields above.
+    //
+    // The guarded `if (p.x)` pattern means "an empty preset value leaves what
+    // you already typed alone", which is right for Custom. It is WRONG here:
+    // switching from Forta to Google would silently keep Forta's introspection
+    // URL, and every revocation check would then be a request to the wrong
+    // provider about a token it never issued — failing in a way that looks like
+    // an outage rather than a misconfiguration.
+    setIntrospectUrl(p.introspectUrl ?? "");
+    setLogoutUrl(p.logoutUrl ?? "");
+
     setButtonLabel(`Sign in with ${p.name}`);
   };
 
@@ -414,7 +458,7 @@ function SSOTab() {
       {enabled && (
         <div>
           <label className="text-xs font-medium text-secondary uppercase tracking-wider block mb-3">Provider</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {PROVIDER_PRESETS.map((p) => (
               <button key={p.id} type="button" onClick={() => !p.comingSoon && applyPreset(p)} disabled={p.comingSoon}
                 className={`relative flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all ${
