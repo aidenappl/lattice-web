@@ -26,6 +26,7 @@ import type {
   DatabaseCredentials,
   DatabaseSnapshot,
   DatabaseSnapshotRun,
+  BackupPosture,
   DatabaseInstanceEvent,
   DatabaseConsoleSession,
   BackupDestination,
@@ -42,6 +43,7 @@ import {
   reqGetDatabaseLifecycleLogs,
   reqGetDatabaseMetrics,
   reqGetDatabaseRuns,
+  reqGetDatabaseBackupPosture,
   reqOpenDatabaseConsole,
   reqGetDatabaseSnapshots,
   reqCreateDatabaseSnapshot,
@@ -146,6 +148,7 @@ export default function DatabaseDetailPage() {
   const [snapshots, setSnapshots] = useState<DatabaseSnapshot[]>([]);
   // Scheduled attempts, including slots that were deliberately skipped.
   const [runs, setRuns] = useState<DatabaseSnapshotRun[]>([]);
+  const [posture, setPosture] = useState<BackupPosture | null>(null);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [snapshotActionLoading, setSnapshotActionLoading] = useState<Record<number, string>>({});
   const [takingSnapshot, setTakingSnapshot] = useState(false);
@@ -208,6 +211,12 @@ export default function DatabaseDetailPage() {
     if (res.success) setRuns(res.data ?? []);
   }, [id]);
 
+  const loadPosture = useCallback(async () => {
+    const res = await reqGetDatabaseBackupPosture(id);
+    if (!mountedRef.current) return;
+    if (res.success) setPosture(res.data);
+  }, [id]);
+
   const loadBackupDestinations = useCallback(async () => {
     const res = await reqGetBackupDestinations();
     if (!mountedRef.current) return;
@@ -228,8 +237,9 @@ export default function DatabaseDetailPage() {
     if (activeTab === "snapshots") {
       loadSnapshots();
       loadRuns();
+      loadPosture();
     }
-  }, [activeTab, loadSnapshots, loadRuns]);
+  }, [activeTab, loadSnapshots, loadRuns, loadPosture]);
 
   // Load backup destinations for settings tab
   useEffect(() => {
@@ -1023,6 +1033,52 @@ export default function DatabaseDetailPage() {
                 </Button>
               )}
             </div>
+
+            {/* 3-2-1 posture. Deliberately conservative: an unconfirmed
+                destination locality is never counted as off-site, and stale
+                snapshots are not copies. A backup dashboard that reassures you
+                wrongly is worse than none, because it stops you looking. */}
+            {posture && (
+              <div className="card p-4 mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-sm font-medium text-primary">Backup posture</h3>
+                  <span
+                    className={`text-xs font-mono px-1.5 py-0.5 rounded ${
+                      posture.score === 3
+                        ? "bg-[#22c55e]/15 text-[#22c55e]"
+                        : posture.score === 0
+                          ? "bg-[#ef4444]/15 text-[#ef4444]"
+                          : "bg-[#eab308]/15 text-[#eab308]"
+                    }`}
+                  >
+                    3-2-1 · {posture.score}/3
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-3 text-xs mb-2">
+                  <span className={posture.copies_ok ? "text-[#22c55e]" : "text-muted"}>
+                    {posture.copies_ok ? "✓" : "✗"} {posture.copies} copies
+                  </span>
+                  <span className={posture.media_ok ? "text-[#22c55e]" : "text-muted"}>
+                    {posture.media_ok ? "✓" : "✗"} {posture.media} media
+                  </span>
+                  <span className={posture.offsite_ok ? "text-[#22c55e]" : "text-muted"}>
+                    {posture.offsite_ok ? "✓" : "✗"} {posture.offsite} off-site
+                  </span>
+                </div>
+                {posture.detail.length > 0 && (
+                  <ul className="text-xs text-muted space-y-0.5 mb-2">
+                    {posture.detail.map((d, i) => (
+                      <li key={i}>· {d}</li>
+                    ))}
+                  </ul>
+                )}
+                {posture.warnings.map((warning, i) => (
+                  <p key={i} className="text-xs text-[#eab308] mt-1">
+                    {warning}
+                  </p>
+                ))}
+              </div>
+            )}
 
             {/* Scheduled attempts. A skipped slot is the row worth surfacing:
                 an absent snapshot is a mystery, whereas "the 03:00 slot did not

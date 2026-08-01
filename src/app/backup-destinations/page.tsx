@@ -85,6 +85,9 @@ export default function BackupDestinationsPage() {
   // Create form state
   const [name, setName] = useState("");
   const [type, setType] = useState<BackupDestinationType>("s3");
+  // Asserted, never inferred: Lattice cannot tell a bucket on this worker from
+  // one in another country, and guessing "off-site" would be false confidence.
+  const [locality, setLocality] = useState("unknown");
   const [config, setConfig] = useState<Record<string, string>>({});
 
   // Edit state
@@ -150,6 +153,7 @@ export default function BackupDestinationsPage() {
   const resetForm = () => {
     setName("");
     setType("s3");
+    setLocality("unknown");
     setConfig({});
   };
 
@@ -163,6 +167,7 @@ export default function BackupDestinationsPage() {
       if (val) cleanConfig[field.key] = val;
     }
     const res = await reqCreateBackupDestination({
+      locality,
       name: name.trim(),
       type,
       config: cleanConfig,
@@ -340,6 +345,26 @@ export default function BackupDestinationsPage() {
                   <option value="google_drive">Google Drive</option>
                   <option value="samba">Samba</option>
                 </select>
+
+                {/* Locality is asserted, never inferred. An S3 endpoint may be a
+                    bucket on the very worker being backed up or one in another
+                    country — both look identical from here, so guessing
+                    "off-site" would manufacture false confidence. */}
+                <label className="block text-xs text-muted mt-3 mb-1">Where does this live?</label>
+                <select
+                  value={locality}
+                  onChange={(e) => setLocality(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none"
+                >
+                  <option value="unknown">Unknown — not counted as off-site</option>
+                  <option value="same_host">Same host as the databases it backs up</option>
+                  <option value="same_fleet">Same fleet / failure domain</option>
+                  <option value="offsite">Off-site — a separate failure domain</option>
+                </select>
+                <p className="text-[11px] text-muted mt-1">
+                  Used for the 3-2-1 posture indicator. Lattice cannot detect this, so an
+                  unconfirmed destination never counts as off-site.
+                </p>
               </div>
             </div>
 

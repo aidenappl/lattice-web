@@ -1,4 +1,5 @@
 import {
+    BackupPosture,
     ContainerLog,
     ContainerMetrics,
     DatabaseConnection,
@@ -188,6 +189,17 @@ export const reqGetDatabaseRuns = (id: number, params?: { limit?: number }) =>
         method: "GET",
         url: `/admin/database-instances/${id}/runs`,
         params,
+    });
+
+/**
+ * 3-2-1 posture for a database. Deliberately conservative: an unconfirmed
+ * destination locality never counts as off-site, and stale snapshots do not
+ * count as copies.
+ */
+export const reqGetDatabaseBackupPosture = (id: number) =>
+    fetchApi<BackupPosture>({
+        method: "GET",
+        url: `/admin/database-instances/${id}/backup-posture`,
     });
 
 /** Authorise an interactive console session against a running instance. */

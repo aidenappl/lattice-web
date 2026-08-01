@@ -14,6 +14,7 @@ export const reqGetBackupDestination = (id: number) =>
     });
 
 export const reqCreateBackupDestination = (data: {
+    locality?: string;
     name: string;
     type: string;
     config: Record<string, string>;
@@ -27,6 +28,7 @@ export const reqCreateBackupDestination = (data: {
 export const reqUpdateBackupDestination = (
     id: number,
     data: Partial<{
+        locality: string;
         name: string;
         type: string;
         config: Record<string, string>;

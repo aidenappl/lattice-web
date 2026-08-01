@@ -136,10 +136,18 @@ export type DatabaseConsoleSession = {
 
 export type BackupDestinationType = "s3" | "google_drive" | "samba";
 
+/**
+ * Where a destination physically lives, asserted by an operator.
+ * `unknown` is the default and is never treated as off-site — Lattice cannot
+ * tell a bucket on this worker from one in another country.
+ */
+export type BackupDestinationLocality = "unknown" | "same_host" | "same_fleet" | "offsite";
+
 export type BackupDestination = {
     id: number;
     name: string;
     type: BackupDestinationType;
+    locality: BackupDestinationLocality;
     active: boolean;
     updated_at: string;
     inserted_at: string;
@@ -180,4 +188,23 @@ export type DatabaseSnapshotRun = {
     finished_at: string | null;
     inserted_at: string;
     updated_at: string;
+};
+
+/**
+ * A database's standing against 3-2-1: three copies, two media, one off-site.
+ *
+ * Every axis reports what is true rather than what was configured — a
+ * destination that has produced no fresh snapshot is not a copy, and one whose
+ * locality nobody confirmed is never counted as off-site.
+ */
+export type BackupPosture = {
+    copies: number;
+    copies_ok: boolean;
+    media: number;
+    media_ok: boolean;
+    offsite: number;
+    offsite_ok: boolean;
+    score: number;
+    detail: string[];
+    warnings: string[];
 };
