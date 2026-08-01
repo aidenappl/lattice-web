@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { reqLogin } from "@/services/auth.service";
+import { SSOProviderButtons, type SSOProvider } from "@/components/sso-provider-buttons";
 import { Logo } from "@/components/ui/logo";
 
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
@@ -17,7 +18,14 @@ export default function LoginPage() {
   const [checking, setChecking] = useState(true);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState(0);
-  const [ssoConfig, setSsoConfig] = useState<{ enabled: boolean; button_label: string; login_url: string } | null>(null);
+  const [ssoConfig, setSsoConfig] = useState<{
+    enabled: boolean;
+    button_label?: string;
+    login_url?: string;
+    // The shared contract. Optional so this page still renders against an API
+    // that has not yet deployed it — see the fallback where it is consumed.
+    providers?: SSOProvider[];
+  } | null>(null);
 
   useEffect(() => {
     document.title = "Sign in | Lattice";
@@ -115,9 +123,29 @@ export default function LoginPage() {
     setLoading(false);
   };
 
-  const ssoHref = ssoConfig?.login_url?.startsWith("/")
-    ? `${API_URL}${ssoConfig.login_url}`
-    : "#";
+  // Prefer the shared `providers` array; fall back to the legacy single-provider
+  // fields when the API has not deployed the new contract yet.
+  //
+  // ⚠️ The fallback is DATED, not permanent. Once all three APIs serve
+  // `providers`, delete it along with button_label/login_url — leaving it means
+  // carrying two rendering paths for a login page forever, and only one of them
+  // supports icons or more than one provider.
+  const providers: SSOProvider[] =
+    ssoConfig?.providers && ssoConfig.providers.length > 0
+      ? ssoConfig.providers
+      : ssoConfig?.enabled && ssoConfig.login_url
+        ? [
+            {
+              name: "sso",
+              display_name: ssoConfig.button_label || "Sign in with SSO",
+              display_icon: null,
+              button_color: null,
+              button_text_color: null,
+              login_url: ssoConfig.login_url,
+              sort_order: 0,
+            },
+          ]
+        : [];
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8 bg-background">
@@ -171,17 +199,14 @@ export default function LoginPage() {
                 </button>
               </form>
 
-              {ssoConfig?.enabled && (
+              {providers.length > 0 && (
                 <>
                   <Divider />
-                  {/* Validate login_url starts with / to prevent javascript: or open redirect */}
-                  <a
-                    href={ssoHref}
-                    className="cursor-pointer w-full flex items-center justify-center gap-2.5 border border-border-strong rounded-lg py-2.5 text-sm font-medium text-primary hover:bg-surface-elevated hover:border-border-emphasis transition-all"
-                  >
-                    <SSOIcon />
-                    {ssoConfig.button_label}
-                  </a>
+                  {/* Each href is re-validated inside the component: login_url is
+                      rendered as a clickable anchor on an unauthenticated page, so
+                      `javascript:` and absolute URLs are refused there rather than
+                      trusted from the API. */}
+                  <SSOProviderButtons providers={providers} apiURL={API_URL} />
                 </>
               )}
             </div>
@@ -265,17 +290,6 @@ function Divider() {
   );
 }
 
-function SSOIcon() {
-  return (
-    <svg className="w-4 h-4 text-brand" fill="currentColor" viewBox="0 0 20 20">
-      <path
-        fillRule="evenodd"
-        d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
-}
 
 function InlineLoading({ message = "Loading…" }: { message?: string }) {
   return (
