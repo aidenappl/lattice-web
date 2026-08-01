@@ -57,6 +57,8 @@ type StatusType =
   | "provisioning"
   | "degraded"
   | "deleting"
+  | "claimed"
+  | "skipped"
   | "none";
 
 const statusVariantMap: Record<
@@ -85,6 +87,12 @@ const statusVariantMap: Record<
   // Degraded is impaired-but-present, not dead — warning, not error.
   degraded: "warning",
   deleting: "warning",
+  // A claimed slot has been won but not yet dispatched — in flight, not wrong.
+  claimed: "warning",
+  // A skipped slot is a deliberate non-run (overrun, stopped database, stale
+  // slot). It is not a failure, but it is not success either — the whole reason
+  // it is recorded rather than logged is so it is visible.
+  skipped: "default",
   stopped: "default",
   maintenance: "default",
   rolled_back: "default",
@@ -114,6 +122,8 @@ const statusDotMap: Record<StatusType, string> = {
   provisioning: "bg-[#eab308]",
   degraded: "bg-[#f97316]",
   deleting: "bg-[#eab308]",
+  claimed: "bg-[#eab308]",
+  skipped: "bg-[#888888]",
   stopped: "bg-[#888888]",
   maintenance: "bg-[#888888]",
   rolled_back: "bg-[#888888]",

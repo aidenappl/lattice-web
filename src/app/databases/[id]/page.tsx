@@ -25,6 +25,7 @@ import type {
   DatabaseInstance,
   DatabaseCredentials,
   DatabaseSnapshot,
+  DatabaseSnapshotRun,
   DatabaseInstanceEvent,
   DatabaseConsoleSession,
   BackupDestination,
@@ -40,6 +41,7 @@ import {
   reqGetDatabaseLogs,
   reqGetDatabaseLifecycleLogs,
   reqGetDatabaseMetrics,
+  reqGetDatabaseRuns,
   reqOpenDatabaseConsole,
   reqGetDatabaseSnapshots,
   reqCreateDatabaseSnapshot,
@@ -142,6 +144,8 @@ export default function DatabaseDetailPage() {
 
   // Snapshots
   const [snapshots, setSnapshots] = useState<DatabaseSnapshot[]>([]);
+  // Scheduled attempts, including slots that were deliberately skipped.
+  const [runs, setRuns] = useState<DatabaseSnapshotRun[]>([]);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [snapshotActionLoading, setSnapshotActionLoading] = useState<Record<number, string>>({});
   const [takingSnapshot, setTakingSnapshot] = useState(false);
@@ -198,6 +202,12 @@ export default function DatabaseDetailPage() {
     if (res.success) setLatestMetrics(res.data?.[0] ?? null);
   }, [id]);
 
+  const loadRuns = useCallback(async () => {
+    const res = await reqGetDatabaseRuns(id, { limit: 20 });
+    if (!mountedRef.current) return;
+    if (res.success) setRuns(res.data ?? []);
+  }, [id]);
+
   const loadBackupDestinations = useCallback(async () => {
     const res = await reqGetBackupDestinations();
     if (!mountedRef.current) return;
@@ -215,8 +225,11 @@ export default function DatabaseDetailPage() {
 
   // Load snapshots when tab switches to snapshots
   useEffect(() => {
-    if (activeTab === "snapshots") loadSnapshots();
-  }, [activeTab, loadSnapshots]);
+    if (activeTab === "snapshots") {
+      loadSnapshots();
+      loadRuns();
+    }
+  }, [activeTab, loadSnapshots, loadRuns]);
 
   // Load backup destinations for settings tab
   useEffect(() => {
@@ -1010,6 +1023,32 @@ export default function DatabaseDetailPage() {
                 </Button>
               )}
             </div>
+
+            {/* Scheduled attempts. A skipped slot is the row worth surfacing:
+                an absent snapshot is a mystery, whereas "the 03:00 slot did not
+                run because the previous one was still going" is an answer. */}
+            {db.snapshot_schedule && runs.length > 0 && (
+              <div className="card p-4 mb-4">
+                <h3 className="text-sm font-medium text-primary mb-1">Schedule activity</h3>
+                <p className="text-xs text-muted mb-3">
+                  Every slot for <code className="font-mono">{db.snapshot_schedule}</code>, including
+                  the ones that did not run.
+                </p>
+                <ul className="space-y-1.5">
+                  {runs.slice(0, 8).map((run) => (
+                    <li key={run.id} className="flex items-baseline gap-2 text-xs">
+                      <StatusBadge status={run.status} />
+                      <span className="text-secondary" title={formatDate(run.scheduled_at)}>
+                        {timeAgo(run.scheduled_at)}
+                      </span>
+                      {run.skip_reason && (
+                        <span className="text-muted truncate">— {run.skip_reason}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {!db.backup_destination_id && (
               <div className="rounded-lg border border-yellow-600/30 bg-yellow-600/5 px-4 py-3 text-sm text-yellow-400">

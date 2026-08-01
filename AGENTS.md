@@ -376,6 +376,13 @@ first asks whether to take a final snapshot: choosing it returns with the databa
 (the API destroys it only once that snapshot completes), so the page reloads rather than navigating
 away. A failed final snapshot means nothing is deleted.
 
+**Schedule activity** on the Snapshots tab lists scheduled *attempts*, not just snapshots — including
+slots that were skipped, with the reason. Scheduling moved to the control plane, so every slot leaves
+a row whether or not it produced a snapshot; an absent snapshot is a mystery, while "the 03:00 slot
+did not run because the previous one was still going" is an answer. Note this added `claimed` and
+`skipped` to `components/ui/badge.tsx` — a status token missing from that map renders as an unstyled
+grey badge.
+
 **Live usage and volume size** are on the Overview tab. Both come from data the platform already
 collected but could not read by instance: CPU/memory samples live in `container_metrics` with a NULL
 `container_id`, and the data volume's size is reported by the worker in `db_sync`. Neither needs the

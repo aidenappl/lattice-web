@@ -161,3 +161,23 @@ export type DatabaseSnapshot = {
     updated_at: string;
     inserted_at: string;
 };
+
+/**
+ * One scheduled snapshot *attempt*, including the ones that did not run.
+ *
+ * `skipped` is the row worth looking at: an absent snapshot is a mystery,
+ * whereas "the 03:00 slot did not run because the previous one was still going"
+ * is an answer. scheduled_at is the nominal, un-jittered fire time.
+ */
+export type DatabaseSnapshotRun = {
+    id: number;
+    database_instance_id: number;
+    scheduled_at: string;
+    status: "claimed" | "running" | "completed" | "failed" | "skipped";
+    skip_reason: string | null;
+    snapshot_id: number | null;
+    dispatched_at: string | null;
+    finished_at: string | null;
+    inserted_at: string;
+    updated_at: string;
+};

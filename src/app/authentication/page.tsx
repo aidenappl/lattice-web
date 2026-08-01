@@ -16,6 +16,7 @@ import { isAdmin, formatDate } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -404,10 +405,7 @@ function SSOTab() {
                 <p className="text-xs text-muted">OAuth2 / OpenID Connect</p>
               </div>
             </div>
-            <button type="button" role="switch" aria-checked={enabled} onClick={() => setEnabled(!enabled)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enabled ? "bg-healthy" : "bg-surface-active border border-border-strong"}`}>
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? "translate-x-6" : "translate-x-1"}`} />
-            </button>
+            <Switch checked={enabled} onChange={setEnabled} label="Enable SSO" />
           </div>
         </div>
       </div>
@@ -513,10 +511,7 @@ function SSOTab() {
                 <p className="text-xs text-muted">Create account (pending approval) on first SSO login</p>
               </div>
             </div>
-            <button type="button" role="switch" aria-checked={autoProvision} onClick={() => setAutoProvision(!autoProvision)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoProvision ? "bg-healthy" : "bg-surface-active border border-border-strong"}`}>
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoProvision ? "translate-x-6" : "translate-x-1"}`} />
-            </button>
+            <Switch checked={autoProvision} onChange={setAutoProvision} label="Auto-provision users" />
           </div>
 
           <div className="flex items-center gap-3 pt-2 border-t border-border-subtle">

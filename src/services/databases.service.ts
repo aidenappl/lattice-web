@@ -7,6 +7,7 @@ import {
     DatabaseInstance,
     DatabaseInstanceEvent,
     DatabaseSnapshot,
+    DatabaseSnapshotRun,
     LifecycleLog,
     PortAvailability,
     SinglePortAvailability,
@@ -174,6 +175,18 @@ export const reqGetDatabaseMetrics = (id: number, params?: { limit?: number; sin
     fetchApi<ContainerMetrics[]>({
         method: "GET",
         url: `/admin/database-instances/${id}/metrics`,
+        params,
+    });
+
+/**
+ * Recent scheduled-snapshot attempts, newest first — including skipped slots.
+ * Scheduling lives in the control plane, so every slot leaves a row whether or
+ * not it produced a snapshot.
+ */
+export const reqGetDatabaseRuns = (id: number, params?: { limit?: number }) =>
+    fetchApi<DatabaseSnapshotRun[]>({
+        method: "GET",
+        url: `/admin/database-instances/${id}/runs`,
         params,
     });
 
