@@ -1,5 +1,6 @@
 import {
     ContainerLog,
+    ContainerMetrics,
     DatabaseConnection,
     DatabaseConsoleSession,
     DatabaseCredentials,
@@ -57,6 +58,7 @@ export const reqUpdateDatabaseInstance = (
         snapshot_schedule: string | null;
         retention_count: number | null;
         backup_destination_id: number | null;
+        deletion_protection: boolean;
     }>,
 ) =>
     fetchApi<DatabaseInstance>({
@@ -77,11 +79,22 @@ export const reqUpdateDatabaseInstance = (
  * abandons the container and volume on disk. Without it, deleting a database on
  * a disconnected worker returns 409 rather than leaking resources.
  */
-export const reqDeleteDatabaseInstance = (id: number, force = false) =>
-    fetchApi<void>({
+export const reqDeleteDatabaseInstance = (
+    id: number,
+    opts: { force?: boolean; finalSnapshot?: boolean } = {},
+) => {
+    const params = new URLSearchParams();
+    if (opts.force) params.set("force", "true");
+    // A final snapshot defers the teardown: the API takes the backup first and
+    // destroys the volume only once it completes, so this call returns with the
+    // database still present.
+    if (opts.finalSnapshot) params.set("final_snapshot", "true");
+    const qs = params.toString();
+    return fetchApi<void>({
         method: "DELETE",
-        url: `/admin/database-instances/${id}${force ? "?force=true" : ""}`,
+        url: `/admin/database-instances/${id}${qs ? `?${qs}` : ""}`,
     });
+};
 
 /**
  * Lifecycle actions on the container only. `remove` destroys the container but
@@ -147,6 +160,20 @@ export const reqGetDatabaseLifecycleLogs = (id: number, params?: { limit?: numbe
     fetchApi<LifecycleLog[]>({
         method: "GET",
         url: `/admin/database-instances/${id}/lifecycle`,
+        params,
+    });
+
+/**
+ * CPU/memory samples for a database instance, newest first.
+ *
+ * Addressed by instance rather than by container id: managed databases have no
+ * row in the containers table, so the generic container-metrics endpoint cannot
+ * reach these samples even though they have been stored all along.
+ */
+export const reqGetDatabaseMetrics = (id: number, params?: { limit?: number; since?: string }) =>
+    fetchApi<ContainerMetrics[]>({
+        method: "GET",
+        url: `/admin/database-instances/${id}/metrics`,
         params,
     });
 

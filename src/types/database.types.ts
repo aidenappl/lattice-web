@@ -47,6 +47,13 @@ export type DatabaseInstance = {
     backup_destination_id: number | null;
     container_name: string;
     volume_name: string;
+    /** Refuses DELETE while set — deleting destroys the data volume. */
+    deletion_protection: boolean;
+    /** A delete is waiting on a final snapshot before the volume is destroyed. */
+    pending_final_snapshot: boolean;
+    /** Data volume size as last observed by the worker; null until reported. */
+    volume_size_bytes: number | null;
+    volume_size_checked_at: string | null;
     active: boolean;
     started_at: string | null;
     updated_at: string;

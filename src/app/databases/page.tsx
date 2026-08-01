@@ -134,7 +134,7 @@ export default function DatabasesPage() {
           variant: "danger",
         });
         if (!forceOk) return;
-        res = await reqDeleteDatabaseInstance(db.id, true);
+        res = await reqDeleteDatabaseInstance(db.id, { force: true });
       }
 
       if (res.success) {

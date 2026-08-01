@@ -369,6 +369,18 @@ Note that clearing a backup field now works: the API distinguishes an explicit J
 omitted key, so the `|| null` the settings form already sent finally *unsets* a schedule. Before, the
 handler read null as "not supplied" and the schedule kept running after the UI showed it cleared.
 
+**Deletion protection and final snapshots.** The Danger Zone carries a *Deletion protection* toggle;
+while it is on the API refuses any delete, **including a forced one** — force exists for a dead
+worker, not as a way around the guard. Deleting a running database with a destination configured
+first asks whether to take a final snapshot: choosing it returns with the database **still present**
+(the API destroys it only once that snapshot completes), so the page reloads rather than navigating
+away. A failed final snapshot means nothing is deleted.
+
+**Live usage and volume size** are on the Overview tab. Both come from data the platform already
+collected but could not read by instance: CPU/memory samples live in `container_metrics` with a NULL
+`container_id`, and the data volume's size is reported by the worker in `db_sync`. Neither needs the
+database to have a row in the `containers` table.
+
 **Remove container ≠ Delete database, and the UI must never blur them.** The header's *Remove
 container* button (`reqDatabaseAction(id, "remove")`) destroys the container and **keeps the data
 volume**, so the database can be started again with its data; the instance stays in the list as

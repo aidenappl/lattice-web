@@ -29,6 +29,7 @@ import type {
   DatabaseConsoleSession,
   BackupDestination,
   ContainerLog,
+  ContainerMetrics,
   LifecycleLog,
 } from "@/types";
 import {
@@ -38,6 +39,7 @@ import {
   reqGetDatabaseEvents,
   reqGetDatabaseLogs,
   reqGetDatabaseLifecycleLogs,
+  reqGetDatabaseMetrics,
   reqOpenDatabaseConsole,
   reqGetDatabaseSnapshots,
   reqCreateDatabaseSnapshot,
@@ -144,6 +146,10 @@ export default function DatabaseDetailPage() {
   const [snapshotActionLoading, setSnapshotActionLoading] = useState<Record<number, string>>({});
   const [takingSnapshot, setTakingSnapshot] = useState(false);
 
+  // Live resource usage. These samples were always collected; they simply had no
+  // read path addressed by database instance until now.
+  const [latestMetrics, setLatestMetrics] = useState<ContainerMetrics | null>(null);
+
   // Settings
   const [backupDestinations, setBackupDestinations] = useState<BackupDestination[]>([]);
   const [settingsForm, setSettingsForm] = useState({
@@ -186,6 +192,12 @@ export default function DatabaseDetailPage() {
     setSnapshotsLoading(false);
   }, [id]);
 
+  const loadMetrics = useCallback(async () => {
+    const res = await reqGetDatabaseMetrics(id, { limit: 1 });
+    if (!mountedRef.current) return;
+    if (res.success) setLatestMetrics(res.data?.[0] ?? null);
+  }, [id]);
+
   const loadBackupDestinations = useCallback(async () => {
     const res = await reqGetBackupDestinations();
     if (!mountedRef.current) return;
@@ -196,6 +208,10 @@ export default function DatabaseDetailPage() {
   useEffect(() => {
     loadDatabase();
   }, [loadDatabase]);
+
+  useEffect(() => {
+    loadMetrics();
+  }, [loadMetrics]);
 
   // Load snapshots when tab switches to snapshots
   useEffect(() => {
@@ -502,8 +518,29 @@ export default function DatabaseDetailPage() {
     });
     if (!ok) return;
 
+    // Offer a last backup before the volume goes. Only meaningful if there is
+    // somewhere to write it and something running to dump.
+    let finalSnapshot = false;
+    if (db.backup_destination_id && db.status === "running") {
+      finalSnapshot = await showConfirm({
+        title: "Take a final snapshot first?",
+        message:
+          "Take one last backup before destroying the data volume. The database is only destroyed once that snapshot completes — if it fails, nothing is deleted.",
+        confirmLabel: "Snapshot, then delete",
+        cancelLabel: "Delete without a snapshot",
+        variant: "danger",
+      });
+    }
+
     setDeletingDb(true);
-    let res = await reqDeleteDatabaseInstance(id);
+    let res = await reqDeleteDatabaseInstance(id, { finalSnapshot });
+
+    if (res.success && finalSnapshot) {
+      toast.success("Final snapshot started — the database will be destroyed once it completes");
+      setDeletingDb(false);
+      loadDatabase();
+      return;
+    }
 
     // 409 means the worker is offline, so nothing can actually be destroyed.
     // Deleting anyway is a real choice — it abandons a container and a full
@@ -520,7 +557,7 @@ export default function DatabaseDetailPage() {
         setDeletingDb(false);
         return;
       }
-      res = await reqDeleteDatabaseInstance(id, true);
+      res = await reqDeleteDatabaseInstance(id, { force: true });
     }
 
     if (res.success) {
@@ -675,17 +712,33 @@ export default function DatabaseDetailPage() {
       {/* Failure detail. An instance in error or degraded always carries a
           reason — surfacing it here is the difference between "it broke" and
           knowing what to do about it. */}
-      {db.last_error && (db.status === "error" || db.status === "degraded") && (
-        <div className="panel border-l-2 border-l-[#ef4444] p-4">
+      {/* backup_stale is deliberately shown regardless of status: a database whose
+          scheduled backups stopped is usually running perfectly, and that is
+          exactly why the condition is easy to miss. */}
+      {db.last_error &&
+        (db.status === "error" ||
+          db.status === "degraded" ||
+          db.last_error.code === "backup_stale") && (
+        <div
+          className={`panel border-l-2 p-4 ${
+            db.last_error.code === "backup_stale" ? "border-l-[#eab308]" : "border-l-[#ef4444]"
+          }`}
+        >
           <div className="flex items-start gap-3">
             <FontAwesomeIcon
               icon={faCircleExclamation}
-              className="h-4 w-4 text-[#ef4444] mt-0.5 shrink-0"
+              className={`h-4 w-4 mt-0.5 shrink-0 ${
+                db.last_error.code === "backup_stale" ? "text-[#eab308]" : "text-[#ef4444]"
+              }`}
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm font-medium text-primary">
-                  {db.status === "degraded" ? "Database is impaired" : "Database failed"}
+                  {db.last_error.code === "backup_stale"
+                    ? "Scheduled backups are not running"
+                    : db.status === "degraded"
+                      ? "Database is impaired"
+                      : "Database failed"}
                 </h3>
                 <code className="font-mono text-[11px] text-secondary bg-surface-elevated px-1.5 py-0.5 rounded">
                   {db.last_error.code}
@@ -857,17 +910,51 @@ export default function DatabaseDetailPage() {
                 <h3 className="text-sm font-medium text-primary">Resources &amp; Timing</h3>
                 <dl className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <dt className="text-muted">CPU Limit</dt>
+                    <dt className="text-muted">CPU</dt>
                     <dd className="text-secondary">
-                      {db.cpu_limit != null ? `${db.cpu_limit} cores` : "No limit"}
+                      {latestMetrics?.cpu_percent != null
+                        ? `${latestMetrics.cpu_percent.toFixed(1)}% of ${db.cpu_limit != null ? `${db.cpu_limit} cores` : "no limit"}`
+                        : db.cpu_limit != null
+                          ? `${db.cpu_limit} cores (limit)`
+                          : "No limit"}
                     </dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-muted">Memory Limit</dt>
+                    <dt className="text-muted">Memory</dt>
                     <dd className="text-secondary">
-                      {db.memory_limit != null ? `${db.memory_limit} MB` : "No limit"}
+                      {latestMetrics?.mem_usage_mb != null
+                        ? `${Math.round(latestMetrics.mem_usage_mb)} MB of ${db.memory_limit != null ? `${db.memory_limit} MB` : "no limit"}`
+                        : db.memory_limit != null
+                          ? `${db.memory_limit} MB (limit)`
+                          : "No limit"}
                     </dd>
                   </div>
+                  <div className="flex justify-between">
+                    <dt className="text-muted">Data volume</dt>
+                    <dd className="text-secondary">
+                      {db.volume_size_bytes != null ? (
+                        <span
+                          title={
+                            db.volume_size_checked_at
+                              ? `measured ${formatDate(db.volume_size_checked_at)}`
+                              : undefined
+                          }
+                        >
+                          {formatBytes(db.volume_size_bytes)}
+                        </span>
+                      ) : (
+                        <span className="text-muted">Not yet measured</span>
+                      )}
+                    </dd>
+                  </div>
+                  {latestMetrics && (
+                    <div className="flex justify-between">
+                      <dt className="text-muted">Usage sampled</dt>
+                      <dd className="text-secondary" title={formatDate(latestMetrics.recorded_at)}>
+                        {timeAgo(latestMetrics.recorded_at)}
+                      </dd>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <dt className="text-muted">Created</dt>
                     <dd className="text-secondary" title={formatDate(db.inserted_at)}>
@@ -1242,6 +1329,38 @@ export default function DatabaseDetailPage() {
             {canEdit(user) && (
               <div className="border-t border-border-subtle pt-6 mt-6">
                 <h3 className="text-sm font-medium text-destructive-soft mb-2">Danger Zone</h3>
+
+                {/* Deletion protection is checked before anything else on delete,
+                    including force — turning it off is a separate, deliberate act
+                    from deleting, which is the whole point of the guard. */}
+                <label className="flex items-start gap-2 mb-4 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={db.deletion_protection}
+                    onChange={async (e) => {
+                      const res = await reqUpdateDatabaseInstance(id, {
+                        deletion_protection: e.target.checked,
+                      });
+                      if (res.success) {
+                        setDb(res.data);
+                        toast.success(
+                          e.target.checked
+                            ? "Deletion protection enabled"
+                            : "Deletion protection disabled",
+                        );
+                      } else {
+                        toast.error(res.error_message ?? "Failed to update deletion protection");
+                      }
+                    }}
+                    className="mt-0.5"
+                  />
+                  <span className="text-xs text-secondary">
+                    <span className="font-medium text-primary">Deletion protection</span>
+                    <br />
+                    Refuses any delete while enabled, including a forced one.
+                  </span>
+                </label>
+
                 <p className="text-xs text-muted mb-4">
                   Permanently delete this database. The container <span className="font-mono">{db.container_name}</span>{" "}
                   and its data volume <span className="font-mono">{db.volume_name}</span> are destroyed on worker{" "}
