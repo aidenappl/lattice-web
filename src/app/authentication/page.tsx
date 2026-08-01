@@ -289,6 +289,7 @@ function SSOTab() {
   const [authorizeUrl, setAuthorizeUrl] = useState("");
   const [tokenUrl, setTokenUrl] = useState("");
   const [userinfoUrl, setUserinfoUrl] = useState("");
+  const [introspectUrl, setIntrospectUrl] = useState("");
   const [redirectUrl, setRedirectUrl] = useState("");
   const [logoutUrl, setLogoutUrl] = useState("");
   const [scopes, setScopes] = useState("");
@@ -314,6 +315,7 @@ function SSOTab() {
       setConfig(d); setEnabled(d.enabled); setClientId(d.client_id);
       setClientSecret(d.client_secret); setAuthorizeUrl(d.authorize_url);
       setTokenUrl(d.token_url); setUserinfoUrl(d.userinfo_url);
+      setIntrospectUrl(d.introspect_url ?? "");
       setRedirectUrl(d.redirect_url); setLogoutUrl(d.logout_url);
       setScopes(d.scopes); setUserIdentifier(d.user_identifier);
       setButtonLabel(d.button_label); setAutoProvision(d.auto_provision);
@@ -359,7 +361,8 @@ function SSOTab() {
     setSaving(true);
     const data: Partial<SSOConfigData> = {
       enabled, client_id: clientId, authorize_url: authorizeUrl,
-      token_url: tokenUrl, userinfo_url: userinfoUrl, redirect_url: redirectUrl,
+      token_url: tokenUrl, userinfo_url: userinfoUrl, introspect_url: introspectUrl,
+      redirect_url: redirectUrl,
       logout_url: logoutUrl, scopes, user_identifier: userIdentifier,
       button_label: buttonLabel, auto_provision: autoProvision,
       post_login_url: postLoginUrl,
@@ -468,6 +471,16 @@ function SSOTab() {
               <Input id="sso-userinfo-url" label="UserInfo URL" type="url" placeholder="https://idp.example.com/userinfo"
                 value={userinfoUrl} error={fieldErrors.userinfoUrl}
                 onChange={(e) => { setUserinfoUrl(e.target.value); clearFieldError("userinfoUrl"); }} />
+              {/*
+                Optional on purpose — it is not in the required-field validation
+                above. An SSO setup without introspection still logs people in
+                correctly; what it loses is the ability to notice that the
+                provider has revoked a grant. Making it required would block
+                every provider that does not implement RFC 7662.
+              */}
+              <Input id="sso-introspect-url" label="Introspection URL (enables revocation checks)" type="url"
+                placeholder="https://idp.example.com/oauth/introspect"
+                value={introspectUrl} onChange={(e) => setIntrospectUrl(e.target.value)} />
               <Input id="sso-redirect-url" label="Redirect URL" placeholder="https://lattice-api.example.com/auth/sso/callback"
                 value={redirectUrl} error={fieldErrors.redirectUrl}
                 onChange={(e) => { setRedirectUrl(e.target.value); clearFieldError("redirectUrl"); }} />
