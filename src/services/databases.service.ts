@@ -60,6 +60,7 @@ export const reqUpdateDatabaseInstance = (
         snapshot_schedule: string | null;
         retention_count: number | null;
         backup_destination_id: number | null;
+        mirror_backup_destination_id: number | null;
         deletion_protection: boolean;
     }>,
 ) =>

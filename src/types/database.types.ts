@@ -45,6 +45,8 @@ export type DatabaseInstance = {
     snapshot_schedule: string | null;
     retention_count: number | null;
     backup_destination_id: number | null;
+    /** Optional second destination each snapshot is copied to, for 3-2-1. */
+    mirror_backup_destination_id: number | null;
     container_name: string;
     volume_name: string;
     /** Refuses DELETE while set — deleting destroys the data volume. */

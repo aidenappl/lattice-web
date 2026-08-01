@@ -165,6 +165,7 @@ export default function DatabaseDetailPage() {
     snapshot_schedule: "",
     retention_count: "",
     backup_destination_id: "",
+    mirror_backup_destination_id: "",
     cpu_limit: "",
     memory_limit: "",
   });
@@ -288,6 +289,8 @@ export default function DatabaseDetailPage() {
         snapshot_schedule: db.snapshot_schedule ?? "",
         retention_count: db.retention_count != null ? String(db.retention_count) : "",
         backup_destination_id: db.backup_destination_id != null ? String(db.backup_destination_id) : "",
+        mirror_backup_destination_id:
+          db.mirror_backup_destination_id != null ? String(db.mirror_backup_destination_id) : "",
         cpu_limit: db.cpu_limit != null ? String(db.cpu_limit) : "",
         memory_limit: db.memory_limit != null ? String(db.memory_limit) : "",
       });
@@ -507,6 +510,7 @@ export default function DatabaseDetailPage() {
       snapshot_schedule: string | null;
       retention_count: number | null;
       backup_destination_id: number | null;
+      mirror_backup_destination_id: number | null;
       cpu_limit: number | null;
       memory_limit: number | null;
     }> = {
@@ -515,6 +519,9 @@ export default function DatabaseDetailPage() {
       snapshot_schedule: settingsForm.snapshot_schedule || null,
       retention_count: settingsForm.retention_count ? parseInt(settingsForm.retention_count) : null,
       backup_destination_id: settingsForm.backup_destination_id ? parseInt(settingsForm.backup_destination_id) : null,
+      mirror_backup_destination_id: settingsForm.mirror_backup_destination_id
+        ? parseInt(settingsForm.mirror_backup_destination_id)
+        : null,
       cpu_limit: settingsForm.cpu_limit ? parseFloat(settingsForm.cpu_limit) : null,
       memory_limit: settingsForm.memory_limit ? parseInt(settingsForm.memory_limit) : null,
     };
@@ -1377,6 +1384,36 @@ export default function DatabaseDetailPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* The mirror is what takes backup posture past 1/3: a second copy
+                  in a different failure domain. Copied after the primary
+                  succeeds, so a mirror failure degrades posture without failing
+                  the backup. */}
+              <div>
+                <label className="block text-xs text-muted mb-1">Mirror destination (optional)</label>
+                <select
+                  value={settingsForm.mirror_backup_destination_id}
+                  onChange={(e) =>
+                    setSettingsForm((f) => ({ ...f, mirror_backup_destination_id: e.target.value }))
+                  }
+                  disabled={!canEdit(user) || !settingsForm.backup_destination_id}
+                  className="h-9 w-full rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <option value="">None</option>
+                  {backupDestinations
+                    .filter((dest) => String(dest.id) !== settingsForm.backup_destination_id)
+                    .map((dest) => (
+                      <option key={dest.id} value={String(dest.id)}>
+                        {dest.name} ({dest.type}
+                        {dest.locality === "offsite" ? ", off-site" : ""})
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[11px] text-muted mt-1">
+                  Each snapshot is copied here after it lands on the primary. An off-site mirror is
+                  what satisfies the &quot;1&quot; in 3-2-1.
+                </p>
               </div>
             </div>
 
