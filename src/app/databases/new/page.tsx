@@ -235,6 +235,14 @@ export default function NewDatabasePage() {
     e.preventDefault();
     if (!engine || !name.trim() || !databaseName.trim() || !username.trim() || !workerId) return;
 
+    // A schedule needs somewhere to write. Without a destination the control
+    // plane never registers it with the worker, so it would save here and never
+    // produce a backup. Rejected by the API too.
+    if (snapshotSchedule.trim() && !backupDestinationId) {
+      toast.error("Choose a backup destination for the snapshot schedule, or leave the schedule empty");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await reqCreateDatabaseInstance({

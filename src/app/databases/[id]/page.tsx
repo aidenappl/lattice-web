@@ -452,6 +452,15 @@ export default function DatabaseDetailPage() {
   // ─── Settings ────────────────────────────────────────────────────────────────
 
   const handleSaveSettings = async () => {
+    // A schedule with nowhere to write is silently unschedulable: the runner is
+    // only told about instances that have a destination, so it would save, show
+    // in this form, and never fire. The API rejects it too — this is just the
+    // earlier, clearer half of the same guard.
+    if (settingsForm.snapshot_schedule && !settingsForm.backup_destination_id) {
+      toast.error("Choose a backup destination, or clear the snapshot schedule — a schedule with no destination never runs");
+      return;
+    }
+
     setSavingSettings(true);
     const data: Partial<{
       name: string;
@@ -892,11 +901,21 @@ export default function DatabaseDetailPage() {
                 )}
               </h3>
               {canEdit(user) && (
+                /* Without a backup destination the API rejects this outright, so
+                   leaving the button live only turns a known-invalid state into
+                   an error toast. The title says which precondition is missing. */
                 <Button
                   variant="secondary"
                   size="sm"
                   loading={takingSnapshot}
-                  disabled={!isRunning || takingSnapshot}
+                  disabled={!isRunning || takingSnapshot || !db.backup_destination_id}
+                  title={
+                    !db.backup_destination_id
+                      ? "Configure a backup destination in Settings before taking a snapshot"
+                      : !isRunning
+                        ? "The database must be running to take a snapshot"
+                        : undefined
+                  }
                   onClick={handleTakeSnapshot}
                 >
                   <FontAwesomeIcon icon={faCamera} className="h-3 w-3 mr-1.5" />

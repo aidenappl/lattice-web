@@ -358,6 +358,17 @@ The create form deliberately does **not** pre-fill a host port: leaving it blank
 plane allocate a free one, which is why a second database on the same worker no longer collides on
 3306.
 
+**A snapshot schedule requires a backup destination, and both forms enforce it.** The control plane
+only registers schedules that have somewhere to write, so a cron with no destination saves, renders
+in the form, and never fires. The create wizard and the Settings tab both refuse that combination
+before submitting, and *Take Snapshot* is disabled with a `title` explaining which precondition is
+missing rather than firing a request the API is guaranteed to reject. The API rejects it too — that
+guard is the load-bearing one, since `lattice-mcp` never goes through this app.
+
+Note that clearing a backup field now works: the API distinguishes an explicit JSON `null` from an
+omitted key, so the `|| null` the settings form already sent finally *unsets* a schedule. Before, the
+handler read null as "not supplied" and the schedule kept running after the UI showed it cleared.
+
 **Remove container ≠ Delete database, and the UI must never blur them.** The header's *Remove
 container* button (`reqDatabaseAction(id, "remove")`) destroys the container and **keeps the data
 volume**, so the database can be started again with its data; the instance stays in the list as
