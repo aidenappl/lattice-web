@@ -51,7 +51,18 @@ export default function LoginPage() {
     fetch(`${API_URL}/auth/sso/config`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data && typeof data.enabled === "boolean") setSsoConfig(data);
+        if (!data) return;
+        // ⚠️ ACCEPT EITHER SHAPE. Gating solely on `enabled` was a latent
+        // outage: that field is a LEGACY one this API still emits alongside the
+        // shared `providers` contract, and the day it is dropped this condition
+        // goes false, setSsoConfig never fires, and every SSO button vanishes
+        // from the login page — silently, with `providers` sitting right there
+        // in the response. monitor-web shipped exactly that bug and locked
+        // SSO-only users out. The derivation below already prefers `providers`;
+        // this gate just has to stop throwing the payload away.
+        if (Array.isArray(data.providers) || typeof data.enabled === "boolean") {
+          setSsoConfig(data);
+        }
       })
       .catch(() => {}); // SSO not available
   }, []);

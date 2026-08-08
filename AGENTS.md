@@ -295,10 +295,20 @@ provider it configures under `/auth/sso/*`).
 - **Two login paths** on `/login`:
   1. **Local** — email/password → `reqLogin` → `POST /auth/login`; on success the API sets the
      session cookie and the page redirects to `/`.
-  2. **SSO** — the page fetches the **public** `/auth/sso/config`; if `enabled`, it renders a
-     button linking to `login_url` (validated to start with `/` to prevent open-redirect /
-     `javascript:` injection). SSO error codes returned on the redirect (`sso_denied`,
-     `sso_no_account`, `sso_state_expired`, …) are mapped to friendly messages.
+  2. **SSO** — the page fetches the **public** `/auth/sso/config` and renders one button per
+     entry in the shared `providers` array, linking to `login_url` (validated to start with `/`
+     to prevent open-redirect / `javascript:` injection). SSO error codes returned on the
+     redirect (`sso_denied`, `sso_no_account`, `sso_state_expired`, …) are mapped to friendly
+     messages.
+
+     > ⚠️ **The response is accepted on `providers` OR `enabled`, and that matters.** `enabled`,
+     > `button_label` and `login_url` are **legacy** fields `lattice-api` still emits beside the
+     > shared contract. Gating the fetch solely on `enabled` — which this page did — is a latent
+     > outage: the day the API drops it, the payload is discarded, `setSsoConfig` never fires,
+     > and every SSO button vanishes from the login page while `providers` sits unread in the
+     > response. `monitor-web` shipped that exact bug and locked SSO-only users out on
+     > 2026-08-07. The provider derivation below already prefers `providers`; keep the gate
+     > permissive so it can reach it.
   - The page uses the **shared Appleby Cloud login layout** — the same structure as
     `forta-login`, `monitor-web` and `openbucket-web`: full-screen centred `<main>`, a brand
     row (40px logo tile + product name + hairline + "Appleby Cloud"), a bordered card holding
