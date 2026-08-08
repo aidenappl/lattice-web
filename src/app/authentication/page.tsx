@@ -45,6 +45,14 @@ interface ProviderPreset {
   userinfoUrl: string;
   scopes: string;
   userIdentifier: string;
+  /**
+   * OIDC issuer. Set only for providers that publish a discovery document.
+   *
+   * ⚠️ This is what upgrades the integration from OAuth2 to OIDC — a signed
+   * id_token, nonce verification, and the `sid` back-channel logout needs.
+   * Without it identity comes from an unsigned UserInfo response.
+   */
+  issuerUrl?: string;
   /** RFC 7662 introspection endpoint, where the provider has one. */
   introspectUrl?: string;
   /** RP-initiated logout endpoint (OIDC Session Management). */
@@ -70,6 +78,7 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     //
     // Values taken from https://auth.appleby.cloud/.well-known/openid-configuration.
     id: "forta", name: "Forta", icon: "F", color: "#3b82f6",
+    issuerUrl: "https://auth.appleby.cloud",
     authorizeUrl: "https://auth.appleby.cloud/oauth/authorize",
     tokenUrl: "https://auth.appleby.cloud/oauth/token",
     userinfoUrl: "https://auth.appleby.cloud/oauth/userinfo",
@@ -319,6 +328,7 @@ function SSOTab() {
   const [enabled, setEnabled] = useState(false);
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
+  const [issuerUrl, setIssuerUrl] = useState("");
   const [authorizeUrl, setAuthorizeUrl] = useState("");
   const [tokenUrl, setTokenUrl] = useState("");
   const [userinfoUrl, setUserinfoUrl] = useState("");
@@ -346,7 +356,7 @@ function SSOTab() {
     if (res.success && res.data) {
       const d = res.data;
       setConfig(d); setEnabled(d.enabled); setClientId(d.client_id);
-      setClientSecret(d.client_secret); setAuthorizeUrl(d.authorize_url);
+      setClientSecret(d.client_secret); setIssuerUrl(d.issuer_url ?? ""); setAuthorizeUrl(d.authorize_url);
       setTokenUrl(d.token_url); setUserinfoUrl(d.userinfo_url);
       setIntrospectUrl(d.introspect_url ?? "");
       setRedirectUrl(d.redirect_url); setLogoutUrl(d.logout_url);
@@ -376,6 +386,10 @@ function SSOTab() {
     // URL, and every revocation check would then be a request to the wrong
     // provider about a token it never issued — failing in a way that looks like
     // an outage rather than a misconfiguration.
+    // Same unconditional rule, and for the same reason: carrying Forta's issuer
+    // over to Google would build an OIDC adapter pointed at the wrong provider,
+    // and every id_token would fail verification.
+    setIssuerUrl(p.issuerUrl ?? "");
     setIntrospectUrl(p.introspectUrl ?? "");
     setLogoutUrl(p.logoutUrl ?? "");
 
@@ -405,7 +419,7 @@ function SSOTab() {
 
     setSaving(true);
     const data: Partial<SSOConfigData> = {
-      enabled, client_id: clientId, authorize_url: authorizeUrl,
+      enabled, client_id: clientId, issuer_url: issuerUrl, authorize_url: authorizeUrl,
       token_url: tokenUrl, userinfo_url: userinfoUrl, introspect_url: introspectUrl,
       redirect_url: redirectUrl,
       logout_url: logoutUrl, scopes, user_identifier: userIdentifier,
@@ -503,6 +517,29 @@ function SSOTab() {
 
           <div>
             <label className="text-xs font-medium text-secondary uppercase tracking-wider block mb-3">Endpoints</label>
+
+            {/*
+              Issuer sits above and outside the grid because it is not one endpoint
+              among several — it decides whether this integration verifies a signed
+              id_token at all. Set, the library discovers the provider's metadata,
+              verifies the id_token, checks the nonce and gets the `sid` that
+              back-channel logout needs. Blank, identity comes from an unsigned
+              UserInfo response and anything able to obtain an access token can
+              become that user.
+            */}
+            <div className="mb-4">
+              <Input id="sso-issuer-url" label="Issuer URL — enables OIDC (recommended)" type="url"
+                placeholder="https://auth.appleby.cloud"
+                value={issuerUrl}
+                onChange={(e) => setIssuerUrl(e.target.value)} />
+              <p className="text-xs text-muted mt-2">
+                Verifies a signed id_token instead of trusting an unsigned UserInfo
+                response, and is required for back-channel logout. Leaving it blank
+                keeps the weaker OAuth2 mode. Existing sessions must sign in again
+                once after setting it.
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input id="sso-authorize-url" label="Authorization URL" type="url" placeholder="https://idp.example.com/authorize"
                 value={authorizeUrl} error={fieldErrors.authorizeUrl}

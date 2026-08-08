@@ -186,6 +186,8 @@ export type SSOConfigData = {
     enabled: boolean;
     client_id: string;
     client_secret: string;
+    /** OIDC issuer — set to verify a signed id_token instead of trusting UserInfo. */
+    issuer_url?: string;
     authorize_url: string;
     token_url: string;
     userinfo_url: string;
