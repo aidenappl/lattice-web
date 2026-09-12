@@ -6,6 +6,11 @@ import reducer, {
   selectStackNameMap,
 } from "./stacksSlice";
 import type { Stack } from "@/types";
+import type { RootState } from "@/store";
+
+// The selector reads only `stacks`; the rest of RootState is irrelevant here.
+const asRootState = (stacks: RootState["stacks"]) =>
+  ({ stacks }) as unknown as RootState;
 
 const mockStack: Stack = {
   id: 1,

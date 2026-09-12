@@ -59,6 +59,9 @@ type StatusType =
   | "deleting"
   | "claimed"
   | "skipped"
+  | "in_progress"
+  | "succeeded"
+  | "disabled"
   | "none";
 
 const statusVariantMap: Record<
@@ -93,6 +96,11 @@ const statusVariantMap: Record<
   // slot). It is not a failure, but it is not success either — the whole reason
   // it is recorded rather than logged is so it is visible.
   skipped: "default",
+  // Automation runs. in_progress is not "running": that token is green here
+  // because it means a healthy container, and an unfinished run is not success.
+  in_progress: "warning",
+  succeeded: "success",
+  disabled: "default",
   stopped: "default",
   maintenance: "default",
   rolled_back: "default",
@@ -124,6 +132,9 @@ const statusDotMap: Record<StatusType, string> = {
   deleting: "bg-[#eab308]",
   claimed: "bg-[#eab308]",
   skipped: "bg-[#888888]",
+  in_progress: "bg-[#eab308]",
+  succeeded: "bg-[#22c55e]",
+  disabled: "bg-[#888888]",
   stopped: "bg-[#888888]",
   maintenance: "bg-[#888888]",
   rolled_back: "bg-[#888888]",
