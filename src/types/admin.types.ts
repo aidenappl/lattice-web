@@ -38,6 +38,12 @@ export type AuditLogEntry = {
     action: string;
     resource_type: string;
     resource_id: number | null;
+    /**
+     * Set when an automation run performed this action acting as `user_id`.
+     * The actor is the pair — without it an automated redeploy reads exactly
+     * like that user clicking the button.
+     */
+    automation_run_id: number | null;
     details: string | null;
     ip_address: string | null;
     inserted_at: string;

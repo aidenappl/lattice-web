@@ -9,8 +9,8 @@ import type { Stack } from "@/types";
 import type { RootState } from "@/store";
 
 // The selector reads only `stacks`; the rest of RootState is irrelevant here.
-const asRootState = (stacks: RootState["stacks"]) =>
-  ({ stacks }) as unknown as RootState;
+const asRootState = (state: { stacks: unknown }) =>
+  state as unknown as RootState;
 
 const mockStack: Stack = {
   id: 1,
@@ -90,7 +90,7 @@ describe("selectStackNameMap", () => {
     const rootState = {
       stacks: { list: [mockStack, stack2], current: null, loading: false, error: null },
     };
-    const map = selectStackNameMap(rootState as any);
+    const map = selectStackNameMap(asRootState(rootState));
     expect(map).toEqual({ 1: "web-stack", 2: "api-stack" });
   });
 
@@ -98,7 +98,7 @@ describe("selectStackNameMap", () => {
     const rootState = {
       stacks: { list: [], current: null, loading: false, error: null },
     };
-    const map = selectStackNameMap(rootState as any);
+    const map = selectStackNameMap(asRootState(rootState));
     expect(map).toEqual({});
   });
 });

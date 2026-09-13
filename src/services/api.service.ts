@@ -1,5 +1,6 @@
 import { ApiResponse } from "@/types";
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
+import { attachMonitor } from "./monitor.service";
 
 const BASE_API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 
@@ -12,6 +13,8 @@ const axiosApi = axios.create({
     withCredentials: true,
     timeout: 10000,
 });
+
+attachMonitor(axiosApi);
 
 const MAX_GET_RETRIES = 3;
 

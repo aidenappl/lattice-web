@@ -164,6 +164,14 @@ export default function AuditLogPage() {
                         ? (userMap.get(entry.user_id) ??
                           `User #${entry.user_id}`)
                         : "System"}
+                      {entry.automation_run_id != null && (
+                        <span
+                          className="badge badge-violet ml-1.5"
+                          title="Performed by an automation run acting as this user"
+                        >
+                          via automation · run #{entry.automation_run_id}
+                        </span>
+                      )}
                     </td>
                     <td>
                       <span

@@ -62,6 +62,7 @@ type StatusType =
   | "in_progress"
   | "succeeded"
   | "disabled"
+  | "enabled"
   | "none";
 
 const statusVariantMap: Record<
@@ -101,6 +102,7 @@ const statusVariantMap: Record<
   in_progress: "warning",
   succeeded: "success",
   disabled: "default",
+  enabled: "success",
   stopped: "default",
   maintenance: "default",
   rolled_back: "default",
@@ -135,6 +137,7 @@ const statusDotMap: Record<StatusType, string> = {
   in_progress: "bg-[#eab308]",
   succeeded: "bg-[#22c55e]",
   disabled: "bg-[#888888]",
+  enabled: "bg-[#22c55e]",
   stopped: "bg-[#888888]",
   maintenance: "bg-[#888888]",
   rolled_back: "bg-[#888888]",

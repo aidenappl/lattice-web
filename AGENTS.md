@@ -59,9 +59,10 @@ Versions are pinned in `package.json` (`version: 0.0.2`, `private: true`).
 | Terminal | **xterm** | `@xterm/xterm ^6.0.0` + addon-fit, addon-web-links | container exec/log terminal |
 | YAML | **js-yaml** | `^4.1.1` | compose YAML parse/serialize in the editor |
 | Toasts | **react-hot-toast** | `^2.6.0` | global `<Toaster>` in `DashboardLayout` |
+| Telemetry | **`@aidenappleby/monitor-js`** | `^1.2.0` | browser + server errors, failed API calls and navigation → Monitor (see *Operations*). 1.2.0 is the first version that strips query strings from reported URLs |
 | Fonts | **Inter Tight** + **JetBrains Mono** | via `next/font/google` | CSS vars `--font-inter-tight`, `--font-jetbrains-mono` |
 | Tests | **Vitest** + Testing Library | `vitest ^4.1.5`, `@testing-library/react ^16.3.2`, `jsdom ^29.0.2` | jsdom env, `src/test/setup.ts` |
-| Lint | **ESLint** + `eslint-config-next` | `eslint ^9`, config `16.1.6` | via `next lint` |
+| Lint | **ESLint** + `eslint-config-next` | `eslint ^9`, config `16.1.6` | `npm run lint` (`eslint`) with the flat config `eslint.config.mjs` — see *Verification* for the React Compiler rules |
 
 > **README drift note:** the current `README.md` claims **ReactFlow 12**
 > (`@xyflow/react`) and **Geist** fonts. Neither matches the code — topology uses **dagre + a
@@ -79,6 +80,9 @@ src/
   app/                      # App Router — one folder per route (see Page map)
     api/health/route.ts     # GET /api/health → {status:"ok"} — Docker HEALTHCHECK hits this
     api/version/route.ts    # GET /api/version → {version} from NEXT_PUBLIC_APP_VERSION
+    api/monitor/route.ts    # POST /api/monitor → same-origin relay for browser telemetry; adds the Monitor key server-side
+    error.tsx               # route error boundary → reports client.error.boundary, offers "Try again"
+    global-error.tsx        # root-layout failure → reports client.error.global; renders its own <html> (no app CSS)
     layout.tsx              # Root layout: fonts, metadata, StoreProvider→ThemeProvider→DashboardLayout, SSR dark class from cookie
     globals.css             # Tailwind v4 import + CSS-variable theme tokens (dark default, light override)
     page.tsx                # "/" dashboard (topology, KPIs, event stream, fleet resources)
@@ -88,17 +92,21 @@ src/
     layout/                 # Sidebar, Topbar, DashboardLayout, CommandPalette, UpdateBanner, RunnerUpgradePanel, Navbar — PascalCase
     dashboard/              # dashboard widgets (DashboardKPIRow, EventStream, FleetResourcePanel, …) — PascalCase
     stacks/ workers/ containers/  # feature-scoped component groups — PascalCase; stacks/ has a barrel index.ts
+    automations/            # AutomationFormModal, WebhookTokenModal, AutomationRunsTable
     topology/               # TopologyBoard.tsx + useTopologyData.ts (dagre layout)
     ThemeProvider.tsx       # light/dark/system context, cookie+localStorage persistence, cross-subdomain cookie domain
   services/                 # one {entity}.service.ts per domain; all call fetchApi<T> (see Service map)
     api.service.ts          # THE axios client + fetchApi<T> + 401/403 handling + proactive/reactive refresh + CSRF
+    monitor.service.ts      # browser Monitor (posts to /api/monitor), attachMonitor(axios), reportError()
+  instrumentation-client.ts # creates the browser Monitor before hydration; client.page.load / client.navigation events
+  instrumentation.ts        # onRequestError → server.request.error (Node runtime only)
   store/                    # Redux Toolkit
     index.ts                # makeStore(), RootState, AppDispatch
     hooks.ts                # useAppDispatch/useAppSelector + useAuth/useAuthStatus/useUser
     StoreProvider.tsx       # singleton store + AppInitializer (boots session via reqGetSelf, gates render)
     slices/                 # authSlice, overviewSlice, workersSlice, stacksSlice, containersSlice (+ *.test.ts)
   hooks/                    # cross-cutting hooks (usePoll, useAdminSocket, useContainerLogs, useIdleTimeout, …)
-  lib/                      # utils.ts (cn, isAdmin, canEdit, formatBytes, …), version.ts, deployment-progress.ts (+ *.test.ts)
+  lib/                      # utils.ts (cn, isAdmin, canEdit, formatBytes, …), version.ts, deployment-progress.ts, automations.ts (+ *.test.ts), monitor-server.ts (server-side Monitor)
   types/                    # domain types; index.ts re-exports all + ApiResponse/ApiSuccess/ApiError/SearchResults/ApiToken
   test/setup.ts             # Vitest + jest-dom setup
 ```
@@ -140,6 +148,8 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 | `/registries` | `registries/page.tsx` | Docker registry config, test, repo/tag browsing |
 | `/env-vars` | `env-vars/page.tsx` | Global (cross-stack) environment variables, incl. secrets |
 | `/templates` | `templates/page.tsx` | Stack templates (create from stack / from config, delete) |
+| `/automations` | `automations/page.tsx` | Automation list: trigger, step count, run-as user (flagged when deactivated), last run, enable switch, run now, create (form modal → show-once webhook URL) |
+| `/automations/[id]` | `automations/[id]/page.tsx` | Automation detail: trigger, run-as identity, ordered steps, polled run history with per-step results; run now / enable / disable / edit / rotate token (admin, webhook only) / delete |
 | `/backup-destinations` | `backup-destinations/page.tsx` | Backup destination CRUD + test |
 | `/audit-log` | `audit-log/page.tsx` | Administrative audit trail |
 | `/authentication` | `authentication/page.tsx` | SSO config (provider presets, OAuth2/OIDC endpoints, introspection, claim mapping) + SMTP config + test |
@@ -149,7 +159,7 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 | `/profile` | `profile/page.tsx` | Self profile: name, password, avatar (`reqUpdateSelf`) |
 
 Sidebar order (from `components/layout/Sidebar.tsx`): Dashboard, Deployments, Audit Log, Workers,
-Stacks, Containers, Databases, Networks, Registries, Env Variables, Templates, Backups,
+Stacks, Containers, Databases, Networks, Registries, Env Variables, Templates, Automations, Backups,
 Authentication, Notifications, AI Management, Settings — with a Profile link in the footer.
 
 ### Service map (`src/services/*.service.ts`)
@@ -170,6 +180,7 @@ The `data<T>` you receive is `lattice-api`'s `data` field, already unwrapped by 
 | `networks.service.ts` | Networks | `reqListAllNetworks`, per-worker list/create/delete, `reqDeleteNetworkByID` |
 | `volumes.service.ts` | Volumes | per-worker `reqListVolumes`/`reqCreateVolume`/`reqDeleteVolume` |
 | `templates.service.ts` | Templates | `reqGetTemplates`, `reqCreateTemplateFromStack`, `reqCreateTemplate`, `reqDeleteTemplate` |
+| `automations.service.ts` | Automations | `reqGetAutomations`/`reqGetAutomation`, `reqCreateAutomation` & `reqRotateAutomationToken` (→ `AutomationWithToken`, token once), `reqUpdateAutomation` (send `trigger`/`actions` only when changed), `reqDeleteAutomation`, `reqEnableAutomation`/`reqDisableAutomation`, `reqRunAutomation` (60 s timeout — a run has a 50 s budget), `reqGetAutomationRuns` |
 | `backup-destinations.service.ts` | Backups | destination CRUD + `reqTestBackupDestination` |
 
 ## Running, building & testing
@@ -209,23 +220,27 @@ All commands go through the custom `dev` CLI (`Devfile.yaml`) or npm directly.
 
 ### Environment variables
 
-Only `NEXT_PUBLIC_*` vars exist — this is a pure client app with no server secrets. Set them in
-`.env.local` (git-ignored). **Never create/modify `.env*` files yourself** — tell the user the
+Build-time config is `NEXT_PUBLIC_*`. The only server-side, runtime variables are the `MONITOR_*`
+ones below, read by `/api/monitor` and `instrumentation.ts` — the Monitor key is the one server
+secret, and it must never become `NEXT_PUBLIC_*`. Set them in `.env.local` (git-ignored). **Never create/modify `.env*` files yourself** — tell the user the
 values to set (global guardrail).
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `NEXT_PUBLIC_LATTICE_API` | **Yes** | `lattice-api` base URL (e.g. `http://localhost:8000` locally). Used for every Axios request, derives the WebSocket URL (`https→wss`), and tightens the CSP `connect-src` in `next.config.ts` |
 | `NEXT_PUBLIC_APP_VERSION` | No | Version string shown in-app and served by `/api/version`; defaults to `"dev"` (`lib/version.ts`). Injected as a Docker build-arg in CI |
+| `MONITOR_INGEST_URL` | No | Monitor ingest endpoint (appleby zone). **Runtime, server-only.** Unset = `/api/monitor` accepts and discards, and server errors are not reported |
+| `MONITOR_API_KEY` | No | Ingest-scoped key minted on the appleby zone. Runtime, server-only |
+| `MONITOR_ENV` | No | `env` of server-side events (default `production`) |
 
-Because these are baked at **build time**, changing the API URL requires a rebuild — there is no
-runtime config.
+The `NEXT_PUBLIC_*` values are baked at **build time**, so changing the API URL requires a rebuild;
+the `MONITOR_*` values are read at runtime from the container's environment.
 
 ### Testing
 
 Vitest with jsdom (`vitest.config.ts`, setup `src/test/setup.ts`, `@` alias mirrored). Tests are
 colocated `*.test.ts(x)` files. Current coverage is the **pure logic and reducers**, not full page
-rendering: `lib/utils.test.ts`, `lib/deployment-progress.test.ts`, and a `*.test.ts` beside each
+rendering: `lib/utils.test.ts`, `lib/deployment-progress.test.ts`, `lib/automations.test.ts`, and a `*.test.ts` beside each
 Redux slice (`authSlice`, `overviewSlice`, `workersSlice`, `stacksSlice`, `containersSlice`). When
 you touch a slice or a `lib/` helper, extend its sibling test.
 
@@ -431,8 +446,38 @@ question before retrying with `force`, because forcing abandons a container and 
 the worker.
 
 Screens that don't map cleanly to a slice (databases, registries, networks, templates, backups,
-deployments, env-vars, webhooks, SSO/SMTP, API tokens) fetch **directly via services into local
-component state** — Redux is reserved for the shared, frequently-re-read fleet data.
+deployments, env-vars, webhooks, SSO/SMTP, API tokens, automations) fetch **directly via services
+into local component state** — Redux is reserved for the shared, frequently-re-read fleet data.
+
+### Automation screens
+
+An automation is one trigger (webhook or UTC cron) plus an ordered list of steps
+(`redeploy_container`, named by **stack + container name** because compose edits re-create container
+ids; `http_request`). The rules live in `lattice-api` (*Domain & architecture → Automations*); these
+screens present them. `types/automation.types.ts` mirrors `structs/Automation.struct.go` — keep the
+status unions in step, and remember a new status token needs an entry in `components/ui/badge.tsx`.
+This change added `in_progress`, `succeeded`, `enabled` and `disabled` there. `in_progress` is
+deliberately not `running`, which is green because it means a healthy container.
+
+- **The run-as identity is visible, and saving can change it.** Every run is authorised against the
+  automation's run-as user at run time; creating it, editing its trigger/steps, or enabling it makes
+  *you* that user. So `AutomationFormModal` sends `trigger`/`actions` **only when they changed**
+  (`canonicalJSON` in `lib/automations.ts`) — a rename must not silently re-bind the identity.
+  Both pages flag a deactivated or missing run-as user, because every firing will be refused.
+- **Admin-only pieces are hidden, not just refused.** A webhook trigger and `http_request` steps
+  require the admin role, so non-admins aren't offered them. For an automation that already has
+  either, a non-admin's form locks the definition and allows a rename only. The API returns 403 regardless.
+  Non-admins receive `http_request` header values and bodies as `[redacted]`.
+- **The webhook URL exists in the browser exactly once** — in the create/rotate response —
+  and `WebhookTokenModal` shows it with a `curl --fail-with-body` recipe and the status-code contract
+  (`200` succeeded/disabled · `409` skipped · `424` failed). `withoutToken` strips it before the
+  automation goes into state. The detail page never has it: it renders the path with the token masked.
+- **Run history is polled every 10 s** on the detail page, since runs arrive from CI and schedules,
+  not from this UI. `AutomationRunsTable` expands a run into per-step results, including skipped steps
+  and the reason each never ran. "Run now" is synchronous and toasts the outcome.
+- **The audit log marks automated actions** with a `via automation · run #N` badge from
+  `AuditLogEntry.automation_run_id`. Without it, an automated redeploy reads exactly like the run-as
+  user clicking the button.
 
 ### Real-time / live data
 
@@ -495,6 +540,20 @@ component state** — Redux is reserved for the shared, frequently-re-read fleet
   API origin + its WebSocket origin (falls back to `wss: ws: https:` if `NEXT_PUBLIC_LATTICE_API`
   is unset at build), allows FontAwesome kit hosts, and sets `frame-ancestors 'none'`. `'unsafe-eval'`
   is added to `script-src` **only in dev** (Next HMR needs it).
+- **Telemetry → Monitor** (service `lattice-web`, appleby zone). The browser posts to this app's own
+  `/api/monitor`, which checks the request is same-origin, caps it (512 KiB, 500 events), forces
+  `service` to `lattice-web`, adds `MONITOR_API_KEY` and forwards, passing Monitor's status back so
+  the SDK's retry and bad-line isolation work unchanged. Same-origin also means the CSP needs no
+  new `connect-src`. Events:
+
+  | Event | Level | Source |
+  |-------|-------|--------|
+  | `client.error.uncaught` / `client.error.unhandled_rejection` | error | Any uncaught error or rejection (SDK window handlers, installed before hydration) |
+  | `client.error.boundary` / `client.error.global` | error | `app/error.tsx` / `app/global-error.tsx`, with the error `digest` shown to the user |
+  | `api.request.server_error` / `client_error` / `network_error` | error / warn / error | Every failed `lattice-api` call via the axios hook: method, path (no query), status, `error_message`, `X-Request-ID` — the same id as the API's own `http.request.end` event. Never a body |
+  | `server.request.error` | error | `onRequestError` — rendering, route handlers, server actions (Node runtime) |
+  | `client.page.load` / `client.navigation` | info | Every load and client-side navigation, path only |
+
 - **Common failure modes:**
   - *Everything shows a loading splash forever / bounces to `/login`* — `reqGetSelf` is failing:
     wrong `NEXT_PUBLIC_LATTICE_API`, CORS not allowing credentialed requests, or `lattice-api` down.
@@ -521,7 +580,11 @@ component state** — Redux is reserved for the shared, frequently-re-read fleet
 - **Never commit `.env*` or the `_wildcard.local.appleby.cloud*.pem` cert files** (both git-ignored;
   the certs are local-dev secrets).
 - **Never log secrets.** DB credentials, env-var secret values, registry passwords, and tokens flow
-  through this app's screens — don't add convenience `console.log`s of response bodies.
+  through this app's screens — don't add convenience `console.log`s of response bodies, and never
+  pass a response body or form value to `reportError` / `monitor.*` (it goes to Monitor).
+- **Never put a Monitor key in a `NEXT_PUBLIC_*` variable.** Browser telemetry goes through
+  `/api/monitor`, which adds the key server-side. Report caught errors with `reportError` from
+  `monitor.service.ts`; failed API calls are already reported by the axios hook.
 - **`server.js` (repo root) is dev-only** — it hard-exits under `NODE_ENV=production`. Production is
   the Next.js standalone server in the Docker image.
 - **Don't reorder or drop this file's sections** (global Documentation Standard). One extra focused
@@ -533,10 +596,19 @@ Run from the repo root; all must be green (global standard for Next.js repos: `n
 errors):
 
 ```bash
+npm run lint       # eslint with eslint.config.mjs — MUST exit 0 (warnings allowed, errors not)
 npx next build     # or: dev build — production build + TypeScript type-check; MUST pass
 npm test           # or: dev test — Vitest suite (slices + lib helpers)
 dev check          # optional but recommended: eslint + prettier --check + tsc --noEmit
 ```
+
+- **Lint could not run at all until `eslint.config.mjs` was added.** ESLint 9 reads only a flat
+  config, and the repo shipped none, so `npm run lint` exited 2 before reading a file. The config is
+  `eslint-config-next`'s own flat preset (core-web-vitals + typescript). It downgrades four React
+  Compiler rules to **warnings**: `react-hooks/set-state-in-effect`, `refs`, `purity` and
+  `immutability`. The first flags the `useEffect` + `useState` + `req*` fetching pattern this repo
+  mandates, and together they were 52 of 54 errors, all in files that predate the config. Promote
+  them back to errors only together with refactoring those effects, or with adopting the React Compiler.
 
 - **Fix every TypeScript error** — `strict` is on; the build fails on type errors.
 - If you changed a **slice** or a **`lib/` helper**, its sibling `*.test.ts` must still pass (extend

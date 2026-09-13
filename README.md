@@ -73,6 +73,7 @@ breaks** — use `dev:ssl` for anything involving login.
 |----------|----------|-------------|
 | `NEXT_PUBLIC_LATTICE_API` | Yes | `lattice-api` base URL (e.g. `http://localhost:8000`). Also derives the WebSocket origin and tightens the CSP. Baked at **build time** |
 | `NEXT_PUBLIC_APP_VERSION` | No | Displayed version string; defaults to `dev` |
+| `MONITOR_INGEST_URL` / `MONITOR_API_KEY` | No | Monitor telemetry (appleby zone). **Runtime, server-only** — the browser posts to `/api/monitor`, which adds the key. Unset = telemetry off |
 
 ## Development
 
@@ -83,7 +84,7 @@ breaks** — use `dev:ssl` for anything involving login.
 | `npm run build` | Production build (standalone output) |
 | `npm start` | Run the production build |
 | `npm test` | Run the Vitest suite once |
-| `npm run lint` | ESLint |
+| `npm run lint` | ESLint (flat config in `eslint.config.mjs`) |
 | `dev dev` / `dev dev-http` | `dev` CLI: HTTPS (`dev:ssl`) / HTTP dev server |
 | `dev setup-local` | One-time mkcert + `/etc/hosts` setup for local HTTPS |
 | `dev check` | ESLint + Prettier check + `tsc --noEmit` |
@@ -99,6 +100,7 @@ breaks** — use `dev:ssl` for anything involving login.
 - **Databases** — managed DB instances: provision, credentials, snapshots, start/stop/restart/remove, restore
 - **Registries** — configure/test Docker registries, browse repositories/tags
 - **Networks, volumes, backup destinations, global env vars, templates, webhooks**
+- **Automations** — a webhook or cron trigger plus ordered steps (redeploy containers across any stacks, HTTP requests), with a show-once webhook URL, the run-as identity on display, and a per-step run history
 - **Users & API tokens** — user CRUD + roles; API tokens for `lattice-mcp` / AI agents (the `/ai` page)
 - **Audit log**, **SSO/SMTP config**, **notification prefs**, **version checks & service updates**
 - **Dark-default theme** — light/system toggle, persisted across `.appleby.cloud` subdomains
@@ -108,15 +110,17 @@ breaks** — use `dev:ssl` for anything involving login.
 ```
 src/
   app/                  # App Router — one folder per route (dashboard, workers, stacks, containers,
-                        #   deployments, databases, networks, registries, env-vars, templates,
+                        #   deployments, databases, networks, registries, env-vars, templates, automations,
                         #   backup-destinations, audit-log, authentication, notifications, ai,
-                        #   settings, profile, login, pending, unauthorized) + api/health, api/version
+                        #   settings, profile, login, pending, unauthorized) + api/health, api/version,
+                        #   api/monitor (telemetry relay), error.tsx / global-error.tsx
   components/           # ui/ primitives (kebab-case) + dashboard/ workers/ stacks/ containers/
                         #   layout/ topology/ feature components (PascalCase)
   services/             # {entity}.service.ts — all call fetchApi<T>; api.service.ts is the client
   store/                # Redux Toolkit: 5 slices, typed hooks, singleton StoreProvider
   hooks/                # useAdminSocket, useContainerLogs, usePoll, useVersionCheck, useIdleTimeout, …
-  lib/                  # utils (cn, isAdmin, canEdit, formatBytes, …), version, deployment-progress
+  lib/                  # utils (cn, isAdmin, canEdit, formatBytes, …), version, deployment-progress, monitor-server
+  instrumentation*.ts   # Monitor wiring: browser errors/navigation (client), onRequestError (server)
   types/                # domain types + ApiResponse<T>
 ```
 
