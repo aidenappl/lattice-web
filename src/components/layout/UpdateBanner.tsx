@@ -15,6 +15,7 @@ import { reqUpdateAPI, reqUpdateWeb } from "@/services/admin.service";
 import { RunnerUpgradePanel } from "@/components/layout/RunnerUpgradePanel";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import { reportFetchFailure, type FetchFailure } from "@/services/monitor.service";
 
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 
@@ -22,22 +23,30 @@ const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 function waitForRestart(label: string, toastId: string) {
   let attempts = 0;
   const maxAttempts = 60;
+  // Failures are expected while the service restarts; only the last one is
+  // reported, and only if it never came back.
+  let lastFailure: Pick<FetchFailure, "response" | "error"> | null = null;
   const poll = setInterval(async () => {
     attempts++;
     try {
       const res = await fetch(`${API_URL}/healthcheck`, {
         signal: AbortSignal.timeout(2000),
       });
+      lastFailure = res.ok ? null : { response: res };
       if (res.ok) {
         clearInterval(poll);
         toast.success(`${label} restarted successfully.`, { id: toastId });
         setTimeout(() => window.location.reload(), 1500);
       }
-    } catch {
+    } catch (err) {
       // still down — keep polling
+      lastFailure = { error: err };
     }
     if (attempts >= maxAttempts) {
       clearInterval(poll);
+      if (lastFailure) {
+        reportFetchFailure({ feature: "update_banner.restart_wait", url: `${API_URL}/healthcheck`, attempts, ...lastFailure });
+      }
       toast.error(`${label} did not come back within 60 seconds.`, {
         id: toastId,
       });
@@ -104,12 +113,14 @@ export function UpdateBanner() {
         "Web container restarting — waiting for it to come back...",
       );
       let attempts = 0;
+      let lastFailure: Pick<FetchFailure, "response" | "error"> | null = null;
       const poll = setInterval(async () => {
         attempts++;
         try {
           const r = await fetch("/api/health", {
             signal: AbortSignal.timeout(2000),
           });
+          lastFailure = r.ok ? null : { response: r };
           if (r.ok) {
             clearInterval(poll);
             toast.success("Web updated successfully. Reloading...", {
@@ -117,11 +128,15 @@ export function UpdateBanner() {
             });
             setTimeout(() => window.location.reload(), 1500);
           }
-        } catch {
+        } catch (err) {
           // still restarting
+          lastFailure = { error: err };
         }
         if (attempts >= 60) {
           clearInterval(poll);
+          if (lastFailure) {
+            reportFetchFailure({ feature: "update_banner.web_restart_wait", url: "/api/health", attempts, ...lastFailure });
+          }
           toast.error("Web did not come back within 60 seconds.", {
             id: toastId,
           });

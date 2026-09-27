@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Logo } from "@/components/ui/logo";
 import { reqGetSelf } from "@/services/auth.service";
 import { reqLogout } from "@/services/auth.service";
+import { monitor } from "@/services/monitor.service";
 
 export default function PendingApprovalPage() {
   const [email, setEmail] = useState("");
@@ -36,6 +37,7 @@ export default function PendingApprovalPage() {
       <button
         onClick={async () => {
           await reqLogout();
+          monitor?.clearUser();
           window.location.replace("/login");
         }}
         className="btn btn-secondary mt-4"

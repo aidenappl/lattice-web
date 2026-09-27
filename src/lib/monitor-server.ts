@@ -1,6 +1,6 @@
 import { Monitor } from "@aidenappleby/monitor-js";
 import type { Instrumentation } from "next";
-import { MONITOR_SERVICE } from "@/services/monitor.service";
+import { MONITOR_SERVICE, RELEASE } from "@/services/monitor.service";
 
 let monitor: Monitor | null | undefined;
 
@@ -48,6 +48,7 @@ export const reportServerError = (
             route_type: context.routeType,
             router_kind: context.routerKind,
             render_source: context.renderSource,
+            release: RELEASE,
         },
     });
 };

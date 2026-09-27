@@ -37,6 +37,7 @@ import { APP_VERSION } from "@/lib/version";
 import toast from "react-hot-toast";
 import { RunnerUpgradePanel } from "@/components/layout/RunnerUpgradePanel";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
+import { reportFetchFailure, type FetchFailure } from "@/services/monitor.service";
 import {
   reqGetTemplates,
   reqDeleteTemplate,
@@ -51,12 +52,16 @@ function waitForAPIRestart(
   mountedRef: React.MutableRefObject<boolean>,
 ) {
   let attempts = 0;
+  // Failures are expected while the API restarts; only the last one is
+  // reported, and only if it never came back.
+  let lastFailure: Pick<FetchFailure, "response" | "error"> | null = null;
   const poll = setInterval(async () => {
     attempts++;
     try {
       const res = await fetch(`${API_URL}/healthcheck`, {
         signal: AbortSignal.timeout(2000),
       });
+      lastFailure = res.ok ? null : { response: res };
       if (res.ok) {
         clearInterval(poll);
         pollRef.current = null;
@@ -66,12 +71,16 @@ function waitForAPIRestart(
           if (mountedRef.current) window.location.reload();
         }, 1500);
       }
-    } catch {
+    } catch (err) {
       // still down
+      lastFailure = { error: err };
     }
     if (attempts >= 60) {
       clearInterval(poll);
       pollRef.current = null;
+      if (lastFailure) {
+        reportFetchFailure({ feature: "settings.api_restart_wait", url: `${API_URL}/healthcheck`, attempts, ...lastFailure });
+      }
       if (!mountedRef.current) return;
       toast.error("API did not come back within 60 seconds.", { id: toastId });
       onFail();
@@ -144,12 +153,14 @@ function VersionCheckSection({ adminUser }: { adminUser: boolean }) {
         "Web container restarting — waiting for it to come back...",
       );
       let attempts = 0;
+      let lastFailure: Pick<FetchFailure, "response" | "error"> | null = null;
       const poll = setInterval(async () => {
         attempts++;
         try {
           const r = await fetch("/api/health", {
             signal: AbortSignal.timeout(2000),
           });
+          lastFailure = r.ok ? null : { response: r };
           if (r.ok) {
             clearInterval(poll);
             pollRef.current = null;
@@ -161,12 +172,16 @@ function VersionCheckSection({ adminUser }: { adminUser: boolean }) {
               if (mountedRef.current) window.location.reload();
             }, 1500);
           }
-        } catch {
+        } catch (err) {
           // still restarting
+          lastFailure = { error: err };
         }
         if (attempts >= 60) {
           clearInterval(poll);
           pollRef.current = null;
+          if (lastFailure) {
+            reportFetchFailure({ feature: "settings.web_restart_wait", url: "/api/health", attempts, ...lastFailure });
+          }
           if (!mountedRef.current) return;
           toast.error("Web did not come back within 60 seconds.", {
             id: toastId,

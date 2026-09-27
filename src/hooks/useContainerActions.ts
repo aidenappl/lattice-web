@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import toast from "react-hot-toast";
+import { reportCaught } from "@/services/monitor.service";
 import {
     reqStartContainer,
     reqStopContainer,
@@ -88,6 +89,7 @@ export function useContainerActions(onRefresh?: () => void) {
                     toast.error(`${label} failed: ${msg}`, { id: toastId });
                 }
             } catch (err) {
+                reportCaught("containers.action", err, { action, container_id: containerId });
                 toast.error(`${label} error: ${String(err)}`, { id: toastId });
             }
 

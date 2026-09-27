@@ -10,6 +10,7 @@ import {
   faChevronUp,
 } from "@fortawesome/free-solid-svg-icons";
 import { useAdminSocket, type AdminSocketEvent } from "@/hooks/useAdminSocket";
+import { reportWarnRateLimited } from "@/services/monitor.service";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { reqUpgradeRunner } from "@/services/workers.service";
 import type { WorkerVersionInfo } from "@/types/version.types";
@@ -149,8 +150,14 @@ function deriveEntry(w: WorkerVersionInfo): RunnerStatusEntry {
         }
         message = pa.message;
       }
-    } catch {
-      /* ignore parse errors */
+    } catch (err) {
+      // Runs on every render: rate-limited per worker.
+      reportWarnRateLimited(
+        "runner_upgrade.pending_action_invalid",
+        { worker_id: w.worker_id, error_message: err instanceof Error ? err.message : String(err) },
+        `runner_upgrade.pending_action_invalid:${w.worker_id}`,
+        5 * 60_000,
+      );
     }
   }
 

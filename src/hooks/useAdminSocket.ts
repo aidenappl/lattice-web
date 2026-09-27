@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import { monitor, reportWarnRateLimited } from "@/services/monitor.service";
+import { ReconnectTracker, type ReconnectReport } from "@/lib/ws-reconnect";
 
 export type AdminSocketEvent = {
     type: string;
@@ -26,6 +28,29 @@ const subscribers = new Set<EventHandler>();
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let intentionalClose = false;
+let sawError = false;
+let openSince: number | null = null;
+
+/** When the shared socket last opened, or null while it is not open. */
+export function adminSocketOpenSince(): number | null {
+    return openSince;
+}
+
+// Bounds WebSocket telemetry to a handful of events per outage.
+const reconnects = new ReconnectTracker();
+// Fires once the socket has stayed open long enough to count as recovered.
+let stableTimer: ReturnType<typeof setTimeout> | null = null;
+
+const clearStableTimer = (): void => {
+    if (stableTimer) {
+        clearTimeout(stableTimer);
+        stableTimer = null;
+    }
+};
+
+const emitReport = (report: ReconnectReport | null): void => {
+    if (report) monitor?.emit(report.name, report.level, { data: { ...report.data, socket: "admin" } });
+};
 
 function connect() {
     if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
@@ -40,6 +65,13 @@ function connect() {
 
     ws.onopen = () => {
         if (isDev) console.log("[AdminSocket] connected");
+        openSince = Date.now();
+        reconnects.opened(openSince);
+        clearStableTimer();
+        stableTimer = setTimeout(() => {
+            stableTimer = null;
+            emitReport(reconnects.stable());
+        }, reconnects.stableAfterMs);
     };
 
     ws.onmessage = (e) => {
@@ -48,6 +80,12 @@ function connect() {
             data = JSON.parse(e.data as string) as AdminSocketEvent;
         } catch (err) {
             if (isDev) console.warn("[AdminSocket] unparseable message:", e.data, err);
+            // Never the payload itself: container log lines can carry secrets.
+            reportWarnRateLimited("ws.message_invalid", {
+                socket: "admin",
+                length: typeof e.data === "string" ? e.data.length : undefined,
+                error_message: err instanceof Error ? err.message : String(err),
+            });
             return;
         }
         if (isDev) console.debug("[AdminSocket] ←", data.type);
@@ -55,13 +93,22 @@ function connect() {
     };
 
     ws.onerror = () => {
-        // Errors are always followed by onclose — let onclose handle reconnect.
+        // Errors are always followed by onclose — let onclose handle reconnect
+        // and reporting. The browser exposes no detail beyond the fact.
+        sawError = true;
     };
 
     ws.onclose = (e) => {
+        const hadError = sawError;
+        sawError = false;
+        openSince = null;
+        clearStableTimer();
         if (intentionalClose) return;
         if (isDev) console.log(`[AdminSocket] closed (code=${e.code}), reconnecting in 3s…`);
         if (subscribers.size > 0) {
+            emitReport(
+                reconnects.failed({ close_code: e.code, was_clean: e.wasClean, had_error: hadError }),
+            );
             reconnectTimer = setTimeout(connect, 3000);
         }
     };
@@ -78,10 +125,13 @@ function ensureConnected() {
 function maybeDisconnect() {
     if (subscribers.size === 0) {
         intentionalClose = true;
+        reconnects.reset();
+        clearStableTimer();
         if (reconnectTimer) {
             clearTimeout(reconnectTimer);
             reconnectTimer = null;
         }
+        openSince = null;
         if (ws) {
             ws.onclose = null;
             ws.close();
@@ -131,5 +181,5 @@ export function useAdminSocket(onEvent: EventHandler): void {
             subscribers.delete(handler);
             maybeDisconnect();
         };
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, []);
 }

@@ -244,6 +244,8 @@ function UserMenu() {
               setOpen(false);
               const { reqLogout } = await import("@/services/auth.service");
               await reqLogout();
+              const { monitor } = await import("@/services/monitor.service");
+              monitor?.clearUser();
               window.location.replace("/login");
             }}
           >

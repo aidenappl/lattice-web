@@ -10,6 +10,7 @@ export * from "./dashboard.types";
 export * from "./webhook.types";
 export * from "./database.types";
 export * from "./automation.types";
+export * from "./request.types";
 
 export type SearchResults = {
     workers: { id: number; name: string; hostname: string; status: string }[];
@@ -44,4 +45,6 @@ export type ApiError = {
     error: string;
     error_message: string;
     error_code: number;
+    /** The X-Request-ID of the failed call (the API's echo, else the one sent). */
+    request_id?: string;
 };

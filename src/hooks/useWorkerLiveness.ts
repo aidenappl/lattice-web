@@ -13,7 +13,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { Worker } from "@/types";
 import { isWorkerOnline } from "@/lib/utils";
-import { useAdminSocket, type AdminSocketEvent } from "./useAdminSocket";
+import { adminSocketOpenSince, useAdminSocket, type AdminSocketEvent } from "./useAdminSocket";
+import { reportWarnRateLimited } from "@/services/monitor.service";
 
 type LivenessMap = Record<number, boolean>; // workerId → isOnline
 
@@ -33,6 +34,12 @@ export function useWorkerLiveness(workers: Worker[]): LivenessMap {
     // Track last-seen timestamps per worker so we can detect heartbeat gaps
     const lastSeenRef = useRef<Record<number, number>>({});
 
+    // The current map, for the staleness ticker to read outside a state updater.
+    const livenessRef = useRef<LivenessMap>(liveness);
+    useEffect(() => {
+        livenessRef.current = liveness;
+    }, [liveness]);
+
     // Stable key derived from workers data — avoids re-seeding on every render
     // when callers pass a freshly-created array with the same contents.
     const workersKey = workers
@@ -40,7 +47,6 @@ export function useWorkerLiveness(workers: Worker[]): LivenessMap {
         .join(",");
 
     // When the actual worker data changes (re-fetch), re-sync liveness seed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         setLiveness(buildInitialLiveness(workers));
         const now = Date.now();
@@ -79,20 +85,35 @@ export function useWorkerLiveness(workers: Worker[]): LivenessMap {
     useEffect(() => {
         const interval = setInterval(() => {
             const STALE_MS = 90_000;
+            const now = Date.now();
+            const stale: number[] = [];
+            for (const [idStr, online] of Object.entries(livenessRef.current)) {
+                if (!online) continue;
+                const id = Number(idStr);
+                const lastSeen = lastSeenRef.current[id] ?? 0;
+                if (now - lastSeen > STALE_MS) stale.push(id);
+            }
+            if (stale.length === 0) return;
+
+            // With the socket down (or only just back) every worker looks stale
+            // here; that outage is reported as ws.* instead.
+            const openSince = adminSocketOpenSince();
+            const socketHealthy = openSince !== null && now - openSince > STALE_MS;
+            for (const id of stale) {
+                if (process.env.NODE_ENV === "development") console.warn(`[WorkerLiveness] worker ${id} → stale (no heartbeat for 90s)`);
+                // A worker that stops heartbeating without a disconnect is a
+                // hung runner or a dropped link the API has not noticed yet.
+                if (socketHealthy) reportWarnRateLimited(
+                    "worker.stale",
+                    { worker_id: id, last_seen_ms_ago: now - (lastSeenRef.current[id] ?? 0) },
+                    `worker.stale:${id}`,
+                    5 * 60_000,
+                );
+            }
             setLiveness((prev) => {
-                let changed = false;
                 const next = { ...prev };
-                for (const [idStr, online] of Object.entries(prev)) {
-                    if (!online) continue;
-                    const id = Number(idStr);
-                    const lastSeen = lastSeenRef.current[id] ?? 0;
-                    if (Date.now() - lastSeen > STALE_MS) {
-                        if (process.env.NODE_ENV === "development") console.warn(`[WorkerLiveness] worker ${id} → stale (no heartbeat for 90s)`);
-                        next[id] = false;
-                        changed = true;
-                    }
-                }
-                return changed ? next : prev;
+                for (const id of stale) next[id] = false;
+                return next;
             });
         }, 15_000);
         return () => clearInterval(interval);

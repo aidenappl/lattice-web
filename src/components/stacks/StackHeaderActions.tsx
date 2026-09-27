@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import toast from "react-hot-toast";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import {
@@ -11,7 +13,21 @@ import {
     reqExportStack,
 } from "@/services/stacks.service";
 import { reqCreateTemplateFromStack } from "@/services/templates.service";
-import type { Stack, Container } from "@/types";
+import type { Stack, Container, StackBulkActionResult } from "@/types";
+
+const plural = (n: number) => `${n} container${n === 1 ? "" : "s"}`;
+
+/** Success toast for a stack-wide action, or a warning when some containers failed. */
+const toastBulkResult = (verb: string, result: StackBulkActionResult) => {
+    const failed = result.failed ?? 0;
+    if (failed > 0) {
+        toast(`${verb} ${plural(result.count)}, ${failed} failed`, {
+            icon: <FontAwesomeIcon icon={faTriangleExclamation} className="text-warning" />,
+        });
+        return;
+    }
+    toast.success(`${verb} ${plural(result.count)}`);
+};
 
 interface StackHeaderActionsProps {
     stack: Stack;
@@ -127,10 +143,7 @@ export function StackHeaderActions({
                             });
                             if (!ok) return;
                             const res = await reqRestartStack(stackId);
-                            if (res.success)
-                                toast.success(
-                                    `Restarted ${res.data.restarted} containers`,
-                                );
+                            if (res.success) toastBulkResult("Restarted", res.data);
                             else toast.error(res.error_message || "Failed");
                         }}
                         disabled={!workerOnline || runningCount === 0}
@@ -149,10 +162,7 @@ export function StackHeaderActions({
                             });
                             if (!ok) return;
                             const res = await reqStopStack(stackId);
-                            if (res.success)
-                                toast.success(
-                                    `Stopped ${res.data.stopped} containers`,
-                                );
+                            if (res.success) toastBulkResult("Stopped", res.data);
                             else toast.error(res.error_message || "Failed");
                         }}
                         disabled={!workerOnline || runningCount === 0}
@@ -164,10 +174,7 @@ export function StackHeaderActions({
                         size="sm"
                         onClick={async () => {
                             const res = await reqStartStack(stackId);
-                            if (res.success)
-                                toast.success(
-                                    `Started ${res.data.started} containers`,
-                                );
+                            if (res.success) toastBulkResult("Started", res.data);
                             else toast.error(res.error_message || "Failed");
                         }}
                         disabled={!workerOnline || stoppedCount === 0}

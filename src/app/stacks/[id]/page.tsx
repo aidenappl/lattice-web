@@ -9,6 +9,7 @@ import {
   faCubes,
 } from "@fortawesome/free-solid-svg-icons";
 import toast from "react-hot-toast";
+import { reportWarn, reportWarnRateLimited } from "@/services/monitor.service";
 import {
   Stack,
   Container,
@@ -127,11 +128,17 @@ export default function StackDetailPage() {
       if (typeof obj === "object" && !Array.isArray(obj) && obj !== null) {
         Object.assign(merged, obj);
       }
-    } catch {
-      // ignore parse errors
+    } catch (err) {
+      // Stored env_vars that aren't JSON. Runs on every edit: rate-limited.
+      reportWarnRateLimited(
+        "stack.env_vars_invalid",
+        { stack_id: id, error_message: err instanceof Error ? err.message : String(err) },
+        `stack.env_vars_invalid:${id}`,
+        5 * 60_000,
+      );
     }
     return merged;
-  }, [stackEnvVars, globalEnvVars]);
+  }, [stackEnvVars, globalEnvVars, id]);
 
   // Compose editor
   const [composeYaml, setComposeYaml] = useState("");
@@ -343,7 +350,6 @@ export default function StackDetailPage() {
         refreshContainers();
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [id, refreshContainers, handleLogSocketEvent, loadLogs],
   );
   useAdminSocket(handleSocketEvent);
@@ -519,6 +525,7 @@ export default function StackDetailPage() {
     const fn = actionFns[action];
     if (!fn) {
       if (process.env.NODE_ENV === "development") console.warn(`[StackPage] unknown action "${action}"`);
+      reportWarn("stack.container_action.unknown", { action, stack_id: id, container_id: containerId });
       setActionLoading((prev) => ({ ...prev, [key]: false }));
       return;
     }

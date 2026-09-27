@@ -13,6 +13,7 @@ import {
   faCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import toast from "react-hot-toast";
+import { reportCaught } from "@/services/monitor.service";
 import type {
   Worker,
   BackupDestination,
@@ -271,7 +272,8 @@ export default function NewDatabasePage() {
       } else {
         toast.error(res.error_message || "Failed to create database");
       }
-    } catch {
+    } catch (err) {
+      reportCaught("databases.create", err);
       toast.error("Failed to create database");
     } finally {
       setSubmitting(false);

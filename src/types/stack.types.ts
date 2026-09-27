@@ -102,3 +102,11 @@ export type Template = {
     updated_at: string;
     inserted_at: string;
 };
+
+/** The result of a stack-wide start/stop/restart-all. */
+export type StackBulkActionResult = {
+    /** Containers the command was sent to. */
+    count: number;
+    /** Containers the command could not be sent to (older APIs omit it). */
+    failed?: number;
+};
