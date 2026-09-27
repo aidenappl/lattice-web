@@ -6,7 +6,7 @@ import { setIsLoading, setIsLogged, setUser } from "./slices/authSlice";
 import { useEffect, useState } from "react";
 import { reqGetSelf } from "@/services/auth.service";
 import { startProactiveRefresh, stopProactiveRefresh } from "@/services/api.service";
-import { monitor } from "@/services/monitor.service";
+import { hasLoggedInCookie, monitor, reportError, sessionFailureLevel } from "@/services/monitor.service";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { Logo } from "@/components/ui/logo";
 
@@ -54,11 +54,27 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
           // Grant revoked — fetchApi already redirecting to /unauthorized
           return;
         } else {
+          // 401/403 is a signed-out visitor or an ended session — expected,
+          // so info, and not reported at all when the browser never held the
+          // logged-in marker (a first visit). Other 4xx warn; 5xx errors.
+          const signedOut = authRes.status === 401 && !hasLoggedInCookie();
+          if (!signedOut) {
+            monitor?.emit("session.bootstrap.failed", sessionFailureLevel(authRes.status), {
+              requestId: authRes.request_id,
+              data: {
+                status_code: authRes.status,
+                error: authRes.error,
+                error_code: authRes.error_code,
+                error_message: authRes.error_message,
+              },
+            });
+          }
           storeInstance.dispatch(setIsLoading(false));
           window.location.href = "/login";
           return;
         }
-      } catch {
+      } catch (err) {
+        reportError("session.bootstrap.failed", err);
         storeInstance.dispatch(setIsLoading(false));
         window.location.href = "/login";
         return;

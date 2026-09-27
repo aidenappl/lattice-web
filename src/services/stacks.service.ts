@@ -1,4 +1,4 @@
-import { Stack, Container, ContainerLog, LifecycleLog, ComposeNetwork, DeployToken, StackExportPayload, StackImportPayload, ContainerMetrics } from "@/types";
+import { Stack, StackBulkActionResult, Container, ContainerLog, LifecycleLog, ComposeNetwork, DeployToken, StackExportPayload, StackImportPayload, ContainerMetrics } from "@/types";
 import { fetchApi } from "./api.service";
 
 export const reqGetStacks = () =>
@@ -177,19 +177,19 @@ export const reqGetAllNetworks = () =>
     });
 
 export const reqRestartStack = (stackId: number) =>
-    fetchApi<{ restarted: number }>({
+    fetchApi<StackBulkActionResult>({
         method: "POST",
         url: `/admin/stacks/${stackId}/restart-all`,
     });
 
 export const reqStopStack = (stackId: number) =>
-    fetchApi<{ stopped: number }>({
+    fetchApi<StackBulkActionResult>({
         method: "POST",
         url: `/admin/stacks/${stackId}/stop-all`,
     });
 
 export const reqStartStack = (stackId: number) =>
-    fetchApi<{ started: number }>({
+    fetchApi<StackBulkActionResult>({
         method: "POST",
         url: `/admin/stacks/${stackId}/start-all`,
     });

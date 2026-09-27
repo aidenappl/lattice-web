@@ -1,7 +1,6 @@
 import { ApiResponse } from "@/types";
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
-import { newRequestId } from "@aidenappleby/monitor-js";
-import { attachMonitor } from "./monitor.service";
+import { attachMonitor, monitor, newClientRequestId, sessionFailureLevel } from "./monitor.service";
 
 const BASE_API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 
@@ -17,18 +16,12 @@ const axiosApi = axios.create({
 
 const REQUEST_ID_HEADER = "X-Request-ID";
 
-// crypto.randomUUID exists only in secure contexts (HTTPS, localhost).
-const mintRequestId = (): string =>
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : newRequestId();
-
 // Every call carries an X-Request-ID. lattice-api adopts it as its own request
 // id, so a browser event (even a timeout that never got a response) joins the
 // API's logs for the same request. Kept on config.meta for the Monitor reporter.
 axiosApi.interceptors.request.use((config) => {
     const existing = config.headers.get(REQUEST_ID_HEADER);
-    const requestId = typeof existing === "string" && existing !== "" ? existing : mintRequestId();
+    const requestId = typeof existing === "string" && existing !== "" ? existing : newClientRequestId();
     config.headers.set(REQUEST_ID_HEADER, requestId);
     config.meta = { ...config.meta, requestId, startTime: Date.now() };
     return config;
@@ -131,6 +124,7 @@ export const fetchApi = async <T>(
                 error: "request_failed",
                 error_message: message ?? "Request failed unexpectedly",
                 error_code: -1,
+                request_id: err instanceof AxiosError ? err.config?.meta?.requestId : undefined,
             };
         }
     }
@@ -161,8 +155,58 @@ const MAX_REFRESH_ATTEMPTS = 2;
 
 let refreshPromise: Promise<RefreshResult | null> | null = null;
 
+/** The outcome of one /auth/refresh attempt that did not succeed. */
+type RefreshFailure = {
+    requestId: string;
+    status?: number;
+    body?: { error?: unknown; error_message?: unknown; error_code?: unknown };
+    error?: unknown;
+};
+
+/**
+ * Reports a refresh that finally failed (after any retry). A 401/403 means the
+ * session is genuinely over (or the visitor never signed in) — expected, so
+ * info. A 5xx or no response at all means the API could not refresh a session
+ * that may still be valid — an error. Anything else (429, other 4xx) is a
+ * warning.
+ */
+const reportRefreshFailure = (f: RefreshFailure, attempts: number): void => {
+    if (!monitor) return;
+    const level = sessionFailureLevel(f.status);
+    const body = f.body ?? {};
+    const err = f.error instanceof Error ? f.error : undefined;
+    monitor.emit("auth.refresh.failed", level, {
+        requestId: f.requestId,
+        data: {
+            status_code: f.status,
+            error: typeof body.error === "string" ? body.error : undefined,
+            error_code:
+                typeof body.error_code === "number"
+                    ? body.error_code
+                    : err instanceof AxiosError
+                      ? err.code
+                      : undefined,
+            error_message:
+                typeof body.error_message === "string" ? body.error_message : err ? err.message : undefined,
+            attempts,
+        },
+    });
+};
+
+const headerString = (headers: unknown, name: string): string | undefined => {
+    if (typeof headers !== "object" || headers === null) return undefined;
+    const v: unknown = (headers as Record<string, unknown>)[name];
+    return typeof v === "string" && v !== "" ? v : undefined;
+};
+
 const doRefresh = async (): Promise<RefreshResult | null> => {
+    let failure: RefreshFailure | null = null;
+    let attempts = 0;
     for (let attempt = 1; attempt <= MAX_REFRESH_ATTEMPTS; attempt++) {
+        attempts = attempt;
+        // A bare axios call, not axiosApi (whose 401 handling would recurse), so
+        // it sets its own X-Request-ID for lattice-api to adopt.
+        const requestId = newClientRequestId();
         try {
             const refreshResponse = await axios.post(
                 `${BASE_API_URL}/auth/refresh`,
@@ -171,6 +215,7 @@ const doRefresh = async (): Promise<RefreshResult | null> => {
                     withCredentials: true,
                     validateStatus: () => true,
                     timeout: 10000,
+                    headers: { [REQUEST_ID_HEADER]: requestId },
                 },
             );
 
@@ -181,24 +226,30 @@ const doRefresh = async (): Promise<RefreshResult | null> => {
                 };
             }
 
+            failure = {
+                requestId: headerString(refreshResponse.headers, "x-request-id") ?? requestId,
+                status: refreshResponse.status,
+                body:
+                    typeof refreshResponse.data === "object" && refreshResponse.data !== null
+                        ? refreshResponse.data
+                        : undefined,
+            };
+
             // Definitive auth failure — don't retry
             if (refreshResponse.status === 401) {
-                return null;
+                break;
             }
+        } catch (err: unknown) {
+            // Network error — retried below
+            failure = { requestId, error: err };
+        }
 
-            // Transient error (429, 500, etc.) — retry once after a brief pause
-            if (attempt < MAX_REFRESH_ATTEMPTS) {
-                await new Promise((r) => setTimeout(r, 1000));
-                continue;
-            }
-        } catch {
-            // Network error — retry once
-            if (attempt < MAX_REFRESH_ATTEMPTS) {
-                await new Promise((r) => setTimeout(r, 1000));
-                continue;
-            }
+        // Transient error (429, 5xx, network) — retry once after a brief pause
+        if (attempt < MAX_REFRESH_ATTEMPTS) {
+            await new Promise((r) => setTimeout(r, 1000));
         }
     }
+    if (failure) reportRefreshFailure(failure, attempts);
     return null;
 };
 
@@ -420,11 +471,13 @@ const executeRequest = async <T>(
         };
     }
 
+    const echoedId: unknown = response.headers?.["x-request-id"];
     return {
         success: false,
         status: response.status,
         error: response.data?.error ?? "unknown_error",
         error_message: response.data?.error_message ?? "An unexpected error occurred",
         error_code: response.data?.error_code ?? 0,
+        request_id: typeof echoedId === "string" && echoedId !== "" ? echoedId : response.config?.meta?.requestId,
     };
 };

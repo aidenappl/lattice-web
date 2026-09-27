@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { reportCaught } from "@/services/monitor.service";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChevronRight,
@@ -280,6 +281,7 @@ export default function ContainerDetailPage() {
       }
     } catch (err) {
       const msg = String(err);
+      reportCaught("container.action", err, { action, container_id: container.id });
       toast.error(`${label} error: ${msg}`, { id: toastId });
       if (process.env.NODE_ENV === "development") console.error(
         `[ContainerInspector] action "${action}" threw for ${name}:`,

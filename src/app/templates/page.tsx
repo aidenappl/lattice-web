@@ -16,6 +16,7 @@ import { LoadError } from "@/components/ui/load-error";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { reportCaught } from "@/services/monitor.service";
 
 export default function TemplatesPage() {
   const router = useRouter();
@@ -74,7 +75,9 @@ export default function TemplatesPage() {
       } else {
         toast.error(res.error_message || "Failed to create stack from template");
       }
-    } catch {
+    } catch (err) {
+      // JSON.parse of the stored config, or an exception outside the API call.
+      reportCaught("templates.create_stack", err, { template_id: t.id });
       toast.error("Invalid template configuration");
     } finally {
       setUsingId(null);

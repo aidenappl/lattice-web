@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { reportCaught } from "@/services/monitor.service";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleExclamation } from "@fortawesome/free-solid-svg-icons";
 import type { DatabaseInstance, DatabaseEngine, Worker } from "@/types";
@@ -44,7 +45,8 @@ export default function DatabasesPage() {
       else toast.error("Failed to load databases");
       if (wRes.success) setWorkers(wRes.data ?? []);
       else toast.error("Failed to load workers");
-    } catch {
+    } catch (err) {
+      reportCaught("databases.load", err);
       toast.error("Failed to load data");
     }
   }, []);
@@ -104,7 +106,8 @@ export default function DatabasesPage() {
       } else {
         toast.error(res.error_message || `Failed to ${action} database`);
       }
-    } catch {
+    } catch (err) {
+      reportCaught("databases.action", err, { action });
       toast.error(`Failed to ${action} database`);
     }
   };
@@ -143,7 +146,8 @@ export default function DatabasesPage() {
       } else {
         toast.error(res.error_message || "Failed to delete database");
       }
-    } catch {
+    } catch (err) {
+      reportCaught("databases.delete", err);
       toast.error("Failed to delete database");
     }
   };

@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosHeaders, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig } from "axios";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
+import type { Monitor } from "@aidenappleby/monitor-js";
 import { fetchApi, stopProactiveRefresh } from "./api.service";
 import { monitor } from "./monitor.service";
 
@@ -27,7 +28,7 @@ const playback = (outcomes: Outcome[], sentIds: string[]): AxiosAdapter => {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 describe("fetchApi Monitor reporting", () => {
-    let emit: ReturnType<typeof vi.spyOn>;
+    let emit: MockInstance<Monitor["emit"]>;
 
     beforeEach(() => {
         vi.useFakeTimers({ toFake: ["setTimeout"] });
@@ -116,6 +117,91 @@ describe("fetchApi Monitor reporting", () => {
         expect(events[0][2]?.requestId).toBe(ids[0]);
         expect(events[0][2]?.data).toMatchObject({ attempts: 1 });
     });
+    describe("when the refresh fails", () => {
+        let refresh: MockInstance<typeof axios.post>;
+        // Stands in for the app's re-auth prompt, so fetchApi does not navigate.
+        const handleExpiry = (e: Event) => e.preventDefault();
+
+        beforeEach(() => {
+            refresh = vi.spyOn(axios, "post");
+            window.addEventListener("lattice:session-expired", handleExpiry);
+        });
+
+        afterEach(() => {
+            refresh.mockRestore();
+            window.removeEventListener("lattice:session-expired", handleExpiry);
+            stopProactiveRefresh();
+        });
+
+        const refreshEvents = () => emit.mock.calls.filter((c) => c[0] === "auth.refresh.failed");
+        const sentRefreshIds = () =>
+            refresh.mock.calls.map((c) => (c[2]?.headers as Record<string, string> | undefined)?.["X-Request-ID"]);
+
+        it("reports a 401 once at info, without retrying, with the id it sent", async () => {
+            refresh.mockResolvedValue({ status: 401, headers: {}, data: { success: false, error: "unauthorized", error_code: 4010 } });
+            const res = await run(fetchApi({ method: "GET", url: "/admin/stacks", adapter: playback([{ status: 401 }], []) }));
+            expect(res.status).toBe(401);
+            expect(refresh).toHaveBeenCalledTimes(1);
+            const ids = sentRefreshIds();
+            expect(ids[0]).toMatch(UUID);
+            const events = refreshEvents();
+            expect(events).toHaveLength(1);
+            const [, level, opts] = events[0];
+            expect(level).toBe("info");
+            expect(opts?.requestId).toBe(ids[0]);
+            expect(opts?.data).toMatchObject({ status_code: 401, error_code: 4010, attempts: 1 });
+        });
+
+        it("reports a 5xx after its retry as one error, with the API's echoed id", async () => {
+            const echoed = "fedcba9876543210fedcba9876543210";
+            refresh.mockResolvedValue({ status: 503, headers: { "x-request-id": echoed }, data: { success: false, error: "unavailable", error_code: 5030 } });
+            await run(fetchApi({ method: "POST", url: "/admin/stacks", adapter: playback([{ status: 401 }], []) }));
+            expect(refresh).toHaveBeenCalledTimes(2);
+            const ids = sentRefreshIds();
+            expect(ids[0]).not.toBe(ids[1]);
+            const events = refreshEvents();
+            expect(events).toHaveLength(1);
+            const [, level, opts] = events[0];
+            expect(level).toBe("error");
+            expect(opts?.requestId).toBe(echoed);
+            expect(opts?.data).toMatchObject({ status_code: 503, error_code: 5030, attempts: 2 });
+        });
+
+        it("reports a network failure as one error with the last id sent", async () => {
+            refresh.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+            await run(fetchApi({ method: "POST", url: "/admin/stacks", adapter: playback([{ status: 401 }], []) }));
+            expect(refresh).toHaveBeenCalledTimes(2);
+            const events = refreshEvents();
+            expect(events).toHaveLength(1);
+            const [, level, opts] = events[0];
+            expect(level).toBe("error");
+            expect(opts?.requestId).toBe(sentRefreshIds()[1]);
+            expect(opts?.data).toMatchObject({ status_code: undefined, error_code: "ERR_NETWORK", error_message: "Network Error", attempts: 2 });
+        });
+
+        const levelCases: { status: number; want: string }[] = [
+            { status: 403, want: "info" },
+            { status: 429, want: "warn" },
+        ];
+        levelCases.forEach(({ status, want }) => {
+            it(`reports a ${status} refresh at ${want}`, async () => {
+                refresh.mockResolvedValue({ status, headers: {}, data: { success: false } });
+                await run(fetchApi({ method: "GET", url: "/admin/stacks", adapter: playback([{ status: 401 }], []) }));
+                const events = refreshEvents();
+                expect(events).toHaveLength(1);
+                expect(events[0][1]).toBe(want);
+            });
+        });
+
+        it("returns the failed call's request id to the caller", async () => {
+            refresh.mockResolvedValue({ status: 401, headers: {}, data: {} });
+            const ids: string[] = [];
+            const res = await run(fetchApi({ method: "GET", url: "/auth/self", adapter: playback([{ status: 401 }], ids) }));
+            expect(res.success).toBe(false);
+            expect(!res.success && res.request_id).toBe(ids[0]);
+        });
+    });
+
     describe("after a 401 and a successful refresh", () => {
         let refresh: ReturnType<typeof vi.spyOn>;
 

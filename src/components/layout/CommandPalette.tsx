@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { reportCaught } from "@/services/monitor.service";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faMagnifyingGlass,
@@ -167,7 +168,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         } else {
           setSearchResults([]);
         }
-      } catch {
+      } catch (err) {
+        reportCaught("command_palette.search", err);
         setSearchResults([]);
       } finally {
         if (!controller.signal.aborted) setSearching(false);

@@ -21,6 +21,7 @@ import {
   faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
 import toast from "react-hot-toast";
+import { reportCaught } from "@/services/monitor.service";
 import type {
   DatabaseInstance,
   DatabaseCredentials,
@@ -382,6 +383,7 @@ export default function DatabaseDetailPage() {
         toast.error(`${label} failed: ${res.error_message ?? "Unknown error"}`, { id: toastId });
       }
     } catch (err) {
+      reportCaught("database.action", err, { action });
       toast.error(`${label} error: ${String(err)}`, { id: toastId });
     }
 

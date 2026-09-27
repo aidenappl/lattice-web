@@ -45,4 +45,6 @@ export type ApiError = {
     error: string;
     error_message: string;
     error_code: number;
+    /** The X-Request-ID of the failed call (the API's echo, else the one sent). */
+    request_id?: string;
 };

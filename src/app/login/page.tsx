@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { reqLogin } from "@/services/auth.service";
 import { SSOProviderButtons, type SSOProvider } from "@/components/sso-provider-buttons";
 import { Logo } from "@/components/ui/logo";
+import { newClientRequestId, reportFetchFailure } from "@/services/monitor.service";
 
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 
@@ -31,25 +32,43 @@ export default function LoginPage() {
     document.title = "Sign in | Lattice";
   }, []);
 
-  // Redirect to dashboard if already authenticated
+  // Redirect to dashboard if already authenticated. A raw fetch, not fetchApi:
+  // a 401 is the expected answer here and must not trigger a refresh.
   useEffect(() => {
-    fetch(`${API_URL}/auth/self`, { credentials: "include" })
+    const url = `${API_URL}/auth/self`;
+    const requestId = newClientRequestId();
+    fetch(url, { credentials: "include", headers: { "X-Request-ID": requestId } })
       .then((res) => {
         if (res.ok) {
           window.location.replace("/");
         } else {
+          // 401/403: not signed in, which is why we're here. Anything else is
+          // the API failing to answer.
+          if (res.status !== 401 && res.status !== 403) {
+            reportFetchFailure({ feature: "login.session_check", url, requestId, response: res });
+          }
           setChecking(false);
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        reportFetchFailure({ feature: "login.session_check", url, requestId, error: err });
         setChecking(false);
       });
   }, []);
 
   useEffect(() => {
     // Fetch SSO config (public endpoint)
-    fetch(`${API_URL}/auth/sso/config`)
-      .then((res) => (res.ok ? res.json() : null))
+    const url = `${API_URL}/auth/sso/config`;
+    const requestId = newClientRequestId();
+    fetch(url, { headers: { "X-Request-ID": requestId } })
+      .then((res) => {
+        if (res.ok) return res.json();
+        // 404: an API without SSO. Anything else hides the SSO buttons.
+        if (res.status !== 404) {
+          reportFetchFailure({ feature: "login.sso_config", url, requestId, response: res });
+        }
+        return null;
+      })
       .then((data) => {
         if (!data) return;
         // ⚠️ ACCEPT EITHER SHAPE. Gating solely on `enabled` was a latent
@@ -64,7 +83,10 @@ export default function LoginPage() {
           setSsoConfig(data);
         }
       })
-      .catch(() => {}); // SSO not available
+      .catch((err: unknown) => {
+        // Unreachable API, or a body that isn't JSON: the SSO buttons don't render.
+        reportFetchFailure({ feature: "login.sso_config", url, requestId, error: err });
+      });
   }, []);
 
   // Handle SSO error from redirect
