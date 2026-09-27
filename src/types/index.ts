@@ -10,6 +10,7 @@ export * from "./dashboard.types";
 export * from "./webhook.types";
 export * from "./database.types";
 export * from "./automation.types";
+export * from "./request.types";
 
 export type SearchResults = {
     workers: { id: number; name: string; hostname: string; status: string }[];

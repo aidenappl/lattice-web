@@ -97,7 +97,7 @@ src/
     ThemeProvider.tsx       # light/dark/system context, cookie+localStorage persistence, cross-subdomain cookie domain
   services/                 # one {entity}.service.ts per domain; all call fetchApi<T> (see Service map)
     api.service.ts          # THE axios client + fetchApi<T> + 401/403 handling + proactive/reactive refresh + CSRF
-    monitor.service.ts      # browser Monitor (posts to /api/monitor), attachMonitor(axios), reportError()
+    monitor.service.ts      # browser Monitor (posts to /api/monitor), attachMonitor(axios) — lattice-web's own API-failure reporter, reportError()
   instrumentation-client.ts # creates the browser Monitor before hydration; client.page.load / client.navigation events
   instrumentation.ts        # onRequestError → server.request.error (Node runtime only)
   store/                    # Redux Toolkit
@@ -550,9 +550,14 @@ deliberately not `running`, which is green because it means a healthy container.
   |-------|-------|--------|
   | `client.error.uncaught` / `client.error.unhandled_rejection` | error | Any uncaught error or rejection (SDK window handlers, installed before hydration) |
   | `client.error.boundary` / `client.error.global` | error | `app/error.tsx` / `app/global-error.tsx`, with the error `digest` shown to the user |
-  | `api.request.server_error` / `client_error` / `network_error` | error / warn / error | Every failed `lattice-api` call via the axios hook: method, path (no query), status, `error_message`, `X-Request-ID` — the same id as the API's own `http.request.end` event. Never a body |
+  | `api.request.server_error` / `client_error` / `network_error` | error / warn / error | Every failed `lattice-api` call via `attachMonitor` (monitor.service.ts — not the SDK's `attachAxiosMonitor`): method, path (no query), status, `error`, `error_message`, numeric `error_code`, `attempts`, `duration_ms`, and `request_id`/`trace_id`. Never a body. A request interceptor in `api.service.ts` sends `X-Request-ID` (a UUID) on every call and keeps it on `config.meta`, so even a `network_error` (no response) carries the id `lattice-api` logs on `http.request.end`. A GET that `fetchApi` retries reports once, on the final failure — the reporter skips failures flagged as retryable on `config.meta` |
   | `server.request.error` | error | `onRequestError` — rendering, route handlers, server actions (Node runtime) |
   | `client.page.load` / `client.navigation` | info | Every load and client-side navigation, path only |
+
+  Events carry `user_id` once `StoreProvider`'s bootstrap `reqGetSelf` succeeds (`monitor.setUser`,
+  re-set after profile updates); every logout path (menu, pending page, idle timeout) calls
+  `monitor.clearUser()`. The `X-Request-ID` header needs `lattice-api`'s CORS `AllowedHeaders` to
+  list it, or every preflight fails.
 
 - **Common failure modes:**
   - *Everything shows a loading splash forever / bounces to `/login`* — `reqGetSelf` is failing:

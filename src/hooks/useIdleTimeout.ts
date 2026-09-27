@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { reqLogout } from "@/services/auth.service";
+import { monitor } from "@/services/monitor.service";
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -17,6 +18,7 @@ export function useIdleTimeout(timeoutMs = IDLE_TIMEOUT_MS) {
                 // Use POST to properly invalidate the server-side session,
                 // then redirect to login page.
                 await reqLogout().catch(() => {});
+                monitor?.clearUser();
                 window.location.replace("/login");
             }, timeoutMs);
         };

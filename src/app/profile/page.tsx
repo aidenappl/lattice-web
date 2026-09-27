@@ -13,6 +13,7 @@ import { useAppDispatch } from "@/store/hooks";
 import { setUser } from "@/store/slices/authSlice";
 import toast from "react-hot-toast";
 import type { User } from "@/types";
+import { monitor } from "@/services/monitor.service";
 
 const roleBadgeVariant = (role: string) => {
   switch (role) {
@@ -67,6 +68,7 @@ export default function ProfilePage() {
     if (res.success) {
       toast.success("Profile updated.");
       dispatch(setUser(res.data as User));
+      monitor?.setUser(String((res.data as User).id));
     } else {
       toast.error(
         "error_message" in res ? res.error_message : "Failed to update profile",
@@ -155,6 +157,7 @@ export default function ProfilePage() {
                   if (res.success) {
                     toast.success("Profile picture updated");
                     dispatch(setUser(res.data as User));
+                    monitor?.setUser(String((res.data as User).id));
                     setEditingAvatar(false);
                   } else {
                     toast.error("Failed to update picture");
@@ -178,6 +181,7 @@ export default function ProfilePage() {
                     if (res.success) {
                       toast.success("Profile picture removed");
                       dispatch(setUser(res.data as User));
+                      monitor?.setUser(String((res.data as User).id));
                       setProfileImageUrl("");
                       setEditingAvatar(false);
                     } else {

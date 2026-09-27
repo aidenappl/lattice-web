@@ -1,5 +1,6 @@
 import { ApiResponse } from "@/types";
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
+import { newRequestId } from "@aidenappleby/monitor-js";
 import { attachMonitor } from "./monitor.service";
 
 const BASE_API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
@@ -14,6 +15,25 @@ const axiosApi = axios.create({
     timeout: 10000,
 });
 
+const REQUEST_ID_HEADER = "X-Request-ID";
+
+// crypto.randomUUID exists only in secure contexts (HTTPS, localhost).
+const mintRequestId = (): string =>
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : newRequestId();
+
+// Every call carries an X-Request-ID. lattice-api adopts it as its own request
+// id, so a browser event (even a timeout that never got a response) joins the
+// API's logs for the same request. Kept on config.meta for the Monitor reporter.
+axiosApi.interceptors.request.use((config) => {
+    const existing = config.headers.get(REQUEST_ID_HEADER);
+    const requestId = typeof existing === "string" && existing !== "" ? existing : mintRequestId();
+    config.headers.set(REQUEST_ID_HEADER, requestId);
+    config.meta = { ...config.meta, requestId, startTime: Date.now() };
+    return config;
+});
+
 attachMonitor(axiosApi);
 
 const MAX_GET_RETRIES = 3;
@@ -25,8 +45,20 @@ export const fetchApi = async <T>(
     const maxAttempts = isGet ? MAX_GET_RETRIES : 1;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        // Whether a failure of this attempt is retried below. The Monitor
+        // reporter reads the same flags, so only the final failure is reported.
+        const canRetry = isGet && attempt < maxAttempts;
+        const attemptConfig: AxiosRequestConfig = {
+            ...config,
+            meta: {
+                ...config.meta,
+                attempt,
+                retryOnNetworkError: canRetry,
+                retryOnServerError: canRetry,
+            },
+        };
         try {
-            const response = await executeRequest<T>(config, null);
+            const response = await executeRequest<T>(attemptConfig, null);
 
             if (
                 response.status === 403 &&
@@ -51,7 +83,7 @@ export const fetchApi = async <T>(
             }
 
             if (response.status === 401) {
-                const refreshResult = await handle401Response<T>(config);
+                const refreshResult = await handle401Response<T>(attemptConfig);
                 if (refreshResult) return refreshResult;
 
                 // Refresh failed — the session is genuinely gone. Rather than
@@ -77,7 +109,7 @@ export const fetchApi = async <T>(
             }
 
             // For GET requests, retry on 5xx errors
-            if (isGet && !response.success && response.status >= 500 && attempt < maxAttempts) {
+            if (canRetry && !response.success && response.status >= 500) {
                 await new Promise((r) => setTimeout(r, 1000 * attempt));
                 continue;
             }
@@ -88,7 +120,7 @@ export const fetchApi = async <T>(
             const message = err instanceof AxiosError ? err.message : "Request failed unexpectedly";
 
             // For GET requests, retry on network/5xx errors
-            if (isGet && attempt < maxAttempts) {
+            if (canRetry) {
                 await new Promise((r) => setTimeout(r, 1000 * attempt));
                 continue;
             }
@@ -188,7 +220,15 @@ const handle401Response = async <T>(
         // Reschedule proactive refresh with the new expiry
         scheduleNextRefresh(result.expiresAt);
 
-        return await executeRequest<T>(originalConfig, result.token);
+        // fetchApi returns this response as-is, so a 5xx here is final. A
+        // thrown network error still reaches fetchApi's retry loop.
+        return await executeRequest<T>(
+            {
+                ...originalConfig,
+                meta: { ...originalConfig.meta, retryOnServerError: false },
+            },
+            result.token,
+        );
     }
     return null;
 };

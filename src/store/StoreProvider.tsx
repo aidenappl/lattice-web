@@ -6,6 +6,7 @@ import { setIsLoading, setIsLogged, setUser } from "./slices/authSlice";
 import { useEffect, useState } from "react";
 import { reqGetSelf } from "@/services/auth.service";
 import { startProactiveRefresh, stopProactiveRefresh } from "@/services/api.service";
+import { monitor } from "@/services/monitor.service";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { Logo } from "@/components/ui/logo";
 
@@ -42,6 +43,7 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
         if (authRes.success) {
           storeInstance.dispatch(setIsLogged(true));
           storeInstance.dispatch(setUser(authRes.data));
+          monitor?.setUser(String(authRes.data.id));
           storeInstance.dispatch(setIsLoading(false));
           startProactiveRefresh();
           if (authRes.data.role === "pending") {
