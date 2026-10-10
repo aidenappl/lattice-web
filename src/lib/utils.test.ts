@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Worker, User } from "@/types";
 import {
   isNewerVersion,
+  formatUlimits,
   cn,
   timeAgo,
   isWorkerOnline,
@@ -395,4 +396,20 @@ describe("sparkColor", () => {
   it("returns blue for <=70", () => {
     expect(sparkColor(50)).toBe("#3b82f6");
   });
+});
+
+describe("formatUlimits", () => {
+    it("shows a single value when soft equals hard", () => {
+        expect(formatUlimits('{"nofile":{"soft":262144,"hard":262144}}')).toBe("nofile=262144");
+    });
+    it("shows soft:hard when they differ, sorted by name", () => {
+        expect(
+            formatUlimits('{"nproc":{"soft":1,"hard":1},"nofile":{"soft":1024,"hard":4096}}'),
+        ).toBe("nofile=1024:4096, nproc=1");
+    });
+    it("is empty for none or unreadable values", () => {
+        expect(formatUlimits(null)).toBe("");
+        expect(formatUlimits("")).toBe("");
+        expect(formatUlimits("{broken")).toBe("");
+    });
 });

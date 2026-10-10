@@ -2,7 +2,7 @@
 
 import type { Container, HealthCheckConfig } from "@/types";
 import { StatusBadge } from "@/components/ui/badge";
-import { formatDate, timeAgo, formatUptime, formatTestCommand } from "@/lib/utils";
+import { formatDate, timeAgo, formatUptime, formatTestCommand, formatUlimits } from "@/lib/utils";
 import { InfoRow } from "./ContainerDetailsTab";
 
 export interface ContainerInfoPanelsProps {
@@ -76,6 +76,16 @@ export function ContainerInfoPanels({
               <InfoRow
                 label="Memory Limit"
                 value={`${container.memory_limit} MB`}
+              />
+            )}
+            {formatUlimits(container.ulimits) && (
+              <InfoRow
+                label="Ulimits"
+                value={
+                  <span className="font-mono text-xs break-all">
+                    {formatUlimits(container.ulimits)}
+                  </span>
+                }
               />
             )}
           </dl>

@@ -138,7 +138,7 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 | `/stacks/new` | `stacks/new/page.tsx` | Create stack (or import compose) |
 | `/stacks/[id]` | `stacks/[id]/page.tsx` | Stack detail tabs: containers, compose YAML editor, env, logs, deployments, deploy tokens, dependency graph |
 | `/containers` | `containers/page.tsx` | Global container list + lifecycle actions |
-| `/containers/[id]` | `containers/[id]/page.tsx` | Container detail: details/health tabs, logs, terminal, action bar, edit form |
+| `/containers/[id]` | `containers/[id]/page.tsx` | Container detail: details/health tabs, logs, terminal, action bar, edit form. `ulimits` (lattice-api ≥ v1.4.7) shows in Container Info via `formatUlimits` and is edited as compose-shaped JSON; the form sends it only when changed, `""` to clear |
 | `/deployments` | `deployments/page.tsx` | Deployment history |
 | `/deployments/[id]` | `deployments/[id]/page.tsx` | Deployment detail + live logs, approve/rollback |
 | `/databases` | `databases/page.tsx` | Managed database instance list |

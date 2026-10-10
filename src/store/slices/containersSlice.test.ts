@@ -23,6 +23,7 @@ const mockContainer: Container = {
   command: null,
   entrypoint: null,
   health_check: null,
+  ulimits: null,
   health_status: "none",
   depends_on: null,
   registry_id: null,

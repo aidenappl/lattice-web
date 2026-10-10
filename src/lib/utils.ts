@@ -152,3 +152,24 @@ export function sparkColor(pct: number): string {
     if (pct > 70) return "#eab308";
     return "#3b82f6";
 }
+
+/**
+ * Formats a container's stored ulimits JSON ({"nofile":{"soft":n,"hard":n}})
+ * as "nofile=262144" (or "nofile=1024:4096" when soft and hard differ).
+ * Returns "" when there are none or the value can't be read.
+ */
+export function formatUlimits(raw: string | null | undefined): string {
+    if (!raw) return "";
+    try {
+        const parsed = JSON.parse(raw) as Record<string, { soft: number; hard: number }>;
+        return Object.keys(parsed)
+            .sort()
+            .map((name) => {
+                const { soft, hard } = parsed[name];
+                return soft === hard ? `${name}=${soft}` : `${name}=${soft}:${hard}`;
+            })
+            .join(", ");
+    } catch {
+        return "";
+    }
+}

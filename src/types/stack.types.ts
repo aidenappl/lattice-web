@@ -31,6 +31,7 @@ export type Container = {
     command: string | null;
     entrypoint: string | null;
     health_check: string | null;
+    ulimits: string | null;
     health_status: "healthy" | "unhealthy" | "starting" | "none";
     depends_on: string | null;
     registry_id: number | null;

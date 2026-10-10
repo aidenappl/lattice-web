@@ -49,6 +49,7 @@ export function ContainerEditForm({
   const [editHealthCheck, setEditHealthCheck] = useState(
     container.health_check ?? "",
   );
+  const [editUlimits, setEditUlimits] = useState(container.ulimits ?? "");
   const [editRegistryId, setEditRegistryId] = useState(
     container.registry_id != null ? String(container.registry_id) : "",
   );
@@ -77,6 +78,9 @@ export function ContainerEditForm({
       port_mappings: editPortMappings || null,
       volumes: editVolumes || null,
       health_check: editHealthCheck || null,
+      // Sent only when changed; "" clears them (null would leave them as-is).
+      ulimits:
+        editUlimits !== (container.ulimits ?? "") ? editUlimits : undefined,
       registry_id: editRegistryId ? Number(editRegistryId) : null,
       depends_on: editDependsOn || null,
     } as Partial<Container>);
@@ -288,6 +292,21 @@ export function ContainerEditForm({
               }
               language="json"
             />
+          </div>
+          <div>
+            <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
+              Ulimits (JSON)
+            </label>
+            <CodeEditor
+              rows={4}
+              value={editUlimits}
+              onChange={setEditUlimits}
+              placeholder={'{"nofile": {"soft": 262144, "hard": 262144}}'}
+              language="json"
+            />
+            <p className="text-[9px] text-muted mt-1">
+              Compose shape: a number sets soft and hard, -1 is unlimited. Applied on the next deploy.
+            </p>
           </div>
         </div>
         <div className="flex gap-2">
