@@ -365,8 +365,7 @@ provider it configures under `/auth/sso/*`).
 - **No idle timeout.** A 30-minute inactivity logout (`useIdleTimeout`) was removed: it ended
   every Lattice session the user had (logout stamps `tokens_revoked_at`), and session length
   belongs to the identity provider.
-- **Logout** follows `data.redirect_url` from `POST /auth/logout` (the provider's end-session URL
-  for an SSO session) or lands on `/login?signed_out=1` (`finishSignOut` in `lib/sso.ts`).
+- **Logout** follows `data.redirect_url` from `POST /auth/logout` (`/login?signed_out=1` — sign-out ends only this app's session; Forta and other apps stay signed in) or lands on `/login?signed_out=1` (`finishSignOut` in `lib/sso.ts`).
 
 **Provider presets (`/authentication`).** `PROVIDER_PRESETS` fills the OAuth2/OIDC endpoints for
 Forta, Google, GitHub, Microsoft and Custom. **`issuer_url` and `logout_url` are applied
