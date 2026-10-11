@@ -29,8 +29,8 @@ validation messages, deployment mechanics, container lifecycle — is produced b
 merely presented here.
 
 It **owns**: the UI, the client-side Redux cache of API data, the auth session lifecycle in the
-browser (login form, cookie-based session, proactive + reactive token refresh, CSRF header, idle
-timeout), the component library (built from scratch), the real-time admin WebSocket consumer, and
+browser (login form, cookie-based session, silent SSO, proactive + reactive token refresh, CSRF
+header), the component library (built from scratch), the real-time admin WebSocket consumer, and
 the local HTTPS dev harness.
 
 It does **not** own:
@@ -105,8 +105,8 @@ src/
     hooks.ts                # useAppDispatch/useAppSelector + useAuth/useAuthStatus/useUser
     StoreProvider.tsx       # singleton store + AppInitializer (boots session via reqGetSelf, gates render)
     slices/                 # authSlice, overviewSlice, workersSlice, stacksSlice, containersSlice (+ *.test.ts)
-  hooks/                    # cross-cutting hooks (usePoll, useAdminSocket, useContainerLogs, useIdleTimeout, …)
-  lib/                      # utils.ts (cn, isAdmin, canEdit, formatBytes, …), version.ts, deployment-progress.ts, automations.ts, ws-reconnect.ts (+ *.test.ts), monitor-server.ts (server-side Monitor)
+  hooks/                    # cross-cutting hooks (usePoll, useAdminSocket, useContainerLogs, …)
+  lib/                      # utils.ts (cn, isAdmin, canEdit, formatBytes, …), version.ts, deployment-progress.ts, automations.ts, ws-reconnect.ts, sso.ts (silent SSO, return_to, sign-out) (+ *.test.ts), monitor-server.ts (server-side Monitor)
   types/                    # domain types; index.ts re-exports all + ApiResponse/ApiSuccess/ApiError/SearchResults/ApiToken
   test/setup.ts             # Vitest + jest-dom setup
 ```
@@ -128,7 +128,7 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 | Route | File | What it does |
 |-------|------|--------------|
 | `/` | `page.tsx` | Dashboard: topology board, KPI row w/ sparklines, live event stream, fleet resource charts, anomaly/failing-stack banners |
-| `/login` | `login/page.tsx` | Dual auth: local email/password (`reqLogin`) **+** SSO button (fetches `/auth/sso/config`, links to `login_url`). Redirects to `/` if already authed |
+| `/login` | `login/page.tsx` | Dual auth: local email/password (`reqLogin`) **+** SSO button (fetches `/auth/sso/config`, links to `login_url`), silent SSO first (`lib/sso.ts`). Redirects to `return_to` if already authed |
 | `/pending` | `pending/page.tsx` | Landing for users with `role: "pending"` (account awaiting approval) |
 | `/unauthorized` | `unauthorized/page.tsx` | Landing when a grant is revoked / `error_code 4003` |
 | `/workers` | `workers/page.tsx` | Worker fleet list with status + live metrics |
@@ -152,7 +152,7 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 | `/automations/[id]` | `automations/[id]/page.tsx` | Automation detail: trigger, run-as identity, ordered steps, polled run history with per-step results; run now / enable / disable / edit / rotate token (admin, webhook only) / delete |
 | `/backup-destinations` | `backup-destinations/page.tsx` | Backup destination CRUD + test |
 | `/audit-log` | `audit-log/page.tsx` | Administrative audit trail |
-| `/authentication` | `authentication/page.tsx` | SSO config (provider presets, OAuth2/OIDC endpoints, introspection, claim mapping) + SMTP config + test |
+| `/authentication` | `authentication/page.tsx` | SSO config (provider presets, OAuth2/OIDC endpoints, claim mapping) + SMTP config + test |
 | `/notifications` | `notifications/page.tsx` | Notification preferences + webhooks |
 | `/ai` | `ai/page.tsx` | **API-token management** (the tokens that power `lattice-mcp` / AI agents) — create/list/delete |
 | `/settings` | `settings/page.tsx` | User management (create/role/deactivate) + version checks + service updates |
@@ -312,12 +312,17 @@ provider it configures under `/auth/sso/*`).
 
 - **Two login paths** on `/login`:
   1. **Local** — email/password → `reqLogin` → `POST /auth/login`; on success the API sets the
-     session cookie and the page redirects to `/`.
+     session cookie and the page redirects to `return_to` (same-origin path) or `/`.
   2. **SSO** — the page fetches the **public** `/auth/sso/config` and renders one button per
-     entry in the shared `providers` array, linking to `login_url` (validated to start with `/`
-     to prevent open-redirect / `javascript:` injection). SSO error codes returned on the
-     redirect (`sso_denied`, `sso_no_account`, `sso_state_expired`, …) are mapped to friendly
-     messages.
+     entry in the shared `providers` array, linking to `login_url?return_to=…` (validated to
+     start with `/` to prevent open-redirect / `javascript:` injection). Error codes returned on
+     the redirect are mapped by `SSO_ERRORS` in `lib/sso.ts`; `login_required` is not an error.
+  3. **Silent SSO** — before rendering the form, with exactly one provider, the page navigates to
+     `<api><login_url>?prompt=none&return_to=…` (`startSilentSSO`). A user still signed in at the
+     identity provider comes straight back signed in and never sees the form; otherwise
+     `lattice-api` redirects to `/login?error=login_required` and the form renders. Skipped when
+     the page has `?error=`, `?signed_out=1` or `?local=1`, and at most once a minute
+     (`lattice-sso-silent-at` in `sessionStorage`) so a session that will not stick cannot loop.
 
      > ⚠️ **The response is accepted on `providers` OR `enabled`, and that matters.** `enabled`,
      > `button_label` and `login_url` are **legacy** fields `lattice-api` still emits beside the
@@ -339,12 +344,17 @@ provider it configures under `/auth/sso/*`).
     labels, dot-marker alerts); don't "consolidate" them back.
 - **Session identity** is `reqGetSelf` → `/auth/self`, returning a `User`
   (`auth_type: "oauth" | "local" | "sso"`, `role`).
+- **SSO users have no Lattice JWTs.** `lattice-api` holds their session server-side
+  (`lattice_session` cookie) and refreshes it against the identity provider, so it lives as long as
+  the provider session. Proactive refresh therefore starts only for `auth_type !== "sso"`, and
+  `/auth/refresh` answers 401 for SSO users.
 - **CSRF:** for `POST`/`PUT`/`DELETE`, `executeRequest` reads the `lattice-csrf` cookie and sends
   it back as the **`X-CSRF-Token`** header (double-submit pattern).
 - **401 handling (reactive):** on a 401, `handle401Response` calls a **singleton
   `refreshPromise`** → `POST /auth/refresh` (deduped so concurrent 401s fire one refresh), then
   retries the original request with the new bearer token. If refresh fails, it redirects to
-  `/login`.
+  `/login?return_to=<path>` (`redirectToLogin`), where silent SSO usually signs the user straight
+  back in.
 - **Proactive refresh (activity-aware):** `startProactiveRefresh` (kicked off after a successful
   `reqGetSelf`) schedules a refresh **~60 s before token expiry**, but only if the user is
   **active** (mouse/key/scroll/touch within 5 min). Idle users defer refresh until their next
@@ -352,21 +362,18 @@ provider it configures under `/auth/sso/*`).
   (`visibilitychange`). `stopProactiveRefresh` tears the listeners down on unmount.
 - **403 handling:** `error_code 4003` → redirect `/unauthorized` (grant revoked); `error_code
   4004` → redirect `/pending` (account not yet approved).
-- **Idle timeout:** `useIdleTimeout` (wired in `DashboardLayout`) logs the user out after inactivity.
+- **No idle timeout.** A 30-minute inactivity logout (`useIdleTimeout`) was removed: it ended
+  every Lattice session the user had (logout stamps `tokens_revoked_at`), and session length
+  belongs to the identity provider.
+- **Logout** follows `data.redirect_url` from `POST /auth/logout` (the provider's end-session URL
+  for an SSO session) or lands on `/login?signed_out=1` (`finishSignOut` in `lib/sso.ts`).
 
-**Provider presets (`/authentication`).** `PROVIDER_PRESETS` fills the OAuth2 endpoints for
-Forta, Google, GitHub, Microsoft and Custom. Two rules govern it:
-
-- **Only the Forta preset sets `introspect_url`**, because Forta is the only one of these that
-  implements RFC 7662. That endpoint is what makes revocation take effect — without it a session
-  survives until its token expires even after the grant is withdrawn upstream. Google, Microsoft
-  and GitHub genuinely do not offer it, so their presets leave it blank rather than guessing a URL
-  that would fail closed on every check.
-- **`introspect_url` and `logout_url` are applied UNCONDITIONALLY** when a preset is chosen, while
-  the other fields use the guarded `if (p.x)` form. The guard means "an empty preset value keeps
-  what you typed", which is right for Custom and wrong for these two: switching Forta → Google
-  would otherwise keep Forta's introspection URL, and every revocation check would become a
-  request to the wrong provider about a token it never issued.
+**Provider presets (`/authentication`).** `PROVIDER_PRESETS` fills the OAuth2/OIDC endpoints for
+Forta, Google, GitHub, Microsoft and Custom. **`issuer_url` and `logout_url` are applied
+UNCONDITIONALLY** when a preset is chosen, while the other fields use the guarded `if (p.x)` form:
+carrying one provider's issuer over to another would point the OIDC adapter at the wrong provider
+and fail every id_token. There is no introspection field any more — revocation is enforced by the
+API's server-side token refresh and back-channel logout.
 
 ### Redux store shape
 
@@ -573,7 +580,7 @@ deliberately not `running`, which is green because it means a healthy container.
   `server.request.error` carries `release` and Next's `route`.
 
   Events carry `user_id` once `StoreProvider`'s bootstrap `reqGetSelf` succeeds (`monitor.setUser`,
-  re-set after profile updates); every logout path (menu, pending page, idle timeout) calls
+  re-set after profile updates); every logout path (menu, pending page) calls
   `monitor.clearUser()`. The `X-Request-ID` header needs `lattice-api`'s CORS `AllowedHeaders` to
   list it, or every preflight fails — so **deploy `lattice-api` before `lattice-web`** whenever the
   header set changes (the enrichment release included). `lattice-api` adopts the id when it is

@@ -53,8 +53,6 @@ interface ProviderPreset {
    * Without it identity comes from an unsigned UserInfo response.
    */
   issuerUrl?: string;
-  /** RFC 7662 introspection endpoint, where the provider has one. */
-  introspectUrl?: string;
   /** RP-initiated logout endpoint (OIDC Session Management). */
   logoutUrl?: string;
   comingSoon?: boolean;
@@ -62,27 +60,12 @@ interface ProviderPreset {
 
 const PROVIDER_PRESETS: ProviderPreset[] = [
   {
-    // ⚠️ FORTA IS FIRST, AND IT IS THE ONLY PRESET THAT FILLS AN INTROSPECTION
-    // URL — because it is the only one of these providers that implements
-    // RFC 7662.
-    //
-    // That endpoint is what makes revocation take effect: without it a session
-    // here survives until its token expires even after the grant is withdrawn
-    // at the identity provider. Leaving an administrator to find and type
-    // /oauth/introspect by hand is how lattice ran for months with an
-    // introspection checkpoint that never once fired.
-    //
-    // Google, Microsoft and GitHub genuinely do not offer RFC 7662, so their
-    // presets leave the field blank rather than guessing a URL that would fail
-    // closed on every check.
-    //
     // Values taken from https://auth.appleby.cloud/.well-known/openid-configuration.
     id: "forta", name: "Forta", icon: "F", color: "#3b82f6",
     issuerUrl: "https://auth.appleby.cloud",
     authorizeUrl: "https://auth.appleby.cloud/oauth/authorize",
     tokenUrl: "https://auth.appleby.cloud/oauth/token",
     userinfoUrl: "https://auth.appleby.cloud/oauth/userinfo",
-    introspectUrl: "https://auth.appleby.cloud/oauth/introspect",
     logoutUrl: "https://auth.appleby.cloud/oauth/logout",
     scopes: "openid email profile",
     // `sub` and not `email`: Forta issues a stable UUID subject. Matching on an
@@ -332,7 +315,6 @@ function SSOTab() {
   const [authorizeUrl, setAuthorizeUrl] = useState("");
   const [tokenUrl, setTokenUrl] = useState("");
   const [userinfoUrl, setUserinfoUrl] = useState("");
-  const [introspectUrl, setIntrospectUrl] = useState("");
   const [redirectUrl, setRedirectUrl] = useState("");
   const [logoutUrl, setLogoutUrl] = useState("");
   const [scopes, setScopes] = useState("");
@@ -358,7 +340,6 @@ function SSOTab() {
       setConfig(d); setEnabled(d.enabled); setClientId(d.client_id);
       setClientSecret(d.client_secret); setIssuerUrl(d.issuer_url ?? ""); setAuthorizeUrl(d.authorize_url);
       setTokenUrl(d.token_url); setUserinfoUrl(d.userinfo_url);
-      setIntrospectUrl(d.introspect_url ?? "");
       setRedirectUrl(d.redirect_url); setLogoutUrl(d.logout_url);
       setScopes(d.scopes); setUserIdentifier(d.user_identifier);
       setButtonLabel(d.button_label); setAutoProvision(d.auto_provision);
@@ -378,19 +359,12 @@ function SSOTab() {
     if (p.scopes) setScopes(p.scopes);
     if (p.userIdentifier) setUserIdentifier(p.userIdentifier);
 
-    // ⚠️ THESE TWO ARE SET UNCONDITIONALLY, unlike the fields above.
-    //
-    // The guarded `if (p.x)` pattern means "an empty preset value leaves what
-    // you already typed alone", which is right for Custom. It is WRONG here:
-    // switching from Forta to Google would silently keep Forta's introspection
-    // URL, and every revocation check would then be a request to the wrong
-    // provider about a token it never issued — failing in a way that looks like
-    // an outage rather than a misconfiguration.
-    // Same unconditional rule, and for the same reason: carrying Forta's issuer
-    // over to Google would build an OIDC adapter pointed at the wrong provider,
-    // and every id_token would fail verification.
+    // ⚠️ SET UNCONDITIONALLY, unlike the fields above. The guarded `if (p.x)`
+    // pattern means "an empty preset value leaves what you already typed
+    // alone", which is right for Custom and wrong here: carrying one
+    // provider's issuer over to another would build an OIDC adapter pointed at
+    // the wrong provider, and every id_token would fail verification.
     setIssuerUrl(p.issuerUrl ?? "");
-    setIntrospectUrl(p.introspectUrl ?? "");
     setLogoutUrl(p.logoutUrl ?? "");
 
     setButtonLabel(`Sign in with ${p.name}`);
@@ -420,7 +394,7 @@ function SSOTab() {
     setSaving(true);
     const data: Partial<SSOConfigData> = {
       enabled, client_id: clientId, issuer_url: issuerUrl, authorize_url: authorizeUrl,
-      token_url: tokenUrl, userinfo_url: userinfoUrl, introspect_url: introspectUrl,
+      token_url: tokenUrl, userinfo_url: userinfoUrl,
       redirect_url: redirectUrl,
       logout_url: logoutUrl, scopes, user_identifier: userIdentifier,
       button_label: buttonLabel, auto_provision: autoProvision,
@@ -550,16 +524,6 @@ function SSOTab() {
               <Input id="sso-userinfo-url" label="UserInfo URL" type="url" placeholder="https://idp.example.com/userinfo"
                 value={userinfoUrl} error={fieldErrors.userinfoUrl}
                 onChange={(e) => { setUserinfoUrl(e.target.value); clearFieldError("userinfoUrl"); }} />
-              {/*
-                Optional on purpose — it is not in the required-field validation
-                above. An SSO setup without introspection still logs people in
-                correctly; what it loses is the ability to notice that the
-                provider has revoked a grant. Making it required would block
-                every provider that does not implement RFC 7662.
-              */}
-              <Input id="sso-introspect-url" label="Introspection URL (enables revocation checks)" type="url"
-                placeholder="https://idp.example.com/oauth/introspect"
-                value={introspectUrl} onChange={(e) => setIntrospectUrl(e.target.value)} />
               <Input id="sso-redirect-url" label="Redirect URL" placeholder="https://lattice-api.example.com/auth/sso/callback"
                 value={redirectUrl} error={fieldErrors.redirectUrl}
                 onChange={(e) => { setRedirectUrl(e.target.value); clearFieldError("redirectUrl"); }} />

@@ -118,7 +118,7 @@ src/
                         #   layout/ topology/ feature components (PascalCase)
   services/             # {entity}.service.ts — all call fetchApi<T>; api.service.ts is the client
   store/                # Redux Toolkit: 5 slices, typed hooks, singleton StoreProvider
-  hooks/                # useAdminSocket, useContainerLogs, usePoll, useVersionCheck, useIdleTimeout, …
+  hooks/                # useAdminSocket, useContainerLogs, usePoll, useVersionCheck, …
   lib/                  # utils (cn, isAdmin, canEdit, formatBytes, …), version, deployment-progress, monitor-server
   instrumentation*.ts   # Monitor wiring: browser errors/navigation (client), onRequestError (server)
   types/                # domain types + ApiResponse<T>

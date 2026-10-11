@@ -11,7 +11,6 @@ import { ConfirmProvider } from "@/components/ui/confirm-modal";
 import { VersionCheckProvider } from "@/hooks/useVersionCheck";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useDesktopNotifications } from "@/hooks/useDesktopNotifications";
-import { useIdleTimeout } from "@/hooks/useIdleTimeout";
 import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
@@ -27,7 +26,6 @@ const publicPaths = ["/login", "/unauthorized", "/pending"];
 function AuthedSideEffects() {
   useNotifications();
   useDesktopNotifications();
-  useIdleTimeout();
   return null;
 }
 

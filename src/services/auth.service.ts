@@ -15,7 +15,7 @@ export const reqLogin = (email: string, password: string) =>
     });
 
 export const reqLogout = () =>
-    fetchApi<null>({
+    fetchApi<{ redirect_url?: string }>({
         method: "POST",
         url: "/auth/logout",
     });

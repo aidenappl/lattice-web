@@ -1,3 +1,4 @@
+import { redirectToLogin } from "@/lib/sso";
 import { ApiResponse } from "@/types";
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
 import { attachMonitor, monitor, newClientRequestId, sessionFailureLevel } from "./monitor.service";
@@ -95,7 +96,9 @@ export const fetchApi = async <T>(
                         path === "/unauthorized" ||
                         path === "/pending";
                     if (!handled && !onAuthPage) {
-                        window.location.href = "/login";
+                        // /login tries a silent SSO sign-in first and
+                        // comes back here (return_to) when it succeeds.
+                        redirectToLogin();
                     }
                 }
                 return response;
@@ -384,7 +387,7 @@ async function onVisibilityChange() {
         } else if (msUntilExpiry <= 0) {
             // Token is fully expired and refresh failed — redirect to login
             if (typeof window !== "undefined") {
-                window.location.href = "/login";
+                redirectToLogin();
             }
         }
     }
