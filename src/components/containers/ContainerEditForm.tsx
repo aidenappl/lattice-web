@@ -10,6 +10,13 @@ import { reqGetRegistries } from "@/services/registries.service";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { Button } from "@/components/ui/button";
 
+// Text fields are sent only when edited, and "" clears them. The API reads null
+// as "leave unchanged", so the old `value || null` made emptying a field a silent
+// no-op: the previous command, env vars, healthcheck, … stayed in place.
+function changed(value: string, original: string | null | undefined): string | undefined {
+  return value !== (original ?? "") ? value : undefined;
+}
+
 const inputClass =
   "w-full rounded-lg border border-border-strong bg-background-alt px-3 py-1.5 text-sm text-primary placeholder-[#444444] focus:border-[#3b82f6] focus:outline-none";
 
@@ -69,20 +76,18 @@ export function ContainerEditForm({
       image: editImage || undefined,
       tag: editTag || undefined,
       restart_policy: editRestartPolicy || undefined,
-      command: editCommand || null,
-      entrypoint: editEntrypoint || null,
+      command: changed(editCommand, container.command),
+      entrypoint: changed(editEntrypoint, container.entrypoint),
       cpu_limit: editCpuLimit ? Number(editCpuLimit) : null,
       memory_limit: editMemoryLimit ? Number(editMemoryLimit) : null,
       replicas: editReplicas ? Number(editReplicas) : undefined,
-      env_vars: editEnvVars || null,
-      port_mappings: editPortMappings || null,
-      volumes: editVolumes || null,
-      health_check: editHealthCheck || null,
-      // Sent only when changed; "" clears them (null would leave them as-is).
-      ulimits:
-        editUlimits !== (container.ulimits ?? "") ? editUlimits : undefined,
+      env_vars: changed(editEnvVars, container.env_vars),
+      port_mappings: changed(editPortMappings, container.port_mappings),
+      volumes: changed(editVolumes, container.volumes),
+      health_check: changed(editHealthCheck, container.health_check),
+      ulimits: changed(editUlimits, container.ulimits),
       registry_id: editRegistryId ? Number(editRegistryId) : null,
-      depends_on: editDependsOn || null,
+      depends_on: changed(editDependsOn, container.depends_on),
     } as Partial<Container>);
     setSaving(false);
     if (res.success) {
@@ -292,6 +297,9 @@ export function ContainerEditForm({
               }
               language="json"
             />
+            <p className="text-[9px] text-muted mt-1">
+              Empty to remove. A healthcheck built into the image still applies after the next deploy.
+            </p>
           </div>
           <div>
             <label className="block text-[10px] text-muted uppercase tracking-wider mb-1.5">
