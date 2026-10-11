@@ -54,8 +54,8 @@ export function loginReturnTo(): string {
 }
 
 /**
- * Completes a sign-out: follows the API's redirect_url (the identity
- * provider's end-session endpoint for an SSO session) or lands on /login with
+ * Completes a sign-out: follows the API's redirect_url (this app's login page —
+ * sign-out ends only this app's session) or lands on /login with
  * signed_out=1, which stops it signing the user straight back in.
  */
 export function finishSignOut(redirectURL?: string | null): void {
