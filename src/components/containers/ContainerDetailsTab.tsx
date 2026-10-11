@@ -1,7 +1,7 @@
 "use client";
 
 import type { Container } from "@/types";
-import { parsePortMappings, parseEnvVars, parseVolumes, prettyField } from "@/lib/utils";
+import { parsePortMappings, parseEnvVars, parseVolumes, formatArgv } from "@/lib/utils";
 
 export function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -108,7 +108,7 @@ export function ContainerDetailsTab({ container }: ContainerDetailsTabProps) {
             CMD
           </h3>
           <code className="text-sm text-subtle font-mono">
-            {prettyField(container.command)}
+            {formatArgv(container.command)}
           </code>
         </section>
       )}
@@ -120,7 +120,7 @@ export function ContainerDetailsTab({ container }: ContainerDetailsTabProps) {
             ENTRYPOINT
           </h3>
           <code className="text-sm text-subtle font-mono">
-            {prettyField(container.entrypoint)}
+            {formatArgv(container.entrypoint)}
           </code>
         </section>
       )}

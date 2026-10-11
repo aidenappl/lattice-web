@@ -173,3 +173,27 @@ export function formatUlimits(raw: string | null | undefined): string {
         return "";
     }
 }
+
+/**
+ * Renders a stored command/entrypoint (JSON array) as a shell string that
+ * lattice-api parses back to the same argv: ["sh","-c","a && b"] -> sh -c 'a && b'.
+ * Arguments with spaces or shell characters are single-quoted. Non-array values
+ * are returned unchanged.
+ */
+export function formatArgv(raw: string | null | undefined): string {
+    if (!raw) return "";
+    let argv: unknown;
+    try {
+        argv = JSON.parse(raw);
+    } catch {
+        return raw;
+    }
+    if (!Array.isArray(argv)) return raw;
+    return argv
+        .map((a) => {
+            const s = String(a);
+            if (s !== "" && /^[A-Za-z0-9_@%+=:,./-]+$/.test(s)) return s;
+            return `'${s.replace(/'/g, `'\\''`)}'`;
+        })
+        .join(" ");
+}

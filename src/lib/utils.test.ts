@@ -3,6 +3,7 @@ import type { Worker, User } from "@/types";
 import {
   isNewerVersion,
   formatUlimits,
+  formatArgv,
   cn,
   timeAgo,
   isWorkerOnline,
@@ -411,5 +412,20 @@ describe("formatUlimits", () => {
         expect(formatUlimits(null)).toBe("");
         expect(formatUlimits("")).toBe("");
         expect(formatUlimits("{broken")).toBe("");
+    });
+});
+
+describe("formatArgv", () => {
+    it("joins plain arguments", () => {
+        expect(formatArgv('["npm","start"]')).toBe("npm start");
+    });
+    it("quotes arguments the API would otherwise split", () => {
+        expect(formatArgv('["sh","-c","migrate && serve"]')).toBe("sh -c 'migrate && serve'");
+        expect(formatArgv('["echo","it\'s"]')).toBe("echo 'it'\\''s'");
+        expect(formatArgv('["printf",""]')).toBe("printf ''");
+    });
+    it("passes through non-arrays and blanks", () => {
+        expect(formatArgv(null)).toBe("");
+        expect(formatArgv("npm start")).toBe("npm start");
     });
 });

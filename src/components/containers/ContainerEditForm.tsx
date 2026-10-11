@@ -9,6 +9,7 @@ import { reqUpdateContainer } from "@/services/stacks.service";
 import { reqGetRegistries } from "@/services/registries.service";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { Button } from "@/components/ui/button";
+import { formatArgv } from "@/lib/utils";
 
 // Text fields are sent only when edited, and "" clears them. The API reads null
 // as "leave unchanged", so the old `value || null` made emptying a field a silent
@@ -37,9 +38,9 @@ export function ContainerEditForm({
   const [editRestartPolicy, setEditRestartPolicy] = useState(
     container.restart_policy ?? "",
   );
-  const [editCommand, setEditCommand] = useState(container.command ?? "");
+  const [editCommand, setEditCommand] = useState(formatArgv(container.command));
   const [editEntrypoint, setEditEntrypoint] = useState(
-    container.entrypoint ?? "",
+    formatArgv(container.entrypoint),
   );
   const [editCpuLimit, setEditCpuLimit] = useState(
     container.cpu_limit != null ? String(container.cpu_limit) : "",
@@ -76,8 +77,8 @@ export function ContainerEditForm({
       image: editImage || undefined,
       tag: editTag || undefined,
       restart_policy: editRestartPolicy || undefined,
-      command: changed(editCommand, container.command),
-      entrypoint: changed(editEntrypoint, container.entrypoint),
+      command: changed(editCommand, formatArgv(container.command)),
+      entrypoint: changed(editEntrypoint, formatArgv(container.entrypoint)),
       cpu_limit: editCpuLimit ? Number(editCpuLimit) : null,
       memory_limit: editMemoryLimit ? Number(editMemoryLimit) : null,
       replicas: editReplicas ? Number(editReplicas) : undefined,
@@ -202,7 +203,7 @@ export function ContainerEditForm({
             <input
               value={editCommand}
               onChange={(e) => setEditCommand(e.target.value)}
-              placeholder="e.g. npm start"
+              placeholder={'e.g. npm start, sh -c "migrate && serve"'}
               className={inputClass}
             />
           </div>
@@ -213,7 +214,7 @@ export function ContainerEditForm({
             <input
               value={editEntrypoint}
               onChange={(e) => setEditEntrypoint(e.target.value)}
-              placeholder="e.g. /bin/sh"
+              placeholder={'e.g. /docker-entrypoint.sh or ["/init", "--"]'}
               className={inputClass}
             />
           </div>
