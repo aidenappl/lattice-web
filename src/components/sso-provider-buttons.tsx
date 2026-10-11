@@ -91,6 +91,16 @@ function cachedIconSrc(apiURL: string, displayIcon: string | null): string | nul
 export interface SSOProviderButtonsProps {
   providers: SSOProvider[];
   apiURL: string;
+  /** Where the API sends the browser after sign-in (?return_to=). */
+  returnTo?: string;
+}
+
+/** Appends return_to to an SSO login href. */
+function withReturnTo(href: string, returnTo?: string): string {
+  if (!returnTo) return href;
+  const u = new URL(href, window.location.origin);
+  u.searchParams.set("return_to", returnTo);
+  return u.toString();
 }
 
 /**
@@ -99,7 +109,7 @@ export interface SSOProviderButtonsProps {
  * Sorted by sort_order then name, matching the API's ordering, so the list is
  * stable rather than dependent on however the rows came back.
  */
-export function SSOProviderButtons({ providers, apiURL }: SSOProviderButtonsProps) {
+export function SSOProviderButtons({ providers, apiURL, returnTo }: SSOProviderButtonsProps) {
   const sorted = [...providers].sort(
     (a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name),
   );
@@ -107,8 +117,9 @@ export function SSOProviderButtons({ providers, apiURL }: SSOProviderButtonsProp
   return (
     <div className="flex flex-col gap-2">
       {sorted.map((p) => {
-        const href = ssoHref(apiURL, p.login_url);
-        if (!href) return null;
+        const base = ssoHref(apiURL, p.login_url);
+        if (!base) return null;
+        const href = withReturnTo(base, returnTo);
 
         const bg = safeColor(p.button_color);
         const fg = safeColor(p.button_text_color);

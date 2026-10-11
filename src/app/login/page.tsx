@@ -5,6 +5,7 @@ import { reqLogin } from "@/services/auth.service";
 import { SSOProviderButtons, type SSOProvider } from "@/components/sso-provider-buttons";
 import { Logo } from "@/components/ui/logo";
 import { newClientRequestId, reportFetchFailure } from "@/services/monitor.service";
+import { clearSilentSSO, loginReturnTo, silentSSOAllowed, SSO_ERRORS, startSilentSSO } from "@/lib/sso";
 
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 
@@ -16,7 +17,20 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(true);
+  // Shows "Checking session…" until the session probe, the SSO config and the
+  // silent-SSO decision have all resolved, so the form never flashes before a
+  // silent sign-in navigates away.
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [ssoLoaded, setSsoLoaded] = useState(false);
+  const checkingBase = !sessionChecked || !ssoLoaded;
+  // Captured before the error effect below cleans the URL: arriving with
+  // ?error= (including login_required) means a sign-in just failed, so no
+  // silent attempt. ?signed_out=1 (after sign-out) and ?local=1 opt out.
+  const [skipSilent] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const p = new URLSearchParams(window.location.search);
+    return p.has("error") || p.has("local") || p.has("signed_out") || !silentSSOAllowed();
+  });
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState(0);
   const [ssoConfig, setSsoConfig] = useState<{
@@ -40,19 +54,20 @@ export default function LoginPage() {
     fetch(url, { credentials: "include", headers: { "X-Request-ID": requestId } })
       .then((res) => {
         if (res.ok) {
-          window.location.replace("/");
+          clearSilentSSO();
+          window.location.replace(loginReturnTo());
         } else {
           // 401/403: not signed in, which is why we're here. Anything else is
           // the API failing to answer.
           if (res.status !== 401 && res.status !== 403) {
             reportFetchFailure({ feature: "login.session_check", url, requestId, response: res });
           }
-          setChecking(false);
+          setSessionChecked(true);
         }
       })
       .catch((err: unknown) => {
         reportFetchFailure({ feature: "login.session_check", url, requestId, error: err });
-        setChecking(false);
+        setSessionChecked(true);
       });
   }, []);
 
@@ -70,6 +85,7 @@ export default function LoginPage() {
         return null;
       })
       .then((data) => {
+        setSsoLoaded(true);
         if (!data) return;
         // ⚠️ ACCEPT EITHER SHAPE. Gating solely on `enabled` was a latent
         // outage: that field is a LEGACY one this API still emits alongside the
@@ -86,6 +102,7 @@ export default function LoginPage() {
       .catch((err: unknown) => {
         // Unreachable API, or a body that isn't JSON: the SSO buttons don't render.
         reportFetchFailure({ feature: "login.sso_config", url, requestId, error: err });
+        setSsoLoaded(true);
       });
   }, []);
 
@@ -94,18 +111,16 @@ export default function LoginPage() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const ssoError = params.get("error");
+      // login_required is the provider answering a silent attempt with "not
+      // signed in" — the expected reason to be here, not an error to show.
+      if (ssoError && ssoError !== "login_required") {
+        setError(SSO_ERRORS[ssoError] ?? "SSO authentication failed");
+      }
       if (ssoError) {
-        const messages: Record<string, string> = {
-          sso_denied: "SSO authentication was denied by the provider.",
-          sso_failed: "SSO authentication failed. Please try again.",
-          sso_no_email: "The SSO provider did not return an email address. Ensure your SSO scopes include 'email'.",
-          sso_no_account: "No account found for this email. Contact your administrator.",
-          sso_state_expired: "SSO session expired. Please try again.",
-          account_disabled: "Your account has been disabled. Contact your administrator.",
-        };
-        setError(messages[ssoError] ?? "SSO authentication failed");
-        // Clean up URL
-        window.history.replaceState({}, "", "/login");
+        // Clean up the URL, keeping return_to.
+        params.delete("error");
+        const rest = params.toString();
+        window.history.replaceState({}, "", "/login" + (rest ? "?" + rest : ""));
       }
     }
   }, []);
@@ -180,6 +195,19 @@ export default function LoginPage() {
           ]
         : [];
 
+  // Silent SSO: with exactly one provider and nothing telling us not to, try a
+  // prompt=none sign-in before showing the form. A user still signed in at the
+  // identity provider comes straight back signed in; otherwise the provider
+  // answers login_required and this page renders normally.
+  const candidate = providers.length === 1 ? providers[0].login_url : null;
+  const silentLoginURL =
+    candidate && candidate.startsWith("/") && !candidate.startsWith("//") && !skipSilent ? candidate : null;
+  const checking = checkingBase || silentLoginURL !== null;
+  useEffect(() => {
+    if (checkingBase || !silentLoginURL) return;
+    startSilentSSO(API_URL, silentLoginURL, loginReturnTo());
+  }, [checkingBase, silentLoginURL]);
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8 bg-background">
       <div className="w-full max-w-sm flex flex-col items-center">
@@ -239,7 +267,7 @@ export default function LoginPage() {
                       rendered as a clickable anchor on an unauthenticated page, so
                       `javascript:` and absolute URLs are refused there rather than
                       trusted from the API. */}
-                  <SSOProviderButtons providers={providers} apiURL={API_URL} />
+                  <SSOProviderButtons providers={providers} apiURL={API_URL} returnTo={loginReturnTo()} />
                 </>
               )}
             </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Logo } from "@/components/ui/logo";
 import { reqGetSelf } from "@/services/auth.service";
 import { reqLogout } from "@/services/auth.service";
+import { finishSignOut } from "@/lib/sso";
 import { monitor } from "@/services/monitor.service";
 
 export default function PendingApprovalPage() {
@@ -36,9 +37,9 @@ export default function PendingApprovalPage() {
       </div>
       <button
         onClick={async () => {
-          await reqLogout();
+          const res = await reqLogout();
           monitor?.clearUser();
-          window.location.replace("/login");
+          finishSignOut(res.success ? res.data?.redirect_url : null);
         }}
         className="btn btn-secondary mt-4"
       >

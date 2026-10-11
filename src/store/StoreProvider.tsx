@@ -45,7 +45,10 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
           storeInstance.dispatch(setUser(authRes.data));
           monitor?.setUser(String(authRes.data.id));
           storeInstance.dispatch(setIsLoading(false));
-          startProactiveRefresh();
+          // Only local-password sessions carry a Lattice JWT to refresh. An
+          // SSO session is refreshed server-side against the identity
+          // provider on each request, so there is nothing to schedule.
+          if (authRes.data.auth_type !== "sso") startProactiveRefresh();
           if (authRes.data.role === "pending") {
             window.location.href = "/pending";
             return;

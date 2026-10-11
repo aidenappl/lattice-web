@@ -148,10 +148,11 @@ export function Navbar() {
                   onClick={async () => {
                     setMenuOpen(false);
                     const { reqLogout } = await import("@/services/auth.service");
-                    await reqLogout();
+                    const res = await reqLogout();
                     const { monitor } = await import("@/services/monitor.service");
                     monitor?.clearUser();
-                    window.location.replace("/login");
+                    const { finishSignOut } = await import("@/lib/sso");
+                    finishSignOut(res.success ? res.data?.redirect_url : null);
                   }}
                 >
                   <FontAwesomeIcon
