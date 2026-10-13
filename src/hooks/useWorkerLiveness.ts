@@ -83,9 +83,19 @@ export function useWorkerLiveness(workers: Worker[]): LivenessMap {
 
     // Periodic staleness check — if no heartbeat in 90s, mark offline
     useEffect(() => {
+        const TICK_MS = 15_000;
+        let lastTick = Date.now();
+        let resumedAt = 0;
         const interval = setInterval(() => {
             const STALE_MS = 90_000;
             const now = Date.now();
+            // A tick far later than scheduled means the tab was frozen or the
+            // machine slept. The socket still reads as open, but nothing was
+            // delivered meanwhile, so every worker looks silent for the whole
+            // nap. Give the socket a staleness window to recover first.
+            if (now - lastTick > TICK_MS * 3) resumedAt = now;
+            lastTick = now;
+            if (now - resumedAt < STALE_MS) return;
             const stale: number[] = [];
             for (const [idStr, online] of Object.entries(livenessRef.current)) {
                 if (!online) continue;
@@ -115,7 +125,7 @@ export function useWorkerLiveness(workers: Worker[]): LivenessMap {
                 for (const id of stale) next[id] = false;
                 return next;
             });
-        }, 15_000);
+        }, TICK_MS);
         return () => clearInterval(interval);
     }, []);
 
