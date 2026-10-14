@@ -516,6 +516,18 @@ deliberately not `running`, which is green because it means a healthy container.
 
 ## Operations
 
+- **CI runners:** every GitHub Actions job runs on `[self-hosted, lattice-worker]` — a
+  single-use runner started by `aidenappl/gh-runner-broker` on the CI host (`aplb-actions`,
+  10.15.10.78), with the toolchain and shared Go/npm caches provisioned by
+  `TeamTrailblaze/runner-setup`. Images build through the host's `lattice-builder` BuildKit
+  (`builder: lattice-builder`), never `docker/setup-buildx-action`, which races other runners
+  on the shared Docker daemon; its local layer cache replaces the gha cache. `setup-go` runs
+  with `cache: false`. Jobs stuck in "Queued" mean the broker or the host is down — check the
+  `gh-runner-broker` service in Monitor (zone `appleby`).
+  **Fallback:** Lattice must build even when that host is down, since Lattice is how you fix it.
+  Set the repo variable `LATTICE_CI_RUNS_ON` to `["ubuntu-latest"]` and every job runs
+  GitHub-hosted, building with `docker/setup-buildx-action`; delete the variable to switch back.
+
 - **Deployment target: self-hosted Docker, NOT Vercel.** CI
   (`.github/workflows/build-and-deploy.yml`) builds a multi-stage image and pushes it to the private
   registry (`registry.appleby.cloud/lattice-web:latest`). Version is
