@@ -8,6 +8,8 @@ export type Stack = {
     auto_deploy: boolean;
     placement_constraints: string | null;
     env_vars: string | null;
+    /** JSON array of env_vars keys whose values the API masks ("***") for non-admins. */
+    secret_env_keys?: string | null;
     compose_yaml: string | null;
     active: boolean;
     inserted_at: string;

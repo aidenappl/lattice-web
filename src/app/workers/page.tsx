@@ -14,7 +14,8 @@ import {
   reqStartAllContainers,
   reqDeleteWorker,
 } from "@/services/workers.service";
-import { reqGetVersions } from "@/services/admin.service";
+import { reqGetVersions, reqGetOverview } from "@/services/admin.service";
+import { Meter } from "@/components/ui/sparkline";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,7 +44,26 @@ import toast from "react-hot-toast";
 // Unset → render the hostname as plain text (no hardcoded port assumption).
 const WORKER_METRICS_PORT = process.env.NEXT_PUBLIC_WORKER_METRICS_PORT;
 
+type Usage = { cpu: number | null; mem: number | null; disk: number | null };
+
+function num(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+function UsageCell({ value }: { value: number | null | undefined }) {
+  if (value == null) return <span className="text-muted">—</span>;
+  return (
+    <div className="flex items-center gap-2" title={`${value.toFixed(1)}%`}>
+      <Meter value={value} width={44} />
+      <span className="mono text-xs text-secondary tabular-nums w-9 text-right">
+        {Math.round(value)}%
+      </span>
+    </div>
+  );
+}
+
 export default function WorkersPage() {
+  const [usage, setUsage] = useState<Record<number, Usage>>({});
   const router = useRouter();
   const user = useUser();
   const editable = canEdit(user);
@@ -71,10 +91,26 @@ export default function WorkersPage() {
   }, []);
 
   const load = useCallback(async () => {
-    const [workersRes, versionsRes] = await Promise.all([
+    const [workersRes, versionsRes, overviewRes] = await Promise.all([
       reqGetWorkers(),
       reqGetVersions(),
+      reqGetOverview(),
     ]);
+    // Latest stored sample per worker; heartbeats keep it live from here.
+    if (overviewRes.success) {
+      const next: Record<number, Usage> = {};
+      for (const m of overviewRes.data?.worker_metrics ?? []) {
+        next[m.worker_id] = {
+          cpu: m.cpu,
+          mem: m.memory,
+          disk:
+            m.disk_used != null && m.disk_total
+              ? (m.disk_used / m.disk_total) * 100
+              : null,
+        };
+      }
+      setUsage(next);
+    }
     if (workersRes.success) {
       setWorkers(workersRes.data ?? []);
       setLoadError(false);
@@ -112,7 +148,30 @@ export default function WorkersPage() {
   // Live updates via WebSocket
   const handleSocketEvent = useCallback((event: AdminSocketEvent) => {
     if (event.type === "worker_heartbeat" && event.worker_id) {
-      const payload = event.payload as { runner_version?: string } | undefined;
+      const payload = event.payload as
+        | ({ runner_version?: string } & Record<string, unknown>)
+        | undefined;
+      if (payload) {
+        const memUsed = num(payload.memory_used_mb);
+        const memTotal = num(payload.memory_total_mb);
+        const diskUsed = num(payload.disk_used_mb);
+        const diskTotal = num(payload.disk_total_mb);
+        const wid = event.worker_id;
+        setUsage((prev) => ({
+          ...prev,
+          [wid]: {
+            cpu: num(payload.cpu_percent) ?? prev[wid]?.cpu ?? null,
+            mem:
+              memUsed != null && memTotal
+                ? (memUsed / memTotal) * 100
+                : (prev[wid]?.mem ?? null),
+            disk:
+              diskUsed != null && diskTotal
+                ? (diskUsed / diskTotal) * 100
+                : (prev[wid]?.disk ?? null),
+          },
+        }));
+      }
       setWorkers((prev) =>
         prev.map((w) =>
           w.id === event.worker_id
@@ -491,7 +550,10 @@ WORKER_NAME=${createdWorker.name}`}
                 <th>Name</th>
                 <th className="hidden sm:table-cell">Hostname</th>
                 <th>Status</th>
-                <th className="hidden lg:table-cell">OS / Arch</th>
+                <th className="hidden md:table-cell">CPU</th>
+                <th className="hidden md:table-cell">Memory</th>
+                <th className="hidden lg:table-cell">Disk</th>
+                <th className="hidden xl:table-cell">OS / Arch</th>
                 <th className="hidden xl:table-cell">Docker</th>
                 <th className="hidden md:table-cell">Runner</th>
                 <th className="hidden sm:table-cell">Last Heartbeat</th>
@@ -501,7 +563,7 @@ WORKER_NAME=${createdWorker.name}`}
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={11}
                     className="text-center text-sm text-muted !py-12"
                   >
                     {workers.length === 0
@@ -554,7 +616,16 @@ WORKER_NAME=${createdWorker.name}`}
                     <td>
                       <StatusBadge status={worker.status} />
                     </td>
-                    <td className="text-secondary hidden lg:table-cell whitespace-nowrap">
+                    <td className="hidden md:table-cell">
+                      <UsageCell value={worker.status === "online" ? usage[worker.id]?.cpu : null} />
+                    </td>
+                    <td className="hidden md:table-cell">
+                      <UsageCell value={worker.status === "online" ? usage[worker.id]?.mem : null} />
+                    </td>
+                    <td className="hidden lg:table-cell">
+                      <UsageCell value={usage[worker.id]?.disk} />
+                    </td>
+                    <td className="text-secondary hidden xl:table-cell whitespace-nowrap">
                       {worker.os ?? "-"}/{worker.arch ?? "-"}
                     </td>
                     <td className="mono text-secondary hidden xl:table-cell">

@@ -43,7 +43,7 @@ import { reqGetGlobalEnvVars } from "@/services/admin.service";
 import type { GlobalEnvVar } from "@/types";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
-import { canEdit, timeAgo, workerStaleReason } from "@/lib/utils";
+import { canEdit, isAdmin, timeAgo, workerStaleReason, parseSecretKeys } from "@/lib/utils";
 import { useUser } from "@/store/hooks";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
@@ -113,6 +113,7 @@ export default function StackDetailPage() {
 
   // Stack env vars
   const [stackEnvVars, setStackEnvVars] = useState("");
+  const [stackSecretKeys, setStackSecretKeys] = useState<Set<string>>(() => new Set());
   const [savingEnvVars, setSavingEnvVars] = useState(false);
   const [globalEnvVars, setGlobalEnvVars] = useState<GlobalEnvVar[]>([]);
 
@@ -203,6 +204,7 @@ export default function StackDetailPage() {
       if (stackRes.success) {
         setStack(stackRes.data);
         setStackEnvVars(stackRes.data.env_vars ?? "");
+        setStackSecretKeys(parseSecretKeys(stackRes.data.secret_env_keys));
         setComposeYaml(stackRes.data.compose_yaml ?? "");
       }
       if (globalEnvRes.success) setGlobalEnvVars(globalEnvRes.data ?? []);
@@ -257,6 +259,7 @@ export default function StackDetailPage() {
       if (stackRes.success) {
         setStack(stackRes.data);
         setStackEnvVars(stackRes.data.env_vars ?? "");
+        setStackSecretKeys(parseSecretKeys(stackRes.data.secret_env_keys));
       }
       if (deploymentsRes.success) {
         const filtered = (deploymentsRes.data ?? []).filter(
@@ -557,9 +560,12 @@ export default function StackDetailPage() {
     setSavingEnvVars(true);
     const res = await reqUpdateStack(id, {
       env_vars: stackEnvVars || undefined,
+      secret_env_keys: JSON.stringify([...stackSecretKeys].sort()),
     });
     if (res.success) {
       setStack(res.data);
+      setStackEnvVars(res.data.env_vars ?? "");
+      setStackSecretKeys(parseSecretKeys(res.data.secret_env_keys));
       setHasPendingChanges(true);
     } else {
       toast.error(res.error_message || "Failed to save environment variables");
@@ -852,6 +858,16 @@ export default function StackDetailPage() {
             <StackEnvTab
               envVars={stackEnvVars}
               onChange={setStackEnvVars}
+              secretKeys={stackSecretKeys}
+              onToggleSecret={(key) =>
+                setStackSecretKeys((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(key)) next.delete(key);
+                  else next.add(key);
+                  return next;
+                })
+              }
+              canUnmarkSecrets={isAdmin(user)}
               onSave={handleSaveEnvVars}
               saving={savingEnvVars}
               canEdit={canEdit(user)}

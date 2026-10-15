@@ -15,6 +15,9 @@ interface StackEnvTabProps {
   highlightVar?: string;
   onClearHighlight?: () => void;
   composeYaml?: string;
+  secretKeys?: Set<string>;
+  onToggleSecret?: (key: string) => void;
+  canUnmarkSecrets?: boolean;
 }
 
 export function StackEnvTab({
@@ -26,6 +29,9 @@ export function StackEnvTab({
   highlightVar,
   onClearHighlight,
   composeYaml,
+  secretKeys,
+  onToggleSecret,
+  canUnmarkSecrets,
 }: StackEnvTabProps) {
   const [globalVars, setGlobalVars] = useState<GlobalEnvVar[]>([]);
   const [globalLoading, setGlobalLoading] = useState(true);
@@ -107,6 +113,9 @@ export function StackEnvTab({
         highlightVar={highlightVar}
         onClearHighlight={onClearHighlight}
         referencedVars={referencedVars}
+        secretKeys={secretKeys}
+        onToggleSecret={userCanEdit ? onToggleSecret : undefined}
+        canUnmarkSecrets={canUnmarkSecrets}
       />
       {userCanEdit && (
         <div className="mt-3 flex justify-end">

@@ -140,6 +140,22 @@ export function prettyField(raw: string | null): string {
 }
 
 /**
+ * Reads a stack's `secret_env_keys` (a JSON array). Anything malformed is
+ * treated as "no secrets", matching lattice-api.
+ */
+export function parseSecretKeys(raw: string | null | undefined): Set<string> {
+    if (!raw) return new Set();
+    try {
+        const list: unknown = JSON.parse(raw);
+        return new Set(
+            Array.isArray(list) ? list.filter((k): k is string => typeof k === "string" && k !== "") : [],
+        );
+    } catch {
+        return new Set();
+    }
+}
+
+/**
  * Drops samples that are much older than the newest one in the set.
  *
  * "Latest sample per container" endpoints keep returning the last row for a

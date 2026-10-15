@@ -106,7 +106,7 @@ src/
     StoreProvider.tsx       # singleton store + AppInitializer (boots session via reqGetSelf, gates render)
     slices/                 # authSlice, overviewSlice, workersSlice, stacksSlice, containersSlice (+ *.test.ts)
   hooks/                    # cross-cutting hooks (usePoll, useAdminSocket, useContainerLogs, useSelection + useBulkAction for list bulk actions, …)
-  lib/                      # utils.ts (cn, isAdmin, canEdit, formatBytes, dropStaleSamples, …), version.ts, deployment-progress.ts, automations.ts, ws-reconnect.ts, sso.ts (silent SSO, return_to, sign-out), bulk.ts (runBulk/summarizeBulk), dotenv.ts (.env import/export) (+ *.test.ts), monitor-server.ts (server-side Monitor)
+  lib/                      # utils.ts (cn, isAdmin, canEdit, formatBytes, dropStaleSamples, …), version.ts, deployment-progress.ts, automations.ts, ws-reconnect.ts, sso.ts (silent SSO, return_to, sign-out), bulk.ts (runBulk/summarizeBulk), dotenv.ts (.env import/export), csv.ts (toCSV/downloadText) (+ *.test.ts), monitor-server.ts (server-side Monitor)
   types/                    # domain types; index.ts re-exports all + ApiResponse/ApiSuccess/ApiError/SearchResults/ApiToken
   test/setup.ts             # Vitest + jest-dom setup
 ```
@@ -131,12 +131,12 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 | `/login` | `login/page.tsx` | Dual auth: local email/password (`reqLogin`) **+** SSO button (fetches `/auth/sso/config`, links to `login_url`), silent SSO first (`lib/sso.ts`). Redirects to `return_to` if already authed |
 | `/pending` | `pending/page.tsx` | Landing for users with `role: "pending"` (account awaiting approval) |
 | `/unauthorized` | `unauthorized/page.tsx` | Landing when a grant is revoked / `error_code 4003` |
-| `/workers` | `workers/page.tsx` | Worker fleet list with status, search, clickable rows; bulk upgrade runner / start / stop containers / reboot (admin) / delete |
+| `/workers` | `workers/page.tsx` | Worker fleet list with status, live CPU / memory / disk meters (seeded from `reqGetOverview().worker_metrics`, then updated from `worker_heartbeat` payloads), search, clickable rows; bulk upgrade runner / start / stop containers / reboot (admin) / delete |
 | `/workers/[id]` | `workers/[id]/page.tsx` | Worker detail: info, infra, stacks, tokens (multi-select delete), container stats (stale samples from removed containers dropped via `dropStaleSamples`), edit/reboot/upgrade |
 | `/workers/[id]/metrics` | `workers/[id]/metrics/page.tsx` | Full metric charts (CPU/mem/disk/net) for one worker. The worker and its metrics load independently: a slow or failed `/metrics` call shows an inline error with Retry instead of a page-wide spinner |
 | `/stacks` | `stacks/page.tsx` | Stack cards with search + status/worker filters; select cards for bulk deploy / restart / start / stop / move to worker / export / delete |
 | `/stacks/new` | `stacks/new/page.tsx` | Create stack (or import compose) |
-| `/stacks/[id]` | `stacks/[id]/page.tsx` | Stack detail tabs: containers, compose YAML editor, env (values whose key looks sensitive are masked until revealed), logs, deployments, deploy tokens (multi-select delete), dependency graph. Export / Save as template (modal) / Delete live in the header's `⋯` menu |
+| `/stacks/[id]` | `stacks/[id]/page.tsx` | Stack detail tabs: containers, compose YAML editor, env (lock toggle per key sets `secret_env_keys` — the API masks those values as `***` for non-admins and keeps the stored value when `***` is saved back; only admins can unmark. Declared secrets and keys that look sensitive are masked in the editor until revealed), logs, deployments, deploy tokens (multi-select delete), dependency graph. Export / Save as template (modal) / Delete live in the header's `⋯` menu |
 | `/containers` | `containers/page.tsx` | Global container list + lifecycle actions; bulk start / stop / restart / recreate / delete (removes from the stack config too) |
 | `/containers/[id]` | `containers/[id]/page.tsx` | Container detail: details/health tabs, logs, terminal, action bar, edit form. `ulimits` (lattice-api ≥ v1.4.7) shows in Container Info via `formatUlimits` and is edited as compose-shaped JSON; the form sends it only when changed, `""` to clear. Every text field in `ContainerEditForm` goes through `changed()` the same way: `null` means "unchanged" to the API, so the old `value \|\| null` made emptying a field a silent no-op. Command/Entrypoint are shown and edited as shell strings via `formatArgv` (quotes arguments so lattice-api ≥ v1.4.9 parses back the same argv); a JSON array is accepted too |
 | `/deployments` | `deployments/page.tsx` | Deployment history. Stack/status filters go to the API (`reqGetDeployments(params)`), paged 50 at a time with "Load older"; duration column; bulk approve for `pending` |
@@ -151,7 +151,7 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 | `/automations` | `automations/page.tsx` | Automation list: trigger, step count, run-as user (flagged when deactivated), last run, enable switch, run now, edit, delete, create (form modal → show-once webhook URL); bulk enable / disable / run / delete |
 | `/automations/[id]` | `automations/[id]/page.tsx` | Automation detail: trigger, run-as identity, ordered steps, polled run history with per-step results; run now / enable / disable / edit / rotate token (admin, webhook only) / delete |
 | `/backup-destinations` | `backup-destinations/page.tsx` | Backup destination CRUD + test (worker picker is a modal), location (locality) shown and editable; bulk delete. Partial config edits rely on lattice-api merging `config` (see that repo's AGENTS.md) |
-| `/audit-log` | `audit-log/page.tsx` | Administrative audit trail |
+| `/audit-log` | `audit-log/page.tsx` | Administrative audit trail. Search, user / action / resource / date-range filters all go to the API (`reqGetAuditLog(AuditLogQuery)`, lattice-api ≥ v1.8.0), 100 per page with "Load older", CSV export of everything matching (paged 500 at a time, capped at 10 000 rows, `lib/csv.ts` escapes formulas), resource ids link to their detail page |
 | `/authentication` | `authentication/page.tsx` | Tabs: SSO config (provider presets — the saved provider is detected from its authorize URL, OAuth2/OIDC endpoints, claim mapping) and **Users** (create / role / activate / approve / delete; bulk approve / role / activate / deactivate / delete — never offered on your own account) |
 | `/notifications` | `notifications/page.tsx` | Email (SMTP) and desktop notification preferences |
 | `/ai` | `ai/page.tsx` | **API-token management** (the tokens that power `lattice-mcp` / AI agents) — create/list/rotate (create same-name replacement, then revoke)/delete; bulk revoke |
@@ -241,7 +241,7 @@ the `MONITOR_*` values are read at runtime from the container's environment.
 Vitest with jsdom (`vitest.config.ts`, setup `src/test/setup.ts`, `@` alias mirrored). Tests are
 colocated `*.test.ts(x)` files. Current coverage is the **pure logic and reducers**, not full page
 rendering: `lib/utils.test.ts`, `lib/deployment-progress.test.ts`, `lib/automations.test.ts`,
-`lib/ws-reconnect.test.ts`, `lib/bulk.test.ts`, `lib/dotenv.test.ts`, `services/monitor.service.test.ts`, `services/api.service.test.ts`, and a `*.test.ts` beside each
+`lib/ws-reconnect.test.ts`, `lib/bulk.test.ts`, `lib/dotenv.test.ts`, `lib/csv.test.ts`, `services/monitor.service.test.ts`, `services/api.service.test.ts`, and a `*.test.ts` beside each
 Redux slice (`authSlice`, `overviewSlice`, `workersSlice`, `stacksSlice`, `containersSlice`). When
 you touch a slice or a `lib/` helper, extend its sibling test.
 
