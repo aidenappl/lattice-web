@@ -58,7 +58,7 @@ import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/badge";
-import { Terminal } from "@/components/ui/terminal";
+import { Terminal } from "@/components/ui/terminal-lazy";
 import {
   LogViewer,
   sortLogs,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { reportCaught } from "@/services/monitor.service";
@@ -23,6 +23,7 @@ import {
   reqUnpauseContainer,
   reqRemoveContainer,
   reqRecreateContainer,
+  reqDeleteContainer,
 } from "@/services/stacks.service";
 import { reqGetStack } from "@/services/stacks.service";
 import { reqGetWorker } from "@/services/workers.service";
@@ -38,7 +39,7 @@ import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
 import { Alert } from "@/components/ui/alert";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import WorkerBadge from "@/components/ui/worker-badge";
-import { Terminal } from "@/components/ui/terminal";
+import { Terminal } from "@/components/ui/terminal-lazy";
 import { LogViewer } from "@/components/ui/log-viewer";
 import { ContainerActionBar, ActionButton } from "@/components/containers/ContainerActionBar";
 import { ContainerEditForm } from "@/components/containers/ContainerEditForm";
@@ -220,6 +221,28 @@ export default function ContainerDetailPage() {
     }, [loadContainer, loadLogsForContainer, tab]),
     10000,
   );
+
+  const router = useRouter();
+  const handleDelete = async () => {
+    if (!container) return;
+    const where = stack ? `the ${stack.name} stack` : "its stack";
+    const ok = await showConfirm({
+      title: `Delete ${container.name}?`,
+      message: `Removes "${container.name}" from ${where}'s config and from Docker, so deploys stop recreating it. Its volumes are kept. If the stack's compose file still defines it, a compose sync will add it back.`,
+      confirmLabel: "Delete container",
+      variant: "danger",
+    });
+    if (!ok) return;
+    setActionLoading("delete");
+    const res = await reqDeleteContainer(container.id);
+    setActionLoading(null);
+    if (res.success) {
+      toast.success(`Deleted ${container.name}`);
+      router.push(stack ? `/stacks/${stack.id}` : "/containers");
+    } else {
+      toast.error(res.error_message || "Failed to delete container");
+    }
+  };
 
   const runAction = async (action: string) => {
     const actionFns: Record<string, () => Promise<{ success: boolean; error_message?: string }>> = {
@@ -446,6 +469,8 @@ export default function ContainerDetailPage() {
           actionLoading={actionLoading}
           actionError={actionError}
           onAction={runAction}
+          onDelete={handleDelete}
+          stackName={stack?.name}
           onClearError={() => setActionError(null)}
           showConfirm={showConfirm}
         />

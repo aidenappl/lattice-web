@@ -5,6 +5,7 @@ import {
   faPlay,
   faStop,
   faXmark,
+  faCircleMinus,
   faRotate,
   faPause,
   faTrash,
@@ -60,6 +61,9 @@ export interface ContainerActionBarProps {
   actionLoading: string | null;
   actionError: string | null;
   onAction: (action: string) => void;
+  /** Deletes the container from its stack's config (and Docker). */
+  onDelete?: () => void;
+  stackName?: string;
   onClearError: () => void;
   showConfirm: (opts: {
     title: string;
@@ -78,6 +82,8 @@ export function ContainerActionBar({
   controlsDisabled,
   actionLoading,
   actionError,
+  onDelete,
+  stackName,
   onAction,
   onClearError,
   showConfirm,
@@ -161,23 +167,37 @@ export function ContainerActionBar({
 
         <div className="h-5 w-px bg-border-strong mx-1 hidden sm:block" />
 
+        {/* Remove and Delete are different operations and used to be one
+            button with wording that fit neither: "Remove" only deletes the
+            Docker container, and the next deploy recreates it from config. */}
         <ActionButton
-          label="Remove"
-          title="Permanently remove container from Docker"
-          icon={<FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />}
+          label="Remove from Docker"
+          title="Remove the Docker container. It stays in the stack and the next deploy recreates it."
+          icon={<FontAwesomeIcon icon={faCircleMinus} className="h-3.5 w-3.5" />}
           disabled={controlsDisabled}
           loading={actionLoading === "remove"}
-          color="text-failed hover:bg-failed/10"
+          color="text-pending hover:bg-pending/10"
           onClick={async () => {
             const ok = await showConfirm({
-              title: "Remove container",
-              message: `Permanently remove "${containerName}" from Docker? This cannot be undone.`,
-              confirmLabel: "Remove",
-              variant: "danger",
+              title: `Remove ${containerName} from Docker?`,
+              message: `The Docker container is stopped and removed. "${containerName}" stays in ${stackName ? `the ${stackName} stack` : "its stack"}, and the next deploy or Recreate brings it back.`,
+              confirmLabel: "Remove from Docker",
+              variant: "warning",
             });
             if (ok) onAction("remove");
           }}
         />
+        {onDelete && (
+          <ActionButton
+            label="Delete"
+            title="Delete the container from the stack's config and from Docker"
+            icon={<FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />}
+            disabled={controlsDisabled || actionLoading !== null}
+            loading={actionLoading === "delete"}
+            color="text-failed hover:bg-failed/10"
+            onClick={onDelete}
+          />
+        )}
 
         {actionError && (
           <div className="ml-auto">

@@ -29,6 +29,38 @@ type TopoNode = {
   meta?: Record<string, unknown>;
 };
 
+/**
+ * Keyboard and screen-reader props for a topology node. The nodes are
+ * positioned divs driven by mouse handlers; without these they could not be
+ * reached or opened without a pointer. Enter opens the node's page, Space
+ * selects it, and focus highlights its tree like hover does.
+ */
+function nodeA11y(
+  node: TopoNode,
+  onNavigate: () => void,
+  onHoverStart: () => void,
+  onHoverEnd: () => void,
+  onSelect?: () => void,
+) {
+  return {
+    role: "button" as const,
+    tabIndex: 0,
+    "aria-label": `${node.kind} ${node.label}, ${node.status}. Press Enter to open.`,
+    onFocus: onHoverStart,
+    onBlur: onHoverEnd,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        onNavigate();
+      } else if (e.key === " " && onSelect) {
+        e.preventDefault();
+        onSelect();
+      }
+    },
+  };
+}
+
+
 type TopoEdge = {
   from: TopoNode;
   to: TopoNode;
@@ -597,6 +629,7 @@ function WorkerNodeEl({
       onDoubleClick={onNavigate}
       onMouseEnter={onHoverStart}
       onMouseLeave={onHoverEnd}
+      {...nodeA11y(node, onNavigate, onHoverStart, onHoverEnd, onSelect)}
     >
       <div
         style={{
@@ -712,6 +745,7 @@ function StackNodeEl({
       onDoubleClick={onNavigate}
       onMouseEnter={onHoverStart}
       onMouseLeave={onHoverEnd}
+      {...nodeA11y(node, onNavigate, onHoverStart, onHoverEnd, onSelect)}
     >
       <div
         style={{
@@ -799,6 +833,7 @@ function ContainerNodeEl({
       onDoubleClick={onNavigate}
       onMouseEnter={onHoverStart}
       onMouseLeave={onHoverEnd}
+      {...nodeA11y(node, onNavigate, onHoverStart, onHoverEnd)}
     >
       <div
         style={{

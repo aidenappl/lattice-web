@@ -26,7 +26,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       "inline-flex items-center justify-center font-medium rounded-lg transition-colors cursor-pointer focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed";
 
     const variants = {
-      primary: "bg-white text-black hover:bg-zinc-100",
+      // Theme tokens, not white/black: in light mode a white button sat on a
+      // near-white page with no border and all but disappeared.
+      primary: "bg-primary text-background hover:opacity-85",
       secondary:
         "border border-border-strong bg-surface text-primary hover:bg-surface-elevated hover:border-border-strong",
       destructive:
