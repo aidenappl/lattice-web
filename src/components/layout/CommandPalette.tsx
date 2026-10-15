@@ -18,6 +18,15 @@ import {
   faPlus,
   faArrowRight,
   faSpinner,
+  faDatabase,
+  faKey,
+  faFileCode,
+  faBolt,
+  faCloudArrowUp,
+  faShieldHalved,
+  faBell,
+  faRobot,
+  faUser,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import type { SearchResults } from "@/types";
@@ -54,11 +63,26 @@ const NAV_COMMANDS: Command[] = [
   { group: "Navigation", label: "Networks", hint: "infrastructure", icon: faNetworkWired, path: "/networks" },
   { group: "Navigation", label: "Registries", hint: "infrastructure", icon: faBoxArchive, path: "/registries" },
   { group: "Navigation", label: "Audit Log", hint: "overview", icon: faClipboardList, path: "/audit-log" },
+  // The palette used to stop at Settings: half the sidebar — databases, env
+  // vars, templates, automations, backups, auth, notifications, AI tokens — was
+  // unreachable from it.
+  { group: "Navigation", label: "Databases", hint: "infrastructure", icon: faDatabase, path: "/databases" },
+  { group: "Navigation", label: "Env Variables", hint: "workspace", icon: faKey, path: "/env-vars" },
+  { group: "Navigation", label: "Templates", hint: "workspace", icon: faFileCode, path: "/templates" },
+  { group: "Navigation", label: "Automations", hint: "workspace", icon: faBolt, path: "/automations" },
+  { group: "Navigation", label: "Backups", hint: "workspace", icon: faCloudArrowUp, path: "/backup-destinations" },
+  { group: "Navigation", label: "Authentication", hint: "workspace", icon: faShieldHalved, path: "/authentication" },
+  { group: "Navigation", label: "Notifications", hint: "workspace", icon: faBell, path: "/notifications" },
+  { group: "Navigation", label: "AI Management", hint: "workspace", icon: faRobot, path: "/ai" },
   { group: "Navigation", label: "Settings", hint: "workspace", icon: faGear, path: "/settings" },
+  { group: "Navigation", label: "Profile", hint: "account", icon: faUser, path: "/profile" },
 ];
 
 const ACTION_COMMANDS: Command[] = [
   { group: "Actions", label: "Create new stack", hint: "action", icon: faPlus, path: "/stacks/new" },
+  { group: "Actions", label: "Create database", hint: "action", icon: faPlus, path: "/databases/new" },
+  { group: "Actions", label: "Add worker", hint: "action", icon: faPlus, path: "/workers" },
+  { group: "Actions", label: "Create API token", hint: "action", icon: faPlus, path: "/ai" },
   { group: "Actions", label: "View workers", hint: "action", icon: faArrowRight, path: "/workers" },
 ];
 

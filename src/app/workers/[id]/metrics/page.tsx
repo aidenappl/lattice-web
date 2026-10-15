@@ -5,7 +5,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { WorkerMetrics, Worker } from "@/types";
 import { reqGetWorkerMetrics, reqGetWorker } from "@/services/workers.service";
-import { PageLoader } from "@/components/ui/loading";
+import { PageLoader, LoadingSpinner } from "@/components/ui/loading";
+import { LoadError } from "@/components/ui/load-error";
 import { Button } from "@/components/ui/button";
 import {
   AreaChart,
@@ -69,16 +70,35 @@ export default function WorkerMetricsPage() {
   const [worker, setWorker] = useState<Worker | null>(null);
   const [metrics, setMetrics] = useState<WorkerMetrics[]>([]);
   const [loading, setLoading] = useState(true);
+  const [metricsLoading, setMetricsLoading] = useState(true);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
   const [range, setRange] = useState<TimeRange>("1h");
 
+  // The worker and its metrics load independently. They used to be awaited
+  // together behind one full-page spinner, so a slow /metrics call (it has
+  // taken minutes in production) left a blank page with no header, no range
+  // buttons and no way to tell anything was wrong.
+  useEffect(() => {
+    reqGetWorker(id).then((wRes) => {
+      if (wRes.success) setWorker(wRes.data);
+      setLoading(false);
+    });
+  }, [id]);
+
   const load = useCallback(async () => {
-    const [wRes, mRes] = await Promise.all([
-      reqGetWorker(id),
-      reqGetWorkerMetrics(id, range),
-    ]);
-    if (wRes.success) setWorker(wRes.data);
-    if (mRes.success) setMetrics((mRes.data ?? []).reverse());
-    setLoading(false);
+    setMetricsLoading(true);
+    const mRes = await reqGetWorkerMetrics(id, range);
+    if (mRes.success) {
+      setMetrics((mRes.data ?? []).reverse());
+      setMetricsError(null);
+    } else {
+      setMetricsError(
+        /timeout/i.test(mRes.error_message ?? "")
+          ? "The metrics request timed out — lattice-api is slow to answer for this range. Try a shorter range or retry."
+          : mRes.error_message || "Failed to load metrics.",
+      );
+    }
+    setMetricsLoading(false);
   }, [id, range]);
 
   useEffect(() => {
@@ -125,10 +145,8 @@ export default function WorkerMetricsPage() {
                 key={r.value}
                 variant={range === r.value ? "primary" : "secondary"}
                 size="sm"
-                onClick={() => {
-                  setRange(r.value);
-                  setLoading(true);
-                }}
+                onClick={() => setRange(r.value)}
+                loading={metricsLoading && range === r.value}
               >
                 {r.label}
               </Button>
@@ -137,7 +155,20 @@ export default function WorkerMetricsPage() {
         </div>
       </div>
 
-      {metrics.length === 0 ? (
+      {metricsError && metrics.length === 0 ? (
+        <LoadError
+          title="Metrics unavailable"
+          message={metricsError}
+          onRetry={load}
+          retrying={metricsLoading}
+        />
+      ) : metricsLoading && metrics.length === 0 ? (
+        <div className="card p-12 flex items-center justify-center gap-3 text-sm text-muted">
+          <LoadingSpinner size="sm" />
+          Loading {ranges.find((r) => r.value === range)?.label.toLowerCase()} of
+          metrics…
+        </div>
+      ) : metrics.length === 0 ? (
         <div className="card p-12 text-center">
           <p className="text-sm text-muted">
             No metrics data available for this time range

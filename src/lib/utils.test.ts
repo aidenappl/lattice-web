@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Worker, User } from "@/types";
 import {
+    dropStaleSamples,
   isNewerVersion,
   formatUlimits,
   formatArgv,
@@ -427,5 +428,27 @@ describe("formatArgv", () => {
     it("passes through non-arrays and blanks", () => {
         expect(formatArgv(null)).toBe("");
         expect(formatArgv("npm start")).toBe("npm start");
+    });
+});
+
+describe("dropStaleSamples", () => {
+    const at = (iso: string) => ({ recorded_at: iso });
+
+    it("keeps samples close to the newest and drops long-gone ones", () => {
+        const rows = [
+            at("2026-10-14T22:13:14Z"),
+            at("2026-10-14T22:12:00Z"),
+            at("2026-10-14T03:29:41Z"), // a -lattice-updating container from this morning
+        ];
+        expect(dropStaleSamples(rows)).toEqual(rows.slice(0, 2));
+    });
+
+    it("measures against the newest sample, not the clock", () => {
+        const rows = [at("2020-01-01T00:00:00Z"), at("2020-01-01T00:04:00Z")];
+        expect(dropStaleSamples(rows)).toEqual(rows);
+    });
+
+    it("returns an empty list unchanged", () => {
+        expect(dropStaleSamples([])).toEqual([]);
     });
 });

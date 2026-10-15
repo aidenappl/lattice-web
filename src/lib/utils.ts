@@ -139,6 +139,23 @@ export function prettyField(raw: string | null): string {
     }
 }
 
+/**
+ * Drops samples that are much older than the newest one in the set.
+ *
+ * "Latest sample per container" endpoints keep returning the last row for a
+ * container that no longer exists — a rolling deploy's temporary
+ * `<name>-lattice-updating` container, say — and without this it is listed
+ * as running, hours after it was removed.
+ */
+export function dropStaleSamples<T extends { recorded_at: string }>(
+    rows: T[],
+    maxLagMs = 5 * 60_000,
+): T[] {
+    if (rows.length === 0) return rows;
+    const newest = Math.max(...rows.map((r) => new Date(r.recorded_at).getTime()));
+    return rows.filter((r) => newest - new Date(r.recorded_at).getTime() <= maxLagMs);
+}
+
 // ── Metric color helpers ────────────────────────────────────────────
 
 export function barColor(pct: number): string {

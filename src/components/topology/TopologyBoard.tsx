@@ -1065,6 +1065,9 @@ export function TopologyBoard() {
       <div
         ref={containerRef}
         className="topology"
+        tabIndex={0}
+        role="region"
+        aria-label="Fleet topology: workers, stacks and containers (scroll to zoom, drag to pan)"
         style={{
           flex: 1,
           position: "relative",

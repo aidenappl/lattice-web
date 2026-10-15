@@ -15,16 +15,14 @@ import toast from "react-hot-toast";
 import type { User } from "@/types";
 import { monitor } from "@/services/monitor.service";
 
+// Same mapping as the Users table. Admin used to render in error red here,
+// which read as "something is wrong with your account".
 const roleBadgeVariant = (role: string) => {
   switch (role) {
     case "admin":
-      return "error" as const;
-    case "editor":
       return "warning" as const;
-    case "viewer":
-      return "success" as const;
     case "pending":
-      return "default" as const;
+      return "error" as const;
     default:
       return "default" as const;
   }

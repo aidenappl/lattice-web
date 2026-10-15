@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActionBar } from "@/components/ui/bulk-action-bar";
+import { useSelection } from "@/hooks/useSelection";
+import { useBulkAction } from "@/hooks/useBulkAction";
 import type { ApiToken } from "@/types";
 import {
   reqGetApiTokens,
@@ -106,6 +110,44 @@ export default function AIManagementPage() {
     setCreating(false);
   };
 
+  const visibleIds = useMemo(() => tokens.map((t) => t.id), [tokens]);
+  const selection = useSelection(visibleIds);
+  const bulk = useBulkAction();
+  const selected = useMemo(
+    () => tokens.filter((t) => selection.isSelected(t.id)),
+    [tokens, selection],
+  );
+
+  // Rotate = mint a replacement with the same name, then revoke the old one.
+  // The API has no in-place rotation, and doing it in this order means a
+  // failure never leaves the caller with no working token.
+  const handleRotate = async (token: ApiToken) => {
+    const ok = await showConfirm({
+      title: `Rotate "${token.name}"?`,
+      message:
+        "A new token is created and shown once; the old one stops working immediately after. Update every tool that uses it.",
+      confirmLabel: "Rotate",
+      variant: "warning",
+    });
+    if (!ok) return;
+    const created = await reqCreateApiToken({
+      name: token.name,
+      expires_in: token.expires_at ? expiresIn : "never",
+    });
+    if (!created.success) {
+      toast.error(created.error_message || "Failed to create the replacement token");
+      return;
+    }
+    const removed = await reqDeleteApiToken(token.id);
+    setCreatedToken(created.data.token);
+    await loadTokens();
+    if (removed.success) toast.success(`Rotated "${token.name}"`);
+    else
+      toast.error(
+        `New token created, but the old one could not be revoked: ${removed.error_message}`,
+      );
+  };
+
   const handleDelete = async (token: ApiToken) => {
     const ok = await showConfirm({
       title: "Delete API token",
@@ -155,6 +197,44 @@ export default function AIManagementPage() {
       </div>
 
       <div className="py-6 space-y-8">
+        {canEdit(user) && (
+          <BulkActionBar
+            count={selection.count}
+            noun="token"
+            onClear={selection.clear}
+            busy={bulk.running}
+            actions={[
+              {
+                label: "Revoke",
+                icon: faTrash,
+                variant: "danger",
+                onClick: () =>
+                  bulk
+                    .run({
+                      items: selected,
+                      verb: "Revoke",
+                      verbPast: "Revoked",
+                      noun: "token",
+                      name: (t) => t.name,
+                      action: (t) => reqDeleteApiToken(t.id),
+                      confirm: {
+                        message:
+                          "Every MCP server, agent or script using these tokens loses access immediately.",
+                        variant: "danger",
+                      },
+                    })
+                    .then((r) => {
+                      if (r) {
+                        const gone = new Set(r.succeeded.map((t) => t.id));
+                        setTokens((prev) => prev.filter((t) => !gone.has(t.id)));
+                        selection.clear();
+                      }
+                    }),
+              },
+            ]}
+          />
+        )}
+
         {/* API Tokens Section */}
         <div>
           <div className="flex items-center gap-2 mb-4">
@@ -173,7 +253,8 @@ export default function AIManagementPage() {
                 <div className="flex gap-2 items-end">
                   <div className="flex-1">
                     <Input
-                      placeholder="Token name"
+                      aria-label="Token name"
+                      placeholder="Token name (required) — e.g. the machine or agent using it"
                       value={tokenName}
                       onChange={(e) => setTokenName(e.target.value)}
                       onKeyDown={(e) => {
@@ -183,6 +264,7 @@ export default function AIManagementPage() {
                     />
                   </div>
                   <select
+                    aria-label="Token expiry"
                     value={expiresIn}
                     onChange={(e) => setExpiresIn(e.target.value)}
                     className="form-select !h-9 !w-auto !text-sm cursor-pointer"
@@ -197,6 +279,7 @@ export default function AIManagementPage() {
                     onClick={handleCreate}
                     disabled={!tokenName.trim() || creating}
                     loading={creating}
+                    title={!tokenName.trim() ? "Enter a token name first" : undefined}
                   >
                     Create Token
                   </Button>
@@ -235,33 +318,32 @@ export default function AIManagementPage() {
                 Loading tokens...
               </div>
             ) : (
-              <table className="w-full">
+              <table className="data-table">
                 <thead>
-                  <tr className="border-b border-border-subtle">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                      Name
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden sm:table-cell">
-                      Created
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden md:table-cell">
-                      Last Used
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden md:table-cell">
-                      Expires
-                    </th>
+                  <tr>
                     {canEdit(user) && (
-                      <th className="px-4 py-3 text-right text-xs font-medium text-secondary uppercase tracking-wider">
-                        Actions
+                      <th className="select-col">
+                        <Checkbox
+                          label="Select all tokens"
+                          checked={selection.allSelected}
+                          indeterminate={selection.someSelected}
+                          onChange={selection.toggleAll}
+                          disabled={selection.empty}
+                        />
                       </th>
                     )}
+                    <th>Name</th>
+                    <th className="hidden sm:table-cell">Created</th>
+                    <th className="hidden md:table-cell">Last used</th>
+                    <th className="hidden md:table-cell">Expires</th>
+                    {canEdit(user) && <th className="text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {tokens.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={canEdit(user) ? 5 : 4}
+                        colSpan={canEdit(user) ? 6 : 4}
                         className="px-4 py-12 text-center text-sm text-muted"
                       >
                         No API tokens created yet
@@ -271,8 +353,19 @@ export default function AIManagementPage() {
                     tokens.map((token) => (
                       <tr
                         key={token.id}
-                        className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors"
+                        className={`!cursor-default ${selection.isSelected(token.id) ? "is-selected" : ""}`}
                       >
+                        {canEdit(user) && (
+                          <td className="select-col">
+                            <Checkbox
+                              label={`Select ${token.name}`}
+                              checked={selection.isSelected(token.id)}
+                              onChange={(_, e) =>
+                                selection.toggle(token.id, { shiftKey: e.shiftKey })
+                              }
+                            />
+                          </td>
+                        )}
                         <td className="px-4 py-3 text-sm font-medium text-primary">
                           {token.name}
                         </td>
@@ -288,11 +381,20 @@ export default function AIManagementPage() {
                           {formatExpiry(token.expires_at)}
                         </td>
                         {canEdit(user) && (
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-4 py-3 text-right whitespace-nowrap space-x-1">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleRotate(token)}
+                              aria-label={`Rotate ${token.name}`}
+                            >
+                              Rotate
+                            </Button>
                             <Button
                               variant="destructive"
                               size="sm"
                               onClick={() => handleDelete(token)}
+                              aria-label={`Delete ${token.name}`}
                             >
                               <FontAwesomeIcon
                                 icon={faTrash}

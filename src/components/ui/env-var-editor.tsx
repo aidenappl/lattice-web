@@ -1,7 +1,19 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
 import { CodeEditor } from "./code-editor";
+
+// Stack-level variables are stored and returned in plain text, so the tab
+// used to print every DSN and password in full to anyone looking at the
+// screen (or a screenshot of it). Values whose key looks sensitive are
+// masked until revealed; they are still sent and saved unchanged.
+const SENSITIVE_KEY = /(PASS|SECRET|TOKEN|KEY|DSN|CREDENTIAL|PRIVATE|AUTH|COOKIE|SESSION|SALT|CERT)/i;
+
+export function isSensitiveKey(key: string): boolean {
+  return SENSITIVE_KEY.test(key);
+}
 
 interface EnvVarEditorProps {
   value: string; // stored as JSON string e.g. '{"KEY":"val"}'
@@ -63,6 +75,15 @@ export function EnvVarEditor({ value, onChange, highlightVar, onClearHighlight, 
   // Track in-progress rows (with possibly empty keys) separately from the
   // serialised JSON so that blank rows aren't immediately discarded.
   const [localRows, setLocalRows] = useState<Row[]>(() => parseToRows(value));
+  const [revealAll, setRevealAll] = useState(false);
+  const [revealed, setRevealed] = useState<Set<number>>(() => new Set());
+  const toggleReveal = (i: number) =>
+    setRevealed((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
 
   // Sync localRows when the external value changes (e.g. after save/load)
   const lastExternalValue = useRef(value);
@@ -189,6 +210,15 @@ export function EnvVarEditor({ value, onChange, highlightVar, onClearHighlight, 
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-4">
+          {!jsonMode && rows.some((r) => isSensitiveKey(r.key)) && (
+            <button
+              type="button"
+              onClick={() => setRevealAll((v) => !v)}
+              className="text-xs text-muted hover:text-secondary transition-colors"
+            >
+              {revealAll ? "Hide secrets" : "Reveal secrets"}
+            </button>
+          )}
           {jsonMode ? (
             <>
               <button
@@ -280,16 +310,38 @@ export function EnvVarEditor({ value, onChange, highlightVar, onClearHighlight, 
                       </span>
                     )}
                   </div>
-                  <input
-                    type="text"
-                    value={row.value}
-                    onChange={(e) => setRow(i, "value", e.target.value)}
-                    placeholder="value"
-                    spellCheck={false}
-                    className={`bg-transparent px-3 py-2 text-sm font-mono placeholder:text-muted focus:outline-none border-r border-border-subtle ${
-                      isUnused ? "text-muted" : "text-secondary"
-                    }`}
-                  />
+                  <div className="flex items-center border-r border-border-subtle min-w-0">
+                    <input
+                      type={
+                        isSensitiveKey(row.key) && !revealAll && !revealed.has(i)
+                          ? "password"
+                          : "text"
+                      }
+                      value={row.value}
+                      onChange={(e) => setRow(i, "value", e.target.value)}
+                      placeholder="value"
+                      spellCheck={false}
+                      autoComplete="off"
+                      aria-label={`Value of ${row.key || "new variable"}`}
+                      className={`bg-transparent px-3 py-2 text-sm font-mono placeholder:text-muted focus:outline-none flex-1 min-w-0 ${
+                        isUnused ? "text-muted" : "text-secondary"
+                      }`}
+                    />
+                    {isSensitiveKey(row.key) && !revealAll && row.value && (
+                      <button
+                        type="button"
+                        onClick={() => toggleReveal(i)}
+                        className="px-2 text-dimmed hover:text-secondary transition-colors"
+                        aria-label={`${revealed.has(i) ? "Hide" : "Reveal"} ${row.key}`}
+                        title={revealed.has(i) ? "Hide" : "Reveal"}
+                      >
+                        <FontAwesomeIcon
+                          icon={revealed.has(i) ? faEyeSlash : faEye}
+                          className="h-3 w-3"
+                        />
+                      </button>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={() => removeRow(i)}

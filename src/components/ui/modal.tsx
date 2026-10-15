@@ -158,7 +158,7 @@ export function Modal({
         {description && (
           <p
             id="modal-description"
-            className="text-xs text-secondary mt-2 leading-relaxed"
+            className="text-xs text-secondary mt-2 leading-relaxed whitespace-pre-line"
           >
             {description}
           </p>

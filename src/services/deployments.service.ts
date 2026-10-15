@@ -1,10 +1,11 @@
 import { Deployment, DeploymentLog } from "@/types";
 import { fetchApi } from "./api.service";
 
-export const reqGetDeployments = () =>
+export const reqGetDeployments = (params?: { stack_id?: number; status?: string; limit?: number; offset?: number }) =>
     fetchApi<Deployment[]>({
         method: "GET",
         url: "/admin/deployments",
+        params,
     });
 
 export const reqGetDeployment = (id: number) =>

@@ -105,8 +105,8 @@ src/
     hooks.ts                # useAppDispatch/useAppSelector + useAuth/useAuthStatus/useUser
     StoreProvider.tsx       # singleton store + AppInitializer (boots session via reqGetSelf, gates render)
     slices/                 # authSlice, overviewSlice, workersSlice, stacksSlice, containersSlice (+ *.test.ts)
-  hooks/                    # cross-cutting hooks (usePoll, useAdminSocket, useContainerLogs, …)
-  lib/                      # utils.ts (cn, isAdmin, canEdit, formatBytes, …), version.ts, deployment-progress.ts, automations.ts, ws-reconnect.ts, sso.ts (silent SSO, return_to, sign-out) (+ *.test.ts), monitor-server.ts (server-side Monitor)
+  hooks/                    # cross-cutting hooks (usePoll, useAdminSocket, useContainerLogs, useSelection + useBulkAction for list bulk actions, …)
+  lib/                      # utils.ts (cn, isAdmin, canEdit, formatBytes, dropStaleSamples, …), version.ts, deployment-progress.ts, automations.ts, ws-reconnect.ts, sso.ts (silent SSO, return_to, sign-out), bulk.ts (runBulk/summarizeBulk), dotenv.ts (.env import/export) (+ *.test.ts), monitor-server.ts (server-side Monitor)
   types/                    # domain types; index.ts re-exports all + ApiResponse/ApiSuccess/ApiError/SearchResults/ApiToken
   test/setup.ts             # Vitest + jest-dom setup
 ```
@@ -131,31 +131,31 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 | `/login` | `login/page.tsx` | Dual auth: local email/password (`reqLogin`) **+** SSO button (fetches `/auth/sso/config`, links to `login_url`), silent SSO first (`lib/sso.ts`). Redirects to `return_to` if already authed |
 | `/pending` | `pending/page.tsx` | Landing for users with `role: "pending"` (account awaiting approval) |
 | `/unauthorized` | `unauthorized/page.tsx` | Landing when a grant is revoked / `error_code 4003` |
-| `/workers` | `workers/page.tsx` | Worker fleet list with status + live metrics |
-| `/workers/[id]` | `workers/[id]/page.tsx` | Worker detail: info, infra, stacks, tokens, container stats, edit/reboot/upgrade |
-| `/workers/[id]/metrics` | `workers/[id]/metrics/page.tsx` | Full metric charts (CPU/mem/disk/net) for one worker |
-| `/stacks` | `stacks/page.tsx` | Stack list with status overview |
+| `/workers` | `workers/page.tsx` | Worker fleet list with status, search, clickable rows; bulk upgrade runner / start / stop containers / reboot (admin) / delete |
+| `/workers/[id]` | `workers/[id]/page.tsx` | Worker detail: info, infra, stacks, tokens (multi-select delete), container stats (stale samples from removed containers dropped via `dropStaleSamples`), edit/reboot/upgrade |
+| `/workers/[id]/metrics` | `workers/[id]/metrics/page.tsx` | Full metric charts (CPU/mem/disk/net) for one worker. The worker and its metrics load independently: a slow or failed `/metrics` call shows an inline error with Retry instead of a page-wide spinner |
+| `/stacks` | `stacks/page.tsx` | Stack cards with search + status/worker filters; select cards for bulk deploy / restart / start / stop / move to worker / export / delete |
 | `/stacks/new` | `stacks/new/page.tsx` | Create stack (or import compose) |
-| `/stacks/[id]` | `stacks/[id]/page.tsx` | Stack detail tabs: containers, compose YAML editor, env, logs, deployments, deploy tokens, dependency graph |
-| `/containers` | `containers/page.tsx` | Global container list + lifecycle actions |
+| `/stacks/[id]` | `stacks/[id]/page.tsx` | Stack detail tabs: containers, compose YAML editor, env (values whose key looks sensitive are masked until revealed), logs, deployments, deploy tokens (multi-select delete), dependency graph. Export / Save as template (modal) / Delete live in the header's `⋯` menu |
+| `/containers` | `containers/page.tsx` | Global container list + lifecycle actions; bulk start / stop / restart / recreate / delete (removes from the stack config too) |
 | `/containers/[id]` | `containers/[id]/page.tsx` | Container detail: details/health tabs, logs, terminal, action bar, edit form. `ulimits` (lattice-api ≥ v1.4.7) shows in Container Info via `formatUlimits` and is edited as compose-shaped JSON; the form sends it only when changed, `""` to clear. Every text field in `ContainerEditForm` goes through `changed()` the same way: `null` means "unchanged" to the API, so the old `value \|\| null` made emptying a field a silent no-op. Command/Entrypoint are shown and edited as shell strings via `formatArgv` (quotes arguments so lattice-api ≥ v1.4.9 parses back the same argv); a JSON array is accepted too |
-| `/deployments` | `deployments/page.tsx` | Deployment history |
-| `/deployments/[id]` | `deployments/[id]/page.tsx` | Deployment detail + live logs, approve/rollback |
-| `/databases` | `databases/page.tsx` | Managed database instance list |
+| `/deployments` | `deployments/page.tsx` | Deployment history. Stack/status filters go to the API (`reqGetDeployments(params)`), paged 50 at a time with "Load older"; duration column; bulk approve for `pending` |
+| `/deployments/[id]` | `deployments/[id]/page.tsx` | Deployment detail + live logs, approve/rollback. Live progress only while active; finished deployments show their duration |
+| `/databases` | `databases/page.tsx` | Managed database instance list with search; bulk start / stop / restart / delete |
 | `/databases/new` | `databases/new/page.tsx` | Provision a database instance (live host-port availability against the chosen worker) |
 | `/databases/[id]` | `databases/[id]/page.tsx` | DB instance detail: overview/snapshots/logs/history/settings tabs, failure banner, SQL console, credentials, start/stop/restart/remove-container, delete (Settings danger zone), restore |
-| `/networks` | `networks/page.tsx` | Compose networks / port-mapping overview across workers |
-| `/registries` | `registries/page.tsx` | Docker registry config, test, repo/tag browsing |
-| `/env-vars` | `env-vars/page.tsx` | Global (cross-stack) environment variables, incl. secrets |
-| `/templates` | `templates/page.tsx` | Stack templates (create from stack / from config, delete) |
-| `/automations` | `automations/page.tsx` | Automation list: trigger, step count, run-as user (flagged when deactivated), last run, enable switch, run now, create (form modal → show-once webhook URL) |
+| `/networks` | `networks/page.tsx` | Compose networks / port-mapping overview across workers; "Remove all" for orphaned networks |
+| `/registries` | `registries/page.tsx` | Docker registry config, test, repo/tag browsing; bulk test / delete |
+| `/env-vars` | `env-vars/page.tsx` | Global (cross-stack) environment variables, incl. secrets. Search, rename (create + delete: the API has no key update), `.env` import (`lib/dotenv.ts`) and export, bulk mark secret / mark plain / export / delete |
+| `/templates` | `templates/page.tsx` | Stack templates: view, use (asks stack name + worker), edit (saved as a new template and the old one deleted — the API has no template update), new from JSON, import a template or stack export, bulk download / delete |
+| `/automations` | `automations/page.tsx` | Automation list: trigger, step count, run-as user (flagged when deactivated), last run, enable switch, run now, edit, delete, create (form modal → show-once webhook URL); bulk enable / disable / run / delete |
 | `/automations/[id]` | `automations/[id]/page.tsx` | Automation detail: trigger, run-as identity, ordered steps, polled run history with per-step results; run now / enable / disable / edit / rotate token (admin, webhook only) / delete |
-| `/backup-destinations` | `backup-destinations/page.tsx` | Backup destination CRUD + test |
+| `/backup-destinations` | `backup-destinations/page.tsx` | Backup destination CRUD + test (worker picker is a modal), location (locality) shown and editable; bulk delete. Partial config edits rely on lattice-api merging `config` (see that repo's AGENTS.md) |
 | `/audit-log` | `audit-log/page.tsx` | Administrative audit trail |
-| `/authentication` | `authentication/page.tsx` | SSO config (provider presets, OAuth2/OIDC endpoints, claim mapping) + SMTP config + test |
-| `/notifications` | `notifications/page.tsx` | Notification preferences + webhooks |
-| `/ai` | `ai/page.tsx` | **API-token management** (the tokens that power `lattice-mcp` / AI agents) — create/list/delete |
-| `/settings` | `settings/page.tsx` | User management (create/role/deactivate) + version checks + service updates |
+| `/authentication` | `authentication/page.tsx` | Tabs: SSO config (provider presets — the saved provider is detected from its authorize URL, OAuth2/OIDC endpoints, claim mapping) and **Users** (create / role / activate / approve / delete; bulk approve / role / activate / deactivate / delete — never offered on your own account) |
+| `/notifications` | `notifications/page.tsx` | Email (SMTP) and desktop notification preferences |
+| `/ai` | `ai/page.tsx` | **API-token management** (the tokens that power `lattice-mcp` / AI agents) — create/list/rotate (create same-name replacement, then revoke)/delete; bulk revoke |
+| `/settings` | `settings/page.tsx` | Version checks + service updates + outgoing webhooks (CRUD, test, enable/disable; bulk test / enable / disable / delete) |
 | `/profile` | `profile/page.tsx` | Self profile: name, password, avatar (`reqUpdateSelf`) |
 
 Sidebar order (from `components/layout/Sidebar.tsx`): Dashboard, Deployments, Audit Log, Workers,
@@ -174,7 +174,7 @@ The `data<T>` you receive is `lattice-api`'s `data` field, already unwrapped by 
 | `admin.service.ts` | Fleet + instance config | `reqGetOverview`, `reqGetFleetMetrics`, `reqGetAnomalies`, `reqGetAuditLog`, `reqGetUsers`/`reqCreateUser`/`reqUpdateUser`/`reqDeleteUser`, `reqGetVersions`/`reqRefreshVersions`/`reqUpdateAPI`/`reqUpdateWeb`, webhooks CRUD+test, global env-var CRUD, SMTP get/update/test, notification prefs, SSO get/update, `reqSearch`, API-token CRUD |
 | `workers.service.ts` | Workers | `reqGetWorkers`/`reqGetWorker`/`reqCreateWorker`/`reqUpdateWorker`/`reqDeleteWorker`, tokens CRUD, `reqGetWorkerMetrics`, `reqRebootWorker`, `reqUpgradeRunner`, `reqStopAllContainers`/`reqStartAllContainers`, `reqGetWorkerContainerStats`, `reqForceRemoveContainer` |
 | `stacks.service.ts` | Stacks + containers | stack CRUD, `reqDeployStack`, `reqGetAllContainers`/`reqGetContainer`/`reqGetContainers`, container CRUD, `reqGetContainerLogs`/`reqGetLifecycleLogs`/`reqGetContainerMetrics`, 8 lifecycle actions (`reqStart/Stop/Kill/Restart/Pause/Unpause/Remove/RecreateContainer`), `reqImportCompose`/`reqUpdateCompose`/`reqSyncCompose`, stack start/stop/restart, `reqExportStack`/`reqImportStackExport`, deploy-token CRUD |
-| `deployments.service.ts` | Deployments | `reqGetDeployments`/`reqGetDeployment`/`reqGetDeploymentLogs`, `reqApproveDeployment`, `reqRollbackDeployment` |
+| `deployments.service.ts` | Deployments | `reqGetDeployments(params?)` (`stack_id`, `status`, `limit`, `offset` — filter server-side), `reqGetDeployment`/`reqGetDeploymentLogs`, `reqApproveDeployment`, `reqRollbackDeployment` |
 | `databases.service.ts` | Managed DBs | instance CRUD, `reqDatabaseAction("start"\|"stop"\|"restart"\|"remove")` (container-only — `remove` keeps the data volume), `reqDeleteDatabaseInstance(id, force?)` (destroys container **and** volume; `force` only for an offline worker), `reqGetDatabaseConnection`, `reqRevealDatabaseCredentials` (audited — prefer over the deprecated `reqGetDatabaseCredentials`), `reqGetDatabaseEvents`/`reqGetDatabaseLogs`/`reqGetDatabaseLifecycleLogs`, `reqOpenDatabaseConsole`, `reqGetWorkerPortAvailability`/`reqCheckWorkerPort`, snapshot list/create/restore/delete |
 | `registries.service.ts` | Registries | registry CRUD, `reqTestRegistry`/`reqTestRegistryInline`, `reqListRegistryRepos`/`reqListRegistryTags` |
 | `networks.service.ts` | Networks | `reqListAllNetworks`, per-worker list/create/delete, `reqDeleteNetworkByID` |
@@ -241,7 +241,7 @@ the `MONITOR_*` values are read at runtime from the container's environment.
 Vitest with jsdom (`vitest.config.ts`, setup `src/test/setup.ts`, `@` alias mirrored). Tests are
 colocated `*.test.ts(x)` files. Current coverage is the **pure logic and reducers**, not full page
 rendering: `lib/utils.test.ts`, `lib/deployment-progress.test.ts`, `lib/automations.test.ts`,
-`lib/ws-reconnect.test.ts`, `services/monitor.service.test.ts`, `services/api.service.test.ts`, and a `*.test.ts` beside each
+`lib/ws-reconnect.test.ts`, `lib/bulk.test.ts`, `lib/dotenv.test.ts`, `services/monitor.service.test.ts`, `services/api.service.test.ts`, and a `*.test.ts` beside each
 Redux slice (`authSlice`, `overviewSlice`, `workersSlice`, `stacksSlice`, `containersSlice`). When
 you touch a slice or a `lib/` helper, extend its sibling test.
 
@@ -292,6 +292,21 @@ you touch a slice or a `lib/` helper, extend its sibling test.
   `class="dark"` on `<html>` to avoid a flash; unset/`system` defaults to dark.
 - **Icons:** Font Awesome free-solid via `<FontAwesomeIcon icon={faX} />` (this repo uses the free
   packages directly, not the FA Kit).
+- **Lists: selection and bulk actions.** Every list of things you can act on has a checkbox column
+  and a floating `BulkActionBar` (`components/ui/bulk-action-bar.tsx`). The pieces:
+  `useSelection(visibleIds)` (shift-click ranges; the selection is always intersected with what is
+  visible, so a bulk action never touches a filtered-out row), `Checkbox` (`components/ui/checkbox.tsx`
+  — a real input, `label` required), and `useBulkAction().run({...})`, which confirms (naming the
+  items), runs one request per item through `runBulk` (`lib/bulk.ts`, 4 at a time, never stops on a
+  failure) and toasts a summary that names what failed. The API has no batch endpoints; don't add
+  per-page loops — use `run`. Hide the bar and checkboxes for roles that can't act (`canEdit` /
+  `isAdmin`). Row actions stay; bulk is in addition, not instead.
+- **Tables:** use `.data-table` inside `.panel`. Such panels scroll sideways (`.panel:has(> .data-table)`)
+  because column breakpoints are viewport-based and the sidebar eats ~260px — before that, the
+  Actions column was clipped off-screen at 1280px. Rows that don't navigate get `!cursor-default`.
+- **Selects:** `.form-select` has a fixed height and no vertical padding so `!h-8` filter selects
+  stay vertically centred. Size inputs in a filter bar with `!w-*` — `.form-input`'s `width: 100%`
+  is unlayered CSS and beats plain Tailwind width utilities.
 
 ## Domain & architecture
 
@@ -312,7 +327,10 @@ provider it configures under `/auth/sso/*`).
 
 - **Two login paths** on `/login`:
   1. **Local** — email/password → `reqLogin` → `POST /auth/login`; on success the API sets the
-     session cookie and the page redirects to `return_to` (same-origin path) or `/`.
+     session cookie and the page redirects to `return_to` (same-origin path, via `loginReturnTo()`)
+     or `/`. (It used to always go to `/`.) The form is `noValidate`: empty or malformed fields are
+     reported in the page's own `ErrorAlert` (`role="alert"`) rather than the browser's unstyled
+     bubbles — no structural change to the shared layout.
   2. **SSO** — the page fetches the **public** `/auth/sso/config` and renders one button per
      entry in the shared `providers` array, linking to `login_url?return_to=…` (validated to
      start with `/` to prevent open-redirect / `javascript:` injection). Error codes returned on
@@ -354,7 +372,8 @@ provider it configures under `/auth/sso/*`).
   `refreshPromise`** → `POST /auth/refresh` (deduped so concurrent 401s fire one refresh), then
   retries the original request with the new bearer token. If refresh fails, it redirects to
   `/login?return_to=<path>` (`redirectToLogin`), where silent SSO usually signs the user straight
-  back in.
+  back in. A 401 from a credential endpoint (`CREDENTIAL_ENDPOINTS`, i.e. `/auth/login`) means
+  "wrong password" and is returned as-is — no refresh attempt.
 - **Proactive refresh (activity-aware):** `startProactiveRefresh` (kicked off after a successful
   `reqGetSelf`) schedules a refresh **~60 s before token expiry**, but only if the user is
   **active** (mouse/key/scroll/touch within 5 min). Idle users defer refresh until their next
@@ -372,7 +391,9 @@ Forta, Google, GitHub, Microsoft and Custom. **`issuer_url` and `logout_url` are
 UNCONDITIONALLY** when a preset is chosen, while the other fields use the guarded `if (p.x)` form:
 carrying one provider's issuer over to another would point the OIDC adapter at the wrong provider
 and fail every id_token. There is no introspection field any more — revocation is enforced by the
-API's server-side token refresh and back-channel logout.
+API's server-side token refresh and back-channel logout. On load, the saved config's
+`authorize_url` is matched against the presets to highlight the right card (it used to always
+highlight Custom OAuth2).
 
 ### Redux store shape
 

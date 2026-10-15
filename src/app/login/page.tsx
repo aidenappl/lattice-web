@@ -145,17 +145,37 @@ export default function LoginPage() {
       baseAttempts = 0;
     }
 
+    // Validated here rather than by the browser: the native bubbles ("Please
+    // fill out this field") are unstyled light-theme popovers on a dark page,
+    // and appear one field at a time.
+    if (!email.trim() || !password) {
+      setError(
+        !email.trim() && !password
+          ? "Enter your email and password."
+          : !email.trim()
+            ? "Enter your email address."
+            : "Enter your password.",
+      );
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+$/.test(email.trim())) {
+      setError("That doesn't look like an email address.");
+      return;
+    }
+
     setError("");
     setLoading(true);
 
-    const res = await reqLogin(email, password);
+    const res = await reqLogin(email.trim(), password);
     // Clear password from state immediately after submission
     setPassword("");
 
     if (res.success) {
       setFailedAttempts(0);
       setLockedUntil(0);
-      window.location.replace("/");
+      // Honour return_to like the SSO path does; a local sign-in used to drop
+      // you on the dashboard whatever page sent you here.
+      window.location.replace(loginReturnTo());
     } else {
       const attempts = baseAttempts + 1;
       setFailedAttempts(attempts);
@@ -229,7 +249,7 @@ export default function LoginPage() {
             <InlineLoading message="Checking session…" />
           ) : (
             <div className="flex flex-col gap-5">
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
                 <Field
                   id="email"
                   label="Email"
@@ -322,7 +342,10 @@ function Field({
 
 function ErrorAlert({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2 text-sm text-failed bg-[var(--failed-bg)] border border-[#ef4444]/20 rounded-lg p-3">
+    <div
+      role="alert"
+      className="flex items-start gap-2 text-sm text-failed bg-[var(--failed-bg)] border border-[#ef4444]/20 rounded-lg p-3"
+    >
       <svg
         className="w-4 h-4 mt-0.5 shrink-0"
         fill="currentColor"

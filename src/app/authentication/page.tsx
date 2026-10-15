@@ -1,7 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { User } from "@/types";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActionBar } from "@/components/ui/bulk-action-bar";
+import { useSelection } from "@/hooks/useSelection";
+import { useBulkAction } from "@/hooks/useBulkAction";
+import {
+  faUserCheck,
+  faUserSlash,
+  faUserShield,
+  faTrash,
+} from "@fortawesome/free-solid-svg-icons";
 import type { SSOConfigData } from "@/services/admin.service";
 import {
   reqGetSSOConfig,
@@ -14,7 +24,6 @@ import {
 import { useUser } from "@/store/hooks";
 import { isAdmin, formatDate } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm-modal";
-import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -144,8 +153,41 @@ function UsersTab({ admin }: { admin: boolean }) {
   };
 
   const handleToggleActive = async (u: User) => {
+    if (u.active) {
+      const ok = await showConfirm({
+        title: `Deactivate ${u.name || u.email}?`,
+        message:
+          "They are signed out everywhere and can't sign back in. Automations that run as them stop firing.",
+        confirmLabel: "Deactivate",
+        variant: "warning",
+      });
+      if (!ok) return;
+    }
     const res = await reqUpdateUser(u.id, { active: !u.active });
-    if (res.success) setUsers((prev) => prev.map((x) => (x.id === u.id ? res.data : x)));
+    if (res.success) {
+      setUsers((prev) => prev.map((x) => (x.id === u.id ? res.data : x)));
+      toast.success(`${u.name || u.email} ${u.active ? "deactivated" : "activated"}`);
+    } else {
+      toast.error(res.error_message || "Failed to update user");
+    }
+  };
+
+  // Never offer bulk actions on yourself: deactivating, demoting or deleting
+  // your own account from here locks you out mid-click.
+  const selectableIds = useMemo(
+    () => users.filter((u) => u.id !== currentUser?.id).map((u) => u.id),
+    [users, currentUser],
+  );
+  const selection = useSelection(selectableIds);
+  const bulk = useBulkAction();
+  const selected = useMemo(
+    () => users.filter((u) => selection.isSelected(u.id)),
+    [users, selection],
+  );
+  const [bulkRole, setBulkRole] = useState("");
+  const userName = (u: User) => u.name || u.email;
+  const refresh = () => {
+    load();
   };
 
   const handleDeleteUser = async (u: User) => {
@@ -157,7 +199,7 @@ function UsersTab({ admin }: { admin: boolean }) {
     if (!ok) return;
     const res = await reqDeleteUser(u.id);
     if (res.success) { toast.success("User deleted"); await load(); }
-    else toast.error("Failed to delete user");
+    else toast.error(res.error_message || "Failed to delete user");
   };
 
   if (loading) return <div className="p-8 text-center text-sm text-muted">Loading users...</div>;
@@ -199,10 +241,138 @@ function UsersTab({ admin }: { admin: boolean }) {
         </form>
       )}
 
+      {admin && (
+        <BulkActionBar
+          count={selection.count}
+          noun="user"
+          onClear={selection.clear}
+          busy={bulk.running}
+          actions={[
+            {
+              label: "Approve",
+              icon: faUserCheck,
+              hidden: !selected.some((u) => u.role === "pending"),
+              onClick: () =>
+                bulk
+                  .run({
+                    items: selected.filter((u) => u.role === "pending"),
+                    verb: "Approve",
+                    verbPast: "Approved",
+                    noun: "user",
+                    name: userName,
+                    action: (u) => reqUpdateUser(u.id, { role: "viewer" }),
+                  })
+                  .then((r) => r && refresh()),
+            },
+            {
+              label: "Activate",
+              icon: faUserCheck,
+              onClick: () =>
+                bulk
+                  .run({
+                    items: selected.filter((u) => !u.active),
+                    verb: "Activate",
+                    verbPast: "Activated",
+                    noun: "user",
+                    name: userName,
+                    action: (u) => reqUpdateUser(u.id, { active: true }),
+                  })
+                  .then((r) => r && refresh()),
+            },
+            {
+              label: "Deactivate",
+              icon: faUserSlash,
+              onClick: () =>
+                bulk
+                  .run({
+                    items: selected.filter((u) => u.active),
+                    verb: "Deactivate",
+                    verbPast: "Deactivated",
+                    noun: "user",
+                    name: userName,
+                    action: (u) => reqUpdateUser(u.id, { active: false }),
+                    confirm: {
+                      message:
+                        "They are signed out and can't sign back in. Automations that run as them stop firing.",
+                    },
+                  })
+                  .then((r) => r && refresh()),
+            },
+            {
+              label: "Delete",
+              icon: faTrash,
+              variant: "danger",
+              onClick: () =>
+                bulk
+                  .run({
+                    items: selected,
+                    verb: "Delete",
+                    verbPast: "Deleted",
+                    noun: "user",
+                    name: userName,
+                    action: (u) => reqDeleteUser(u.id),
+                    confirm: { message: "This cannot be undone.", variant: "danger" },
+                  })
+                  .then((r) => {
+                    if (r) {
+                      selection.clear();
+                      refresh();
+                    }
+                  }),
+            },
+          ]}
+        >
+          <span className="flex items-center gap-1.5 ml-1">
+            <FontAwesomeIcon icon={faUserShield} className="h-3 w-3 text-muted" />
+            <select
+              aria-label="Set role for selected users"
+              value={bulkRole}
+              disabled={!!bulk.running}
+              onChange={(e) => {
+                const role = e.target.value;
+                setBulkRole("");
+                if (!role) return;
+                bulk
+                  .run({
+                    items: selected.filter((u) => u.role !== role),
+                    verb: `Make ${role}`,
+                    verbPast: `Made ${role}`,
+                    noun: "user",
+                    name: userName,
+                    action: (u) => reqUpdateUser(u.id, { role }),
+                    confirm:
+                      role === "admin"
+                        ? { message: "Admins can manage users, secrets and every worker." }
+                        : { message: `Their access changes to ${role} immediately.` },
+                  })
+                  .then((r) => r && refresh());
+              }}
+              className="form-select !h-7 !w-auto !text-xs !bg-transparent"
+            >
+              <option value="">Set role…</option>
+              <option value="viewer">Viewer</option>
+              <option value="editor">Editor</option>
+              <option value="admin">Admin</option>
+            </select>
+          </span>
+        </BulkActionBar>
+      )}
+
       <div className="panel">
         <table className="data-table">
           <thead>
             <tr>
+              {admin && (
+                <th className="select-col">
+                  <Checkbox
+                    label="Select all other users"
+                    checked={selection.allSelected}
+                    indeterminate={selection.someSelected}
+                    onChange={selection.toggleAll}
+                    disabled={selection.empty}
+                  />
+                </th>
+              )}
               <th>User</th>
               <th>Auth</th>
               <th>Role</th>
@@ -213,10 +383,26 @@ function UsersTab({ admin }: { admin: boolean }) {
           </thead>
           <tbody>
             {users.length === 0 ? (
-              <tr><td colSpan={admin ? 6 : 5} className="text-center text-sm text-muted !py-12">No users found</td></tr>
+              <tr><td colSpan={admin ? 7 : 5} className="text-center text-sm text-muted !py-12">No users found</td></tr>
             ) : (
               users.map((u) => (
-                <tr key={u.id}>
+                <tr
+                  key={u.id}
+                  className={`!cursor-default ${selection.isSelected(u.id) ? "is-selected" : ""}`}
+                >
+                  {admin && (
+                    <td className="select-col">
+                      {u.id !== currentUser?.id && (
+                        <Checkbox
+                          label={`Select ${userName(u)}`}
+                          checked={selection.isSelected(u.id)}
+                          onChange={(_, e) =>
+                            selection.toggle(u.id, { shiftKey: e.shiftKey })
+                          }
+                        />
+                      )}
+                    </td>
+                  )}
                   <td>
                     <div className="flex items-center gap-2.5">
                       <Avatar src={u.profile_image_url} name={u.name} email={u.email} size={28} />
@@ -228,8 +414,9 @@ function UsersTab({ admin }: { admin: boolean }) {
                   </td>
                   <td className="text-secondary">{u.auth_type}</td>
                   <td>
-                    {admin ? (
+                    {admin && u.id !== currentUser?.id ? (
                       <select
+                        aria-label={`Role for ${userName(u)}`}
                         value={u.role}
                         onChange={async (e) => {
                           const res = await reqUpdateUser(u.id, { role: e.target.value });
@@ -237,10 +424,10 @@ function UsersTab({ admin }: { admin: boolean }) {
                             setUsers((prev) => prev.map((x) => (x.id === u.id ? res.data : x)));
                             toast.success(`Role updated to ${e.target.value}`);
                           } else {
-                            toast.error("Failed to update role");
+                            toast.error(res.error_message || "Failed to update role");
                           }
                         }}
-                        className="bg-surface-elevated border border-border-strong text-foreground px-2 py-1 rounded-md text-xs cursor-pointer"
+                        className="form-select !h-7 !w-auto !text-xs"
                       >
                         <option value="pending">Pending</option>
                         <option value="viewer">Viewer</option>
@@ -250,6 +437,7 @@ function UsersTab({ admin }: { admin: boolean }) {
                     ) : (
                       <Badge variant={u.role === "admin" ? "warning" : u.role === "pending" ? "error" : "default"}>
                         {u.role}
+                        {u.id === currentUser?.id && " (you)"}
                       </Badge>
                     )}
                   </td>
@@ -280,10 +468,12 @@ function UsersTab({ admin }: { admin: boolean }) {
                             Approve
                           </Button>
                         )}
-                        <Button variant={u.active ? "destructive" : "secondary"} size="sm"
-                          onClick={() => handleToggleActive(u)}>
-                          {u.active ? "Deactivate" : "Activate"}
-                        </Button>
+                        {currentUser?.id !== u.id && (
+                          <Button variant="secondary" size="sm"
+                            onClick={() => handleToggleActive(u)}>
+                            {u.active ? "Deactivate" : "Activate"}
+                          </Button>
+                        )}
                         {currentUser?.id !== u.id && (
                           <Button variant="destructive" size="sm" onClick={() => handleDeleteUser(u)}>Delete</Button>
                         )}
@@ -344,7 +534,15 @@ function SSOTab() {
       setScopes(d.scopes); setUserIdentifier(d.user_identifier);
       setButtonLabel(d.button_label); setAutoProvision(d.auto_provision);
       setPostLoginUrl(d.post_login_url || "");
-      if (d.authorize_url) setSelectedProvider("custom");
+      // Highlight the preset the saved endpoints actually belong to. This was
+      // hard-coded to "custom", so a working Forta setup showed Custom OAuth2
+      // selected — and inviting a click on Forta that would reset fields.
+      if (d.authorize_url) {
+        const match = PROVIDER_PRESETS.find(
+          (p) => p.id !== "custom" && p.authorizeUrl && p.authorizeUrl === d.authorize_url,
+        );
+        setSelectedProvider(match?.id ?? "custom");
+      }
     }
     setLoading(false);
   };
@@ -482,6 +680,7 @@ function SSOTab() {
                   placeholder={config?.client_secret ? "Enter new secret to change" : "your-client-secret"}
                   value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} />
                 <button type="button" onClick={() => setShowSecret(!showSecret)}
+                  aria-label={showSecret ? "Hide client secret" : "Show client secret"}
                   className="absolute right-3 top-[30px] text-muted hover:text-secondary transition-colors">
                   <FontAwesomeIcon icon={showSecret ? faEyeSlash : faEye} className="h-3.5 w-3.5" />
                 </button>

@@ -35,7 +35,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { canEdit } from "@/lib/utils";
+import { canEdit, dropStaleSamples } from "@/lib/utils";
 import { useUser } from "@/store/hooks";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { useConfirm } from "@/components/ui/confirm-modal";
@@ -131,7 +131,10 @@ export default function WorkerDetailPage() {
     const loadContainerStats = async () => {
       const res = await reqGetWorkerContainerStats(id);
       if (res.success && res.data?.length > 0 && mountedRef.current) {
-        setContainerStats(res.data.map((m) => ({
+        // The endpoint returns the latest sample per container name ever seen,
+        // so a rolling deploy's temporary "<name>-lattice-updating" container
+        // lingered here for hours as if it were still running.
+        setContainerStats(dropStaleSamples(res.data).map((m) => ({
           name: m.container_name,
           cpu_percent: m.cpu_percent,
           mem_usage_mb: m.mem_usage_mb,

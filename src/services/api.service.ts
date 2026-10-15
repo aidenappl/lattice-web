@@ -32,6 +32,19 @@ attachMonitor(axiosApi);
 
 const MAX_GET_RETRIES = 3;
 
+/** Hard navigation to one of this app's own auth landing pages — never a URL from a response. */
+function goToAuthPage(path: "/unauthorized" | "/pending") {
+    window.location.assign(new URL(path, window.location.origin).toString());
+}
+
+const CREDENTIAL_ENDPOINTS = ["/auth/login"];
+
+function isCredentialEndpoint(url: string | undefined): boolean {
+    if (!url) return false;
+    const path = url.replace(/^https?:\/\/[^/]+/, "").split("?")[0];
+    return CREDENTIAL_ENDPOINTS.includes(path);
+}
+
 export const fetchApi = async <T>(
     config: AxiosRequestConfig,
 ): Promise<ApiResponse<T>> => {
@@ -61,7 +74,7 @@ export const fetchApi = async <T>(
                 response.error_code === 4003 &&
                 typeof window !== "undefined"
             ) {
-                window.location.href = "/unauthorized";
+                goToAuthPage("/unauthorized");
                 return response;
             }
 
@@ -72,11 +85,14 @@ export const fetchApi = async <T>(
                 response.error_code === 4004 &&
                 typeof window !== "undefined"
             ) {
-                window.location.href = "/pending";
+                goToAuthPage("/pending");
                 return response;
             }
 
-            if (response.status === 401) {
+            // A 401 from the login endpoint means "wrong password", not "session
+            // expired" — refreshing there only fired a pointless /auth/refresh on
+            // every failed sign-in.
+            if (response.status === 401 && !isCredentialEndpoint(config.url)) {
                 const refreshResult = await handle401Response<T>(attemptConfig);
                 if (refreshResult) return refreshResult;
 
