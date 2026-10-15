@@ -901,7 +901,7 @@ export function CodeEditor({
             placeholder={placeholder}
             spellCheck={false}
             style={{ tabSize: 2 }}
-            className={`code-editor-textarea relative w-full h-full bg-transparent ${sharedStyles} text-transparent caret-white placeholder:text-muted focus:outline-none resize-none selection:bg-[#264f78] selection:text-[#e4e4e7]`}
+            className={`code-editor-textarea relative w-full h-full bg-transparent ${sharedStyles} text-transparent caret-[var(--text-primary)] placeholder:text-muted focus:outline-none resize-none selection:bg-[#264f78] selection:text-[#e4e4e7]`}
           />
         </div>
       </div>

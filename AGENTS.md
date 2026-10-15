@@ -127,7 +127,7 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 
 | Route | File | What it does |
 |-------|------|--------------|
-| `/` | `page.tsx` | Dashboard: topology board, KPI row w/ sparklines, live event stream, fleet resource charts, anomaly/failing-stack banners |
+| `/` | `page.tsx` | Dashboard: topology board (nodes are keyboard-operable: Tab to focus, Enter opens, Space selects), KPI row w/ sparklines, live event stream, fleet resource charts, anomaly/failing-stack banners |
 | `/login` | `login/page.tsx` | Dual auth: local email/password (`reqLogin`) **+** SSO button (fetches `/auth/sso/config`, links to `login_url`), silent SSO first (`lib/sso.ts`). Redirects to `return_to` if already authed |
 | `/pending` | `pending/page.tsx` | Landing for users with `role: "pending"` (account awaiting approval) |
 | `/unauthorized` | `unauthorized/page.tsx` | Landing when a grant is revoked / `error_code 4003` |
@@ -138,7 +138,7 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 | `/stacks/new` | `stacks/new/page.tsx` | Create stack (or import compose) |
 | `/stacks/[id]` | `stacks/[id]/page.tsx` | Stack detail tabs: containers, compose YAML editor, env (lock toggle per key sets `secret_env_keys` — the API masks those values as `***` for non-admins and keeps the stored value when `***` is saved back; only admins can unmark. Declared secrets and keys that look sensitive are masked in the editor until revealed), logs, deployments, deploy tokens (multi-select delete), dependency graph. Export / Save as template (modal) / Delete live in the header's `⋯` menu |
 | `/containers` | `containers/page.tsx` | Global container list + lifecycle actions; bulk start / stop / restart / recreate / delete (removes from the stack config too) |
-| `/containers/[id]` | `containers/[id]/page.tsx` | Container detail: details/health tabs, logs, terminal, action bar, edit form. `ulimits` (lattice-api ≥ v1.4.7) shows in Container Info via `formatUlimits` and is edited as compose-shaped JSON; the form sends it only when changed, `""` to clear. Every text field in `ContainerEditForm` goes through `changed()` the same way: `null` means "unchanged" to the API, so the old `value \|\| null` made emptying a field a silent no-op. Command/Entrypoint are shown and edited as shell strings via `formatArgv` (quotes arguments so lattice-api ≥ v1.4.9 parses back the same argv); a JSON array is accepted too |
+| `/containers/[id]` | `containers/[id]/page.tsx` | Container detail: details/health tabs, logs, terminal, action bar, edit form. `ulimits` (lattice-api ≥ v1.4.7) shows in Container Info via `formatUlimits` and is edited as compose-shaped JSON; the form sends it only when changed, `""` to clear. Every text field in `ContainerEditForm` goes through `changed()` the same way: `null` means "unchanged" to the API, so the old `value \|\| null` made emptying a field a silent no-op. Command/Entrypoint are shown and edited as shell strings via `formatArgv` (quotes arguments so lattice-api ≥ v1.4.9 parses back the same argv); a JSON array is accepted too. The action bar separates **Remove from Docker** (`reqRemoveContainer`, the container stays in the stack and the next deploy recreates it) from **Delete** (`reqDeleteContainer`, removes it from the stack's config; the compose file is untouched, so a compose sync can add it back) |
 | `/deployments` | `deployments/page.tsx` | Deployment history. Stack/status filters go to the API (`reqGetDeployments(params)`), paged 50 at a time with "Load older"; duration column; bulk approve for `pending` |
 | `/deployments/[id]` | `deployments/[id]/page.tsx` | Deployment detail + live logs, approve/rollback. Live progress only while active; finished deployments show their duration |
 | `/databases` | `databases/page.tsx` | Managed database instance list with search; bulk start / stop / restart / delete |
@@ -304,6 +304,13 @@ you touch a slice or a `lib/` helper, extend its sibling test.
 - **Tables:** use `.data-table` inside `.panel`. Such panels scroll sideways (`.panel:has(> .data-table)`)
   because column breakpoints are viewport-based and the sidebar eats ~260px — before that, the
   Actions column was clipped off-screen at 1280px. Rows that don't navigate get `!cursor-default`.
+- **Colours come from tokens, never literals.** Use `bg-primary` / `text-background` / `text-pending` /
+  `bg-pending/10` etc., not `bg-white`, `text-black` or `#hex` — the light theme is real, and the
+  primary `Button` was white-on-near-white there until it moved to tokens (as were the code
+  editor's caret and the worker-offline banner).
+- **Heavy client-only modules load on demand.** The xterm terminal is imported through
+  `components/ui/terminal-lazy.tsx` (`next/dynamic`, `ssr: false`) so it isn't in the container and
+  database detail bundles until a terminal opens. Do the same for anything similar.
 - **Selects:** `.form-select` has a fixed height and no vertical padding so `!h-8` filter selects
   stay vertically centred. Size inputs in a filter bar with `!w-*` — `.form-input`'s `width: 100%`
   is unlayered CSS and beats plain Tailwind width utilities.

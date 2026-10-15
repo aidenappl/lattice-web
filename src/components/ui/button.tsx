@@ -26,13 +26,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       "inline-flex items-center justify-center font-medium rounded-lg transition-colors cursor-pointer focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed";
 
     const variants = {
-      primary: "bg-white text-black hover:bg-zinc-100",
+      // Theme tokens, not white/black: in light mode a white button sat on a
+      // near-white page with no border and all but disappeared.
+      primary: "bg-primary text-background hover:opacity-85",
       secondary:
         "border border-border-strong bg-surface text-primary hover:bg-surface-elevated hover:border-border-strong",
       destructive:
         "bg-red-600/10 border border-red-600/30 text-destructive-soft hover:bg-red-600/20 hover:border-red-600/50",
       warning:
-        "bg-yellow-600/10 border border-yellow-600/30 text-yellow-400 hover:bg-yellow-600/20 hover:border-yellow-600/50",
+        "bg-pending/10 border border-pending/30 text-pending hover:bg-pending/20 hover:border-pending/50",
       ghost: "text-secondary hover:bg-surface-elevated hover:text-primary",
     };
 

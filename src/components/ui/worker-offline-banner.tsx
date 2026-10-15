@@ -13,7 +13,7 @@ export function WorkerOfflineBanner({
   reason?: string | null;
 }) {
   return (
-    <div className="mb-5 flex items-start gap-3 rounded-xl border border-[#7c3a00] bg-[#1f0f00] px-4 py-3">
+    <div className="mb-5 flex items-start gap-3 rounded-xl border border-pending/30 bg-pending/5 px-4 py-3">
       <FontAwesomeIcon
         icon={faTriangleExclamation}
         className="h-4 w-4 mt-0.5 shrink-0 text-pending"
@@ -22,7 +22,7 @@ export function WorkerOfflineBanner({
         <p className="text-sm font-medium text-pending">
           Worker{workerName ? ` "${workerName}"` : ""} is offline
         </p>
-        <p className="text-xs text-[#9a4a1a] mt-0.5">
+        <p className="text-xs text-secondary mt-0.5">
           {reason ?? "No heartbeat received."} Container data may not reflect
           the current state. All controls are disabled until the worker
           reconnects.
@@ -38,8 +38,8 @@ export function WorkerOfflineBanner({
  */
 export function StalePill() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border border-[#7c3a00] bg-[#1f0f00] text-pending">
-      <span className="h-1.5 w-1.5 rounded-full bg-[#f97316] animate-pulse" />
+    <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border border-pending/30 bg-pending/10 text-pending">
+      <span className="h-1.5 w-1.5 rounded-full bg-pending animate-pulse" />
       stale
     </span>
   );

@@ -31,7 +31,7 @@ export function FailingStacksBanner({
       />
       <div style={{ flex: 1 }}>
         <span style={{ fontWeight: 500 }}>
-          {count} stack{count > 1 ? "s" : ""} need attention
+          {count} stack{count > 1 ? "s need" : " needs"} attention
         </span>
         <span className="text-muted" style={{ marginLeft: 8 }}>
           healthcheck failures — consider rollback.
