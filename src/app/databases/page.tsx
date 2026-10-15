@@ -6,7 +6,17 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { reportCaught } from "@/services/monitor.service";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCircleExclamation } from "@fortawesome/free-solid-svg-icons";
+import {
+  faCircleExclamation,
+  faPlay,
+  faStop,
+  faRotate,
+  faTrash,
+} from "@fortawesome/free-solid-svg-icons";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActionBar } from "@/components/ui/bulk-action-bar";
+import { useSelection } from "@/hooks/useSelection";
+import { useBulkAction } from "@/hooks/useBulkAction";
 import type { DatabaseInstance, DatabaseEngine, Worker } from "@/types";
 import {
   reqGetDatabaseInstances,
@@ -33,7 +43,9 @@ export default function DatabasesPage() {
 
   // Filters
   const [filterEngine, setFilterEngine] = useState<"all" | DatabaseEngine>("all");
-  const [filterStatus, setFilterStatus] = useState<"all" | "running" | "stopped" | "pending" | "error">("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [search, setSearch] = useState("");
+  const editable = canEdit(user);
 
   const load = useCallback(async () => {
     try {
@@ -81,20 +93,78 @@ export default function DatabasesPage() {
   );
 
   const filteredDatabases = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return databases.filter((db) => {
       if (filterEngine !== "all" && db.engine !== filterEngine) return false;
       if (filterStatus !== "all" && db.status !== filterStatus) return false;
+      if (
+        q &&
+        !db.name.toLowerCase().includes(q) &&
+        !(db.database_name ?? "").toLowerCase().includes(q)
+      )
+        return false;
       return true;
     });
-  }, [databases, filterEngine, filterStatus]);
+  }, [databases, filterEngine, filterStatus, search]);
+
+  const statuses = useMemo(
+    () => Array.from(new Set(databases.map((d) => d.status))).sort(),
+    [databases],
+  );
+  const visibleIds = useMemo(
+    () => filteredDatabases.map((d) => d.id),
+    [filteredDatabases],
+  );
+  const selection = useSelection(visibleIds);
+  const bulk = useBulkAction();
+  const selected = useMemo(
+    () => filteredDatabases.filter((d) => selection.isSelected(d.id)),
+    [filteredDatabases, selection],
+  );
+  const workerName = (id: number) => workerMap.get(id)?.name ?? `worker ${id}`;
+
+  const bulkAction = (
+    action: "start" | "stop" | "restart",
+    eligible: (d: DatabaseInstance) => boolean,
+  ) => {
+    const verb = action.charAt(0).toUpperCase() + action.slice(1);
+    const items = selected.filter(eligible);
+    if (items.length === 0) {
+      toast(`None of the selected databases can be ${action}ed right now`);
+      return;
+    }
+    bulk
+      .run({
+        items,
+        verb,
+        verbPast: action === "stop" ? "Stopped" : `${verb}ed`,
+        noun: "database",
+        name: (d) => d.name,
+        action: (d) => reqDatabaseAction(d.id, action),
+        confirm:
+          action === "start"
+            ? undefined
+            : {
+                message:
+                  action === "stop"
+                    ? "Each database container stops and its open connections are dropped. Data is kept."
+                    : "Each database container restarts; open connections are dropped for a few seconds.",
+                variant: action === "stop" ? "danger" : "warning",
+              },
+      })
+      .then((r) => r && load());
+  };
 
   const handleAction = async (db: DatabaseInstance, action: "start" | "stop" | "restart") => {
     if (action === "stop" || action === "restart") {
       const confirmed = await showConfirm({
         title: `${action.charAt(0).toUpperCase() + action.slice(1)} database "${db.name}"`,
-        message: "This will stop the database container. Any active connections will be terminated.",
+        message:
+          action === "stop"
+            ? "The database container stops and every open connection is dropped. Data is kept."
+            : "The database container restarts. Open connections are dropped for a few seconds.",
         confirmLabel: action.charAt(0).toUpperCase() + action.slice(1),
-        variant: "danger",
+        variant: action === "stop" ? "danger" : "warning",
       });
       if (!confirmed) return;
     }
@@ -119,7 +189,7 @@ export default function DatabasesPage() {
   const handleDelete = async (db: DatabaseInstance) => {
     const confirmed = await showConfirm({
       title: `Delete database "${db.name}"`,
-      message: `This destroys the container and the data volume ${db.volume_name} on worker ${db.worker_id}. Every table in "${db.database_name}" goes with it and cannot be recovered — only existing snapshots, which are kept.`,
+      message: `This destroys the container and the data volume ${db.volume_name} on ${workerName(db.worker_id)}. Every table in "${db.database_name}" goes with it and cannot be recovered — only existing snapshots, which are kept.`,
       confirmLabel: "Delete permanently",
       variant: "danger",
     });
@@ -131,7 +201,7 @@ export default function DatabasesPage() {
       // 409: the worker is offline, so nothing can actually be destroyed.
       if (!res.success && res.status === 409) {
         const forceOk = await showConfirm({
-          title: `Worker ${db.worker_id} is offline`,
+          title: `${workerName(db.worker_id)} is offline`,
           message: `The container and data volume cannot be destroyed while the worker is disconnected. Delete the record anyway? ${db.container_name} and ${db.volume_name} will be left on the worker and nothing in Lattice will point at them.`,
           confirmLabel: "Delete record anyway",
           variant: "danger",
@@ -162,59 +232,131 @@ export default function DatabasesPage() {
           <div className="page-title">Databases</div>
           <div className="page-subtitle">Manage your database instances</div>
         </div>
-        {canEdit(user) && (
+        {editable && (
           <Button onClick={() => router.push("/databases/new")}>
             New Database
           </Button>
         )}
       </div>
 
+      {/* Same filter bar as every other list page — this one used to have its
+          own taller, differently-styled selects. */}
+      <div className="filters-bar">
+        <input
+          type="search"
+          aria-label="Search databases"
+          placeholder="Search by name or schema…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="form-input !w-full sm:!w-64 !h-8 !text-sm"
+        />
+        <select
+          value={filterEngine}
+          onChange={(e) =>
+            setFilterEngine(e.target.value as "all" | DatabaseEngine)
+          }
+          aria-label="Filter by engine"
+          className="form-select !h-8 !w-auto !text-sm cursor-pointer"
+        >
+          <option value="all">All engines</option>
+          <option value="mysql">MySQL</option>
+          <option value="mariadb">MariaDB</option>
+          <option value="postgres">PostgreSQL</option>
+        </select>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          aria-label="Filter by status"
+          className="form-select !h-8 !w-auto !text-sm cursor-pointer"
+        >
+          <option value="all">All statuses</option>
+          {statuses.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-muted ml-auto whitespace-nowrap">
+          {filteredDatabases.length} database
+          {filteredDatabases.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      {editable && (
+        <BulkActionBar
+          count={selection.count}
+          noun="database"
+          onClear={selection.clear}
+          busy={bulk.running}
+          actions={[
+            {
+              label: "Start",
+              icon: faPlay,
+              onClick: () =>
+                bulkAction("start", (d) =>
+                  ["stopped", "error", "degraded"].includes(d.status),
+                ),
+            },
+            {
+              label: "Stop",
+              icon: faStop,
+              onClick: () => bulkAction("stop", (d) => d.status === "running"),
+            },
+            {
+              label: "Restart",
+              icon: faRotate,
+              onClick: () =>
+                bulkAction("restart", (d) => d.status === "running"),
+            },
+            {
+              label: "Delete",
+              icon: faTrash,
+              variant: "danger",
+              onClick: () =>
+                bulk
+                  .run({
+                    items: selected,
+                    verb: "Delete",
+                    verbPast: "Started deleting",
+                    noun: "database",
+                    name: (d) => `${d.name} (${workerName(d.worker_id)})`,
+                    action: (d) => reqDeleteDatabaseInstance(d.id),
+                    confirm: {
+                      title: `Permanently delete ${selected.length} database${selected.length !== 1 ? "s" : ""}?`,
+                      message:
+                        "Each database's container AND data volume are destroyed. Existing snapshots are kept; nothing else can be recovered. Databases with deletion protection, or on an offline worker, are skipped and listed as failures.",
+                      variant: "danger",
+                    },
+                  })
+                  .then((r) => {
+                    if (r) {
+                      selection.clear();
+                      load();
+                    }
+                  }),
+            },
+          ]}
+        />
+      )}
+
       <div className="py-6">
-        {/* Filter row */}
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          <div className="flex flex-col gap-1">
-            <select
-              value={filterEngine}
-              onChange={(e) =>
-                setFilterEngine(e.target.value as "all" | DatabaseEngine)
-              }
-              aria-label="Filter by engine"
-              className="h-9 rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
-            >
-              <option value="all">All Engines</option>
-              <option value="mysql">MySQL</option>
-              <option value="mariadb">MariaDB</option>
-              <option value="postgres">PostgreSQL</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <select
-              value={filterStatus}
-              onChange={(e) =>
-                setFilterStatus(
-                  e.target.value as "all" | "running" | "stopped" | "pending" | "error",
-                )
-              }
-              aria-label="Filter by status"
-              className="h-9 rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none focus:ring-1 focus:ring-[#444444]/50"
-            >
-              <option value="all">All Statuses</option>
-              <option value="running">Running</option>
-              <option value="stopped">Stopped</option>
-              <option value="pending">Pending</option>
-              <option value="error">Error</option>
-            </select>
-          </div>
-          <span className="text-xs text-muted ml-auto">
-            {filteredDatabases.length} database{filteredDatabases.length !== 1 ? "s" : ""}
-          </span>
-        </div>
 
         {/* Databases table */}
         <div className="panel">
           <table className="data-table">
             <thead>
               <tr>
+                {editable && (
+                  <th className="select-col">
+                    <Checkbox
+                      label="Select all visible databases"
+                      checked={selection.allSelected}
+                      indeterminate={selection.someSelected}
+                      onChange={selection.toggleAll}
+                      disabled={selection.empty}
+                    />
+                  </th>
+                )}
                 <th>Name</th>
                 <th className="hidden sm:table-cell">Engine</th>
                 <th className="hidden lg:table-cell">Version</th>
@@ -231,7 +373,7 @@ export default function DatabasesPage() {
               {filteredDatabases.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={canEdit(user) ? 8 : 7}
+                    colSpan={editable ? 9 : 7}
                     className="text-center text-sm text-muted !py-12"
                   >
                     {databases.length === 0
@@ -243,7 +385,22 @@ export default function DatabasesPage() {
                 filteredDatabases.map((db) => {
                   const worker = workerMap.get(db.worker_id);
                   return (
-                    <tr key={db.id}>
+                    <tr
+                      key={db.id}
+                      onClick={() => router.push(`/databases/${db.id}`)}
+                      className={selection.isSelected(db.id) ? "is-selected" : ""}
+                    >
+                      {editable && (
+                        <td className="select-col">
+                          <Checkbox
+                            label={`Select ${db.name}`}
+                            checked={selection.isSelected(db.id)}
+                            onChange={(_, e) =>
+                              selection.toggle(db.id, { shiftKey: e.shiftKey })
+                            }
+                          />
+                        </td>
+                      )}
                       <td>
                         <Link
                           href={`/databases/${db.id}`}
@@ -292,11 +449,16 @@ export default function DatabasesPage() {
                       <td className="hidden lg:table-cell">
                         <StatusBadge status={db.health_status} />
                       </td>
-                      {canEdit(user) && (
-                        <td className="text-right space-x-1">
+                      {editable && (
+                        <td
+                          className="text-right whitespace-nowrap space-x-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Stop is disruptive, not destructive: it used to be
+                              styled exactly like Delete, one button apart. */}
                           {db.status === "stopped" || db.status === "error" || db.status === "degraded" ? (
                             <Button
-                              variant="ghost"
+                              variant="secondary"
                               size="sm"
                               onClick={() => handleAction(db, "start")}
                             >
@@ -304,7 +466,7 @@ export default function DatabasesPage() {
                             </Button>
                           ) : db.status === "running" ? (
                             <Button
-                              variant="destructive"
+                              variant="secondary"
                               size="sm"
                               onClick={() => handleAction(db, "stop")}
                             >
@@ -313,18 +475,13 @@ export default function DatabasesPage() {
                           ) : null}
                           {db.status === "running" && (
                             <Button
-                              variant="ghost"
+                              variant="secondary"
                               size="sm"
                               onClick={() => handleAction(db, "restart")}
                             >
                               Restart
                             </Button>
                           )}
-                          <Link href={`/databases/${db.id}`}>
-                            <Button variant="secondary" size="sm">
-                              View
-                            </Button>
-                          </Link>
                           <Button
                             variant="destructive"
                             size="sm"

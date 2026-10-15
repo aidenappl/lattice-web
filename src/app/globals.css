@@ -19,11 +19,12 @@
   --border-strong: #2e2e38;
   --border-emphasis: #444444;
 
-  /* Text */
+  /* Text — muted and dimmed are used for 10–12px labels, so both clear
+     WCAG AA 4.5:1 on --background. They were 3.9:1 and 2.3:1. */
   --text-primary: #ededf0;
   --text-secondary: #a0a0ab;
-  --text-muted: #6e6e78;
-  --text-dimmed: #4a4a54;
+  --text-muted: #8b8b95;
+  --text-dimmed: #80808a;
   --text-subtle: #a0a0ab;
 
   /* Semantic accents */
@@ -107,8 +108,8 @@
 
   --text-primary: #0a0a0b;
   --text-secondary: #52525b;
-  --text-muted: #7a7a82;
-  --text-dimmed: #a0a0a8;
+  --text-muted: #686870;
+  --text-dimmed: #6e6e76;
   --text-subtle: #52525b;
 
   --healthy: #059669;
@@ -535,6 +536,142 @@ html {
   border-radius: var(--radius-md);
   overflow: hidden;
 }
+/* Tables scroll sideways inside their panel instead of being clipped by it.
+   Column breakpoints are viewport-based, so at 1280px the sidebar leaves the
+   table ~1000px and the right-hand columns — usually Actions — were cut off
+   with no way to reach them. */
+.panel:has(> .data-table),
+.table-scroll {
+  overflow-x: auto;
+}
+.data-table th.select-col,
+.data-table td.select-col {
+  width: 40px;
+  padding-right: 0;
+}
+.data-table tr.is-selected td {
+  background: var(--info-bg);
+}
+
+/* ── Selection & bulk actions ─────────────────────────────────── */
+.sidebar-nav-scroll {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+.lt-checkbox {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--border-emphasis);
+  border-radius: 4px;
+  background: var(--background-alt);
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+  vertical-align: middle;
+  transition:
+    background 0.1s,
+    border-color 0.1s;
+  flex-shrink: 0;
+}
+.lt-checkbox:hover {
+  border-color: var(--text-secondary);
+}
+.lt-checkbox:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}
+.lt-checkbox:checked,
+.lt-checkbox:indeterminate {
+  background: var(--info);
+  border-color: var(--info);
+}
+.lt-checkbox:checked::after {
+  content: "";
+  width: 8px;
+  height: 4px;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: translateY(-1px) rotate(-45deg);
+}
+.lt-checkbox:indeterminate::after {
+  content: "";
+  width: 8px;
+  height: 2px;
+  background: #fff;
+  border-radius: 1px;
+}
+.lt-checkbox:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.bulk-bar {
+  position: fixed;
+  bottom: 20px;
+  /* Centred over the content column, not the window, and sized to its content
+     so the actions never wrap onto a second row. */
+  left: var(--sidebar-w);
+  right: 0;
+  margin-inline: auto;
+  width: max-content;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - var(--sidebar-w) - 32px);
+  padding: 8px 10px 8px 16px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  font-size: 13px;
+  animation: bulk-bar-in 0.14s ease-out;
+}
+@keyframes bulk-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.bulk-bar-count {
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+.bulk-bar-count strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.bulk-bar-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border-strong);
+}
+.bulk-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.bulk-bar-btn:hover:not(:disabled) {
+  background: var(--surface-active);
+}
+.bulk-bar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.bulk-bar-btn-danger {
+  color: var(--failed);
+}
+.bulk-bar-btn-danger:hover:not(:disabled) {
+  background: var(--failed-bg);
+}
 .panel-header {
   display: flex;
   align-items: center;
@@ -898,6 +1035,16 @@ html {
 }
 .form-input::placeholder {
   color: var(--text-dimmed);
+}
+/* A select's text sits on the padding box, not the line box, so the vertical
+   padding inherited above pushed the label below centre whenever a page shrank
+   the control with `!h-8`. A fixed height with no vertical padding centres it at
+   every height. */
+.form-select {
+  height: 36px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: normal;
 }
 .form-label {
   font-size: 11.5px;

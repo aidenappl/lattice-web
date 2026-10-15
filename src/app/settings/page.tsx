@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { WebhookConfig } from "@/types";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActionBar } from "@/components/ui/bulk-action-bar";
+import { useSelection } from "@/hooks/useSelection";
+import { useBulkAction } from "@/hooks/useBulkAction";
 import {
   reqUpdateAPI,
   reqUpdateWeb,
@@ -13,7 +17,7 @@ import {
   reqTestWebhook,
 } from "@/services/admin.service";
 import { useUser } from "@/store/hooks";
-import { isAdmin, formatDate, isNewerVersion } from "@/lib/utils";
+import { isAdmin, isNewerVersion } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,19 +33,16 @@ import {
   faMicrochip,
   faCheck,
   faArrowUp,
-  faEye,
-  faEyeSlash,
-  faLock,
+  faPaperPlane,
+  faToggleOn,
+  faToggleOff,
+  faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { APP_VERSION } from "@/lib/version";
 import toast from "react-hot-toast";
 import { RunnerUpgradePanel } from "@/components/layout/RunnerUpgradePanel";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { reportFetchFailure, type FetchFailure } from "@/services/monitor.service";
-import {
-  reqGetTemplates,
-  reqDeleteTemplate,
-} from "@/services/templates.service";
 
 const API_URL = process.env.NEXT_PUBLIC_LATTICE_API ?? "";
 
@@ -537,6 +538,14 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
     }
   };
 
+  const visibleIds = useMemo(() => webhooks.map((w) => w.id), [webhooks]);
+  const selection = useSelection(visibleIds);
+  const bulk = useBulkAction();
+  const selected = useMemo(
+    () => webhooks.filter((w) => selection.isSelected(w.id)),
+    [webhooks, selection],
+  );
+
   if (loading) {
     return (
       <div>
@@ -643,33 +652,113 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
         </form>
       )}
 
+      {adminUser && (
+        <BulkActionBar
+          count={selection.count}
+          noun="webhook"
+          onClear={selection.clear}
+          busy={bulk.running}
+          actions={[
+            {
+              label: "Test",
+              icon: faPaperPlane,
+              onClick: () =>
+                bulk.run({
+                  items: selected,
+                  verb: "Test",
+                  verbPast: "Sent a test to",
+                  noun: "webhook",
+                  name: (w) => w.name,
+                  action: (w) => reqTestWebhook(w.id),
+                }),
+            },
+            {
+              label: "Enable",
+              icon: faToggleOn,
+              onClick: () =>
+                bulk
+                  .run({
+                    items: selected.filter((w) => !w.active),
+                    verb: "Enable",
+                    verbPast: "Enabled",
+                    noun: "webhook",
+                    name: (w) => w.name,
+                    action: (w) => reqUpdateWebhook(w.id, { active: true }),
+                  })
+                  .then((r) => r && loadWebhooks()),
+            },
+            {
+              label: "Disable",
+              icon: faToggleOff,
+              onClick: () =>
+                bulk
+                  .run({
+                    items: selected.filter((w) => w.active),
+                    verb: "Disable",
+                    verbPast: "Disabled",
+                    noun: "webhook",
+                    name: (w) => w.name,
+                    action: (w) => reqUpdateWebhook(w.id, { active: false }),
+                  })
+                  .then((r) => r && loadWebhooks()),
+            },
+            {
+              label: "Delete",
+              icon: faTrash,
+              variant: "danger",
+              onClick: () =>
+                bulk
+                  .run({
+                    items: selected,
+                    verb: "Delete",
+                    verbPast: "Deleted",
+                    noun: "webhook",
+                    name: (w) => w.name,
+                    action: (w) => reqDeleteWebhook(w.id),
+                    confirm: {
+                      message: "Their endpoints stop receiving Lattice events.",
+                      variant: "danger",
+                    },
+                  })
+                  .then((r) => {
+                    if (r) {
+                      selection.clear();
+                      loadWebhooks();
+                    }
+                  }),
+            },
+          ]}
+        />
+      )}
+
       {!loadError && (
       <div className="panel">
-        <table className="w-full">
+        <table className="data-table">
           <thead>
-            <tr className="border-b border-border-subtle">
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden sm:table-cell">
-                URL
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden md:table-cell">
-                Events
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-secondary uppercase tracking-wider">
-                Actions
-              </th>
+            <tr>
+              {adminUser && (
+                <th className="select-col">
+                  <Checkbox
+                    label="Select all webhooks"
+                    checked={selection.allSelected}
+                    indeterminate={selection.someSelected}
+                    onChange={selection.toggleAll}
+                    disabled={selection.empty}
+                  />
+                </th>
+              )}
+              <th>Name</th>
+              <th className="hidden sm:table-cell">URL</th>
+              <th className="hidden md:table-cell">Events</th>
+              <th>Status</th>
+              <th className="text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {webhooks.length === 0 ? (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   className="px-4 py-12 text-center text-sm text-muted"
                 >
                   No webhooks configured
@@ -679,8 +768,19 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
               webhooks.map((wh) => (
                 <tr
                   key={wh.id}
-                  className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors"
+                  className={`!cursor-default ${selection.isSelected(wh.id) ? "is-selected" : ""}`}
                 >
+                  {adminUser && (
+                    <td className="select-col">
+                      <Checkbox
+                        label={`Select ${wh.name}`}
+                        checked={selection.isSelected(wh.id)}
+                        onChange={(_, e) =>
+                          selection.toggle(wh.id, { shiftKey: e.shiftKey })
+                        }
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-sm font-medium text-primary">
                     {wh.name}
                   </td>
@@ -707,7 +807,7 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
                       {wh.active ? "active" : "inactive"}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
                       {adminUser && (
                         <>
@@ -726,7 +826,7 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
                             Edit
                           </Button>
                           <Button
-                            variant={wh.active ? "destructive" : "secondary"}
+                            variant="secondary"
                             size="sm"
                             onClick={() => handleToggleActive(wh)}
                           >
@@ -769,7 +869,8 @@ export default function SettingsPage() {
         <div className="flex-1">
           <div className="page-title">Settings</div>
           <div className="page-subtitle">
-            System configuration and user management
+            Versions, self-updates and outgoing webhooks. Users are managed
+            under Authentication.
           </div>
         </div>
       </div>

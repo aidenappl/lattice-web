@@ -6,6 +6,11 @@ import type { Container, Stack, Worker } from "@/types";
 import {
   reqGetAllContainers,
   reqGetStacks,
+  reqStartContainer,
+  reqStopContainer,
+  reqRestartContainer,
+  reqRecreateContainer,
+  reqDeleteContainer,
 } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
@@ -19,9 +24,16 @@ import {
   faSpinner,
   faRecycle,
   faChevronRight,
+  faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { StatusBadge } from "@/components/ui/badge";
-import { timeAgo } from "@/lib/utils";
+import { timeAgo, canEdit } from "@/lib/utils";
+import { useUser } from "@/store/hooks";
+import { useSelection } from "@/hooks/useSelection";
+import { useBulkAction } from "@/hooks/useBulkAction";
+import type { BulkOutcome } from "@/lib/bulk";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActionBar } from "@/components/ui/bulk-action-bar";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
 import { useContainerActions } from "@/hooks/useContainerActions";
@@ -144,7 +156,9 @@ export default function ContainersPage() {
   );
   const workerLiveness = useWorkerLiveness(workers);
 
-  const filtered = containers.filter((c) => {
+  const user = useUser();
+  const editable = canEdit(user);
+  const filtered = useMemo(() => containers.filter((c) => {
     if (filterStatus !== "all" && c.status !== filterStatus) return false;
     if (filterStack !== "all" && String(c.stack_id) !== filterStack)
       return false;
@@ -161,7 +175,44 @@ export default function ContainersPage() {
         return false;
     }
     return true;
-  });
+  }), [containers, filterStatus, filterStack, filterWorker, search, stackMap]);
+
+  const visibleIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
+  const selection = useSelection(visibleIds);
+  const bulk = useBulkAction();
+  const selected = useMemo(
+    () => filtered.filter((c) => selection.isSelected(c.id)),
+    [filtered, selection],
+  );
+
+  const bulkContainers = (
+    verb: string,
+    verbPast: string,
+    fn: (id: number) => Promise<BulkOutcome>,
+    eligible: (c: Container) => boolean,
+    confirm?: { message: string; variant?: "danger" | "warning" },
+  ) => {
+    const items = selected.filter(eligible);
+    if (items.length === 0) {
+      toast(`None of the selected containers can be ${verbPast.toLowerCase()}`);
+      return;
+    }
+    bulk
+      .run({
+        items,
+        verb,
+        verbPast,
+        noun: "container",
+        name: (c) => c.name,
+        action: (c) => fn(c.id),
+        confirm,
+      })
+      .then((res) => {
+        if (!res) return;
+        if (verb === "Delete") selection.clear();
+        setTimeout(load, 2000);
+      });
+  };
 
   if (loading) return <PageLoader />;
 
@@ -182,6 +233,75 @@ export default function ContainersPage() {
         </button>
       </div>
 
+      {editable && (
+        <BulkActionBar
+          count={selection.count}
+          noun="container"
+          onClear={selection.clear}
+          busy={bulk.running}
+          actions={[
+            {
+              label: "Start",
+              icon: faPlay,
+              onClick: () =>
+                bulkContainers("Start", "Started", reqStartContainer, (c) =>
+                  ["stopped", "error", "pending"].includes(c.status),
+                ),
+            },
+            {
+              label: "Stop",
+              icon: faStop,
+              onClick: () =>
+                bulkContainers(
+                  "Stop",
+                  "Stopped",
+                  reqStopContainer,
+                  (c) => c.status === "running" || c.status === "paused",
+                  { message: "Each container is shut down gracefully." },
+                ),
+            },
+            {
+              label: "Restart",
+              icon: faRotate,
+              onClick: () =>
+                bulkContainers(
+                  "Restart",
+                  "Restarted",
+                  reqRestartContainer,
+                  (c) => c.status === "running",
+                  { message: "Each running container is stopped and started." },
+                ),
+            },
+            {
+              label: "Recreate",
+              icon: faRecycle,
+              onClick: () =>
+                bulkContainers(
+                  "Recreate",
+                  "Recreated",
+                  reqRecreateContainer,
+                  () => true,
+                  {
+                    message:
+                      "Each container is removed and created fresh from its saved config.",
+                  },
+                ),
+            },
+            {
+              label: "Delete",
+              icon: faTrash,
+              variant: "danger",
+              onClick: () =>
+                bulkContainers("Delete", "Deleted", reqDeleteContainer, () => true, {
+                  message:
+                    "Removes each container from Docker AND from its stack's config, so the next deploy will not bring it back.",
+                  variant: "danger",
+                }),
+            },
+          ]}
+        />
+      )}
+
       {/* Filters */}
       <div className="filters-bar">
         <input
@@ -189,7 +309,7 @@ export default function ContainersPage() {
           placeholder="Search by name or image..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="form-input w-full sm:w-56 !h-8 !text-sm"
+          className="form-input !w-full sm:!w-56 !h-8 !text-sm"
         />
         <select
           value={filterStatus}
@@ -252,6 +372,17 @@ export default function ContainersPage() {
           <table className="data-table">
             <thead>
               <tr>
+                {editable && (
+                  <th className="select-col">
+                    <Checkbox
+                      label="Select all visible containers"
+                      checked={selection.allSelected}
+                      indeterminate={selection.someSelected}
+                      onChange={selection.toggleAll}
+                      disabled={selection.empty}
+                    />
+                  </th>
+                )}
                 <th>Name</th>
                 <th>Status</th>
                 <th className="hidden sm:table-cell">Health</th>
@@ -276,8 +407,19 @@ export default function ContainersPage() {
                 return (
                   <tr
                     key={c.id}
-                    className="hover:bg-surface-elevated transition-colors group"
+                    className={`hover:bg-surface-elevated transition-colors group ${selection.isSelected(c.id) ? "is-selected" : ""}`}
                   >
+                    {editable && (
+                      <td className="select-col">
+                        <Checkbox
+                          label={`Select ${c.name}`}
+                          checked={selection.isSelected(c.id)}
+                          onChange={(_, e) =>
+                            selection.toggle(c.id, { shiftKey: e.shiftKey })
+                          }
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <Link
                         href={`/containers/${c.id}`}

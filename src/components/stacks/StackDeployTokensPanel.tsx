@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { DeployToken } from "@/types";
+import toast from "react-hot-toast";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faKey } from "@fortawesome/free-solid-svg-icons";
+import { faKey, faTrash } from "@fortawesome/free-solid-svg-icons";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useSelection } from "@/hooks/useSelection";
+import { useBulkAction } from "@/hooks/useBulkAction";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { canEdit, isAdmin, timeAgo } from "@/lib/utils";
@@ -14,6 +18,9 @@ import {
   reqCreateDeployToken,
   reqDeleteDeployToken,
 } from "@/services/stacks.service";
+
+// The usage hints used to say https://YOUR_API — the URL is known, so show it.
+const API_URL = process.env.NEXT_PUBLIC_LATTICE_API || "https://YOUR_API";
 
 export interface StackDeployTokensPanelProps {
   stackId: number;
@@ -29,6 +36,29 @@ export default function StackDeployTokensPanel({
 
   const user = useUser();
   const showConfirm = useConfirm();
+  const ids = useMemo(() => tokens.map((t) => t.id), [tokens]);
+  const selection = useSelection(ids);
+  const bulk = useBulkAction();
+
+  const deleteSelected = async () => {
+    const res = await bulk.run({
+      items: tokens.filter((t) => selection.isSelected(t.id)),
+      verb: "Delete",
+      verbPast: "Deleted",
+      noun: "deploy token",
+      name: (t) => t.name,
+      action: (t) => reqDeleteDeployToken(t.id),
+      confirm: {
+        message: "CI pipelines using them can no longer trigger deploys.",
+        variant: "danger",
+      },
+    });
+    if (res) {
+      const gone = new Set(res.succeeded.map((t) => t.id));
+      setTokens((prev) => prev.filter((t) => !gone.has(t.id)));
+      selection.clear();
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -59,6 +89,8 @@ export default function StackDeployTokensPanel({
         ...prev,
       ]);
       setNewTokenName("");
+    } else {
+      toast.error(res.error_message || "Failed to create deploy token");
     }
   };
 
@@ -75,6 +107,8 @@ export default function StackDeployTokensPanel({
     if (res.success) {
       setTokens((prev) => prev.filter((t) => t.id !== tokenId));
       if (createdToken) setCreatedToken(null);
+    } else {
+      toast.error(res.error_message || "Failed to delete deploy token");
     }
   };
 
@@ -87,11 +121,28 @@ export default function StackDeployTokensPanel({
         />
         <span>Deploy Tokens</span>
         <span className="badge badge-neutral ml-2">{tokens.length}</span>
+        {isAdmin(user) && selection.count > 0 && (
+          <button
+            onClick={deleteSelected}
+            disabled={!!bulk.running}
+            className="ml-auto inline-flex items-center gap-1.5 text-xs text-failed hover:underline cursor-pointer disabled:opacity-50"
+          >
+            <FontAwesomeIcon icon={faTrash} className="h-3 w-3" />
+            Delete {selection.count}
+          </button>
+        )}
       </div>
       <div className="p-4">
         {isAdmin(user) && (
-          <div className="flex gap-2 mb-3">
+          <form
+            className="flex gap-2 mb-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateToken();
+            }}
+          >
             <Input
+              aria-label="New deploy token name"
               placeholder="Token name (e.g. GitHub Actions)"
               value={newTokenName}
               onChange={(e) => setNewTokenName(e.target.value)}
@@ -99,12 +150,12 @@ export default function StackDeployTokensPanel({
             />
             <Button
               size="sm"
-              onClick={handleCreateToken}
+              type="submit"
               disabled={!newTokenName.trim()}
             >
               Create
             </Button>
-          </div>
+          </form>
         )}
 
         {createdToken && (
@@ -116,7 +167,7 @@ export default function StackDeployTokensPanel({
               {createdToken}
             </p>
             <p className="text-[10px] text-muted">
-              Usage: <code className="text-xs">curl -X POST https://YOUR_API/api/deploy/{createdToken}</code>
+              Usage: <code className="text-xs break-all">curl -X POST {API_URL}/api/deploy/{createdToken}</code>
             </p>
           </div>
         )}
@@ -133,9 +184,18 @@ export default function StackDeployTokensPanel({
               tokens.map((token) => (
                 <div
                   key={token.id}
-                  className="flex items-center justify-between rounded-lg bg-surface-elevated px-3 py-2"
+                  className="flex items-center justify-between gap-3 rounded-lg bg-surface-elevated px-3 py-2"
                 >
-                  <div className="min-w-0">
+                  {isAdmin(user) && (
+                    <Checkbox
+                      label={`Select ${token.name}`}
+                      checked={selection.isSelected(token.id)}
+                      onChange={(_, e) =>
+                        selection.toggle(token.id, { shiftKey: e.shiftKey })
+                      }
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs text-primary">{token.name}</p>
                     <p className="text-[10px] text-dimmed">
                       {token.last_used_at
@@ -164,11 +224,11 @@ export default function StackDeployTokensPanel({
           <div className="mt-3 rounded-lg bg-surface-elevated p-2.5 space-y-1.5">
             <p className="text-[10px] text-dimmed">
               <span className="text-secondary font-medium">Full stack:</span>{" "}
-              <code className="text-[10px]">curl -X POST https://YOUR_API/api/deploy/TOKEN</code>
+              <code className="text-[10px] break-all">curl -X POST {API_URL}/api/deploy/TOKEN</code>
             </p>
             <p className="text-[10px] text-dimmed">
               <span className="text-secondary font-medium">Single container:</span>{" "}
-              <code className="text-[10px]">curl -X POST &quot;https://YOUR_API/api/deploy/TOKEN?container=NAME&quot;</code>
+              <code className="text-[10px] break-all">curl -X POST &quot;{API_URL}/api/deploy/TOKEN?container=NAME&quot;</code>
             </p>
           </div>
         )}

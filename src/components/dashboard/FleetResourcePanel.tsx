@@ -57,6 +57,26 @@ export function FleetResourcePanel({
     net: "Network",
     req: "Containers",
   };
+  // The fourth tab is running containers; it was labelled "REQ", which reads
+  // as requests and is a metric Lattice doesn't collect.
+  const tabLabels: Record<MetricKey, string> = {
+    cpu: "CPU",
+    mem: "MEM",
+    net: "NET",
+    req: "CTR",
+  };
+  const workerValueText = (w: WorkerMetricsSummary): string => {
+    switch (metric) {
+      case "cpu":
+        return `${Math.round(w.cpu ?? 0)}%`;
+      case "mem":
+        return `${Math.round(w.memory ?? 0)}%`;
+      case "net":
+        return `${formatBytes(w.net_rx_rate ?? 0)}/s`;
+      case "req":
+        return `${w.running ?? 0}/${w.containers ?? 0}`;
+    }
+  };
   const colors: Record<MetricKey, string> = {
     cpu: "var(--pending)",
     mem: "var(--info)",
@@ -148,14 +168,19 @@ export function FleetResourcePanel({
 
   return (
     <div className="panel" style={{ display: "flex", flexDirection: "column" }}>
-      <div className="panel-header">
+      {/* Wraps instead of overflowing: at 1280px the metric tabs ran past the
+          panel edge and "REQ" was cut to "R". */}
+      <div className="panel-header" style={{ flexWrap: "wrap", rowGap: 8 }}>
         <FontAwesomeIcon
           icon={faChartLine}
           style={{ width: 12, color: "var(--text-muted)" }}
         />
         <span>Fleet resources</span>
         <span className="muted">· live</span>
-        <div className="panel-header-right" style={{ display: "flex", gap: 6 }}>
+        <div
+          className="panel-header-right"
+          style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}
+        >
           {/* Time range selector */}
           <div className="flex gap-0.5 p-0.5 bg-surface-alt rounded border border-border text-[11px]">
             {(["1h", "6h", "24h", "7d"] as TimeRange[]).map((r) => (
@@ -184,7 +209,7 @@ export function FleetResourcePanel({
                     : "text-muted hover:text-primary"
                 }`}
               >
-                {m.toUpperCase()}
+                {tabLabels[m]}
               </button>
             ))}
           </div>
@@ -234,8 +259,12 @@ export function FleetResourcePanel({
               {currentValue}
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {sortedWorkers.slice(0, 6).map((w) => (
+          {/* Every worker, scrollable — it used to stop silently at six, so a
+              nine-worker fleet looked like six. */}
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 168, overflowY: "auto" }}
+          >
+            {sortedWorkers.map((w) => (
               <div
                 key={w.worker_id}
                 style={{
@@ -257,6 +286,12 @@ export function FleetResourcePanel({
                   }}
                 >
                   {w.worker_name}
+                </span>
+                <span
+                  className="mono"
+                  style={{ fontSize: 10, color: "var(--text-muted)", minWidth: 44, textAlign: "right" }}
+                >
+                  {workerValueText(w)}
                 </span>
                 <Meter
                   value={

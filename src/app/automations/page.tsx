@@ -1,17 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPlus } from "@fortawesome/free-solid-svg-icons";
+import {
+  faPlus,
+  faPlay,
+  faToggleOn,
+  faToggleOff,
+  faTrash,
+} from "@fortawesome/free-solid-svg-icons";
 import type { Automation, AutomationWithToken } from "@/types";
 import {
   reqDisableAutomation,
   reqEnableAutomation,
   reqGetAutomations,
   reqRunAutomation,
+  reqDeleteAutomation,
 } from "@/services/automations.service";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActionBar } from "@/components/ui/bulk-action-bar";
+import { useConfirm } from "@/components/ui/confirm-modal";
+import { useSelection } from "@/hooks/useSelection";
+import { useBulkAction } from "@/hooks/useBulkAction";
 import { PageLoader } from "@/components/ui/loading";
 import { LoadError } from "@/components/ui/load-error";
 import { StatusBadge } from "@/components/ui/badge";
@@ -31,6 +43,8 @@ export default function AutomationsPage() {
   const [creating, setCreating] = useState(false);
   const [revealed, setRevealed] = useState<{ id: number; path: string } | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [editingAutomation, setEditingAutomation] = useState<Automation | null>(null);
+  const showConfirm = useConfirm();
 
   useEffect(() => {
     document.title = "Lattice - Automations";
@@ -84,6 +98,42 @@ export default function AutomationsPage() {
     setAutomations((prev) => [withoutToken(saved), ...prev]);
   };
 
+  const handleEdited = (saved: AutomationWithToken) => {
+    setEditingAutomation(null);
+    toast.success("Automation saved");
+    setAutomations((prev) =>
+      prev.map((x) => (x.id === saved.id ? { ...withoutToken(saved), last_run: x.last_run } : x)),
+    );
+  };
+
+  const remove = async (a: Automation) => {
+    const ok = await showConfirm({
+      title: `Delete "${a.name}"?`,
+      message:
+        a.trigger.type === "webhook"
+          ? "Its webhook URL stops working immediately; callers get 404. Run history is deleted with it."
+          : "Its schedule stops and its run history is deleted with it.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
+    const res = await reqDeleteAutomation(a.id);
+    if (res.success) {
+      toast.success(`Deleted ${a.name}`);
+      setAutomations((prev) => prev.filter((x) => x.id !== a.id));
+    } else {
+      toast.error(res.error_message || "Failed to delete the automation");
+    }
+  };
+
+  const visibleIds = useMemo(() => automations.map((a) => a.id), [automations]);
+  const selection = useSelection(visibleIds);
+  const bulk = useBulkAction();
+  const selected = useMemo(
+    () => automations.filter((a) => selection.isSelected(a.id)),
+    [automations, selection],
+  );
+
   if (loading) return <PageLoader />;
 
   const editable = canEdit(user);
@@ -106,6 +156,96 @@ export default function AutomationsPage() {
         )}
       </div>
 
+      {editable && (
+        <BulkActionBar
+          count={selection.count}
+          noun="automation"
+          onClear={selection.clear}
+          busy={bulk.running}
+          actions={[
+            {
+              label: "Enable",
+              icon: faToggleOn,
+              onClick: () =>
+                bulk
+                  .run({
+                    items: selected.filter((a) => !a.enabled),
+                    verb: "Enable",
+                    verbPast: "Enabled",
+                    noun: "automation",
+                    name: (a) => a.name,
+                    action: (a) => reqEnableAutomation(a.id),
+                    confirm: {
+                      message:
+                        "Enabling makes you the identity each automation runs as.",
+                    },
+                  })
+                  .then((r) => r && load()),
+            },
+            {
+              label: "Disable",
+              icon: faToggleOff,
+              onClick: () =>
+                bulk
+                  .run({
+                    items: selected.filter((a) => a.enabled),
+                    verb: "Disable",
+                    verbPast: "Disabled",
+                    noun: "automation",
+                    name: (a) => a.name,
+                    action: (a) => reqDisableAutomation(a.id),
+                  })
+                  .then((r) => r && load()),
+            },
+            {
+              label: "Run now",
+              icon: faPlay,
+              onClick: () =>
+                bulk
+                  .run({
+                    items: selected,
+                    verb: "Run",
+                    verbPast: "Ran",
+                    noun: "automation",
+                    name: (a) => a.name,
+                    action: (a) => reqRunAutomation(a.id),
+                    concurrency: 1,
+                    confirm: {
+                      message: "They run one after another, each with up to a 50 s budget.",
+                    },
+                  })
+                  .then((r) => r && load()),
+            },
+            {
+              label: "Delete",
+              icon: faTrash,
+              variant: "danger",
+              onClick: () =>
+                bulk
+                  .run({
+                    items: selected,
+                    verb: "Delete",
+                    verbPast: "Deleted",
+                    noun: "automation",
+                    name: (a) => a.name,
+                    action: (a) => reqDeleteAutomation(a.id),
+                    confirm: {
+                      message:
+                        "Webhook URLs stop working immediately and run history is deleted.",
+                      variant: "danger",
+                    },
+                  })
+                  .then((r) => {
+                    if (r) {
+                      selection.clear();
+                      load();
+                    }
+                  }),
+            },
+          ]}
+        />
+      )}
+
       <div className="py-6">
         {loadError && automations.length === 0 ? (
           <LoadError
@@ -121,6 +261,17 @@ export default function AutomationsPage() {
             <table className="data-table">
               <thead>
                 <tr>
+                  {editable && (
+                    <th className="select-col">
+                      <Checkbox
+                        label="Select all automations"
+                        checked={selection.allSelected}
+                        indeterminate={selection.someSelected}
+                        onChange={selection.toggleAll}
+                        disabled={selection.empty}
+                      />
+                    </th>
+                  )}
                   <th>Name</th>
                   <th>Trigger</th>
                   <th className="hidden sm:table-cell">Steps</th>
@@ -133,14 +284,23 @@ export default function AutomationsPage() {
               <tbody>
                 {automations.length === 0 ? (
                   <tr>
-                    <td colSpan={editable ? 7 : 6} className="text-center text-sm text-muted !py-12">
+                    <td colSpan={editable ? 8 : 6} className="text-center text-sm text-muted !py-12">
                       No automations yet. One webhook can redeploy containers in any number of stacks — which a
                       stack-bound deploy token cannot.
                     </td>
                   </tr>
                 ) : (
                   automations.map((a) => (
-                    <tr key={a.id}>
+                    <tr key={a.id} className={selection.isSelected(a.id) ? "is-selected" : ""}>
+                      {editable && (
+                        <td className="select-col">
+                          <Checkbox
+                            label={`Select ${a.name}`}
+                            checked={selection.isSelected(a.id)}
+                            onChange={(_, e) => selection.toggle(a.id, { shiftKey: e.shiftKey })}
+                          />
+                        </td>
+                      )}
                       <td>
                         <Link
                           href={`/automations/${a.id}`}
@@ -180,7 +340,7 @@ export default function AutomationsPage() {
                         />
                       </td>
                       {editable && (
-                        <td className="text-right">
+                        <td className="text-right whitespace-nowrap space-x-1">
                           <Button
                             variant="secondary"
                             size="sm"
@@ -189,6 +349,22 @@ export default function AutomationsPage() {
                             disabled={busyId !== null}
                           >
                             Run now
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setEditingAutomation(a)}
+                            aria-label={`Edit ${a.name}`}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => remove(a)}
+                            aria-label={`Delete ${a.name}`}
+                          >
+                            Delete
                           </Button>
                         </td>
                       )}
@@ -202,6 +378,13 @@ export default function AutomationsPage() {
       </div>
 
       {creating && <AutomationFormModal onClose={() => setCreating(false)} onSaved={handleSaved} />}
+      {editingAutomation && (
+        <AutomationFormModal
+          automation={editingAutomation}
+          onClose={() => setEditingAutomation(null)}
+          onSaved={handleEdited}
+        />
+      )}
       {revealed && (
         <WebhookTokenModal path={revealed.path} automationId={revealed.id} onClose={() => setRevealed(null)} />
       )}

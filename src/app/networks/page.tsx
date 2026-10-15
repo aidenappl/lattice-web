@@ -29,6 +29,7 @@ import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import WorkerBadge from "@/components/ui/worker-badge";
 import { useConfirm } from "@/components/ui/confirm-modal";
+import { useBulkAction } from "@/hooks/useBulkAction";
 import toast from "react-hot-toast";
 
 type Tab = "networks" | "ports";
@@ -94,8 +95,9 @@ export default function NetworksPage() {
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="px-6 pt-2">
+      {/* Tabs — flush with the page edge like every other tab strip; the old
+          px-6 indented the underline past the panels below it. */}
+      <div className="pt-2">
         <div className="flex gap-1 border-b border-border-subtle">
           <button
             onClick={() => setTab("networks")}
@@ -167,6 +169,7 @@ function NetworksTab({
   onDelete: () => void;
 }) {
   const confirm = useConfirm();
+  const bulk = useBulkAction();
 
   if (networks.length === 0) {
     return (
@@ -228,6 +231,23 @@ function NetworksTab({
     }
   };
 
+  const handleDeleteAllOrphaned = async () => {
+    const res = await bulk.run({
+      items: orphaned,
+      verb: "Remove",
+      verbPast: "Removed",
+      noun: "orphaned network",
+      name: (n) => n.name,
+      action: (n) => reqDeleteNetworkByID(n.id),
+      confirm: {
+        message:
+          "These network records belong to stacks that no longer exist and nothing uses them.",
+        variant: "danger",
+      },
+    });
+    if (res) onDelete();
+  };
+
   return (
     <div className="space-y-6">
       {stackIds.map((stackId) => {
@@ -259,31 +279,28 @@ function NetworksTab({
                 {stackNetworks.length !== 1 ? "s" : ""}
               </span>
             </div>
-            <table className="w-full">
+            {/* Fixed columns: each stack's table used to size itself, so Driver /
+                Subnet / Containers started at a different x in every card. */}
+            <table className="data-table table-fixed">
+              <colgroup>
+                <col className="w-[30%]" />
+                <col className="w-[14%]" />
+                <col className="w-[18%]" />
+                <col />
+              </colgroup>
               <thead>
-                <tr className="border-b border-border-subtle">
-                  <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
-                    Driver
-                  </th>
-                  <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
-                    Subnet
-                  </th>
-                  <th className="px-5 py-2.5 text-left text-xs font-medium text-muted uppercase tracking-wider">
-                    Connected Containers
-                  </th>
+                <tr>
+                  <th>Name</th>
+                  <th>Driver</th>
+                  <th>Subnet</th>
+                  <th>Stack containers</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
                 {stackNetworks.map((n) => {
                   const connected = containersByStack.get(n.stack_id) ?? [];
                   return (
-                    <tr
-                      key={n.id}
-                      className="hover:bg-surface-elevated transition-colors"
-                    >
+                    <tr key={n.id} className="!cursor-default">
                       <td className="px-5 py-2.5">
                         <span className="text-sm font-mono font-medium text-primary">
                           {n.name}
@@ -341,10 +358,22 @@ function NetworksTab({
                 Orphaned Networks
               </span>
             </div>
-            <span className="text-xs text-muted">
-              {orphaned.length} network{orphaned.length !== 1 ? "s" : ""} from
-              deleted stacks
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted">
+                {orphaned.length} network{orphaned.length !== 1 ? "s" : ""} from
+                deleted stacks
+              </span>
+              {orphaned.length > 1 && (
+                <button
+                  onClick={handleDeleteAllOrphaned}
+                  disabled={!!bulk.running}
+                  className="inline-flex items-center gap-1.5 text-xs text-failed hover:underline cursor-pointer disabled:opacity-50"
+                >
+                  <FontAwesomeIcon icon={faTrash} className="h-3 w-3" />
+                  Remove all
+                </button>
+              )}
+            </div>
           </div>
           <table className="w-full">
             <thead>

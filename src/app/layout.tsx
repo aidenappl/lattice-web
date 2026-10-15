@@ -19,8 +19,8 @@ const jetbrainsMono = JetBrains_Mono({
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // No maximumScale / userScalable: disabling zoom fails WCAG 1.4.4 and
+  // makes 10–11px labels unreadable for anyone who needs to enlarge them.
 };
 
 export const metadata: Metadata = {

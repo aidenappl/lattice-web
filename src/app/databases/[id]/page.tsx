@@ -70,6 +70,10 @@ import { useUser } from "@/store/hooks";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { usePoll } from "@/hooks/usePoll";
 import { useConfirm } from "@/components/ui/confirm-modal";
+import { useSelection } from "@/hooks/useSelection";
+import { useBulkAction } from "@/hooks/useBulkAction";
+import { Checkbox } from "@/components/ui/checkbox";
+import { reqGetWorker } from "@/services/workers.service";
 
 const ENGINE_LABELS: Record<string, string> = {
   postgres: "PostgreSQL",
@@ -538,13 +542,24 @@ export default function DatabaseDetailPage() {
     setSavingSettings(false);
   };
 
+  // Confirm dialogs used to say "on worker 4" — the id, which nobody knows.
+  const [workerName, setWorkerName] = useState<string | null>(null);
+  const dbWorkerId = db?.worker_id;
+  useEffect(() => {
+    if (!dbWorkerId) return;
+    reqGetWorker(dbWorkerId).then((r) => {
+      if (r.success) setWorkerName(r.data.name);
+    });
+  }, [dbWorkerId]);
+  const workerLabel = workerName ?? `worker ${dbWorkerId}`;
+
   const handleDeleteDatabase = async () => {
     if (!db) return;
 
     const ok = await showConfirm({
       title: `Delete ${db.name}`,
       message:
-        `This destroys the container and the data volume ${db.volume_name} on worker ${db.worker_id}. Every table and row in "${db.database_name}" goes with it and cannot be recovered — only existing snapshots, which are kept.`,
+        `This destroys the container and the data volume ${db.volume_name} on ${workerLabel}. Every table and row in "${db.database_name}" goes with it and cannot be recovered — only existing snapshots, which are kept.`,
       confirmLabel: "Delete permanently",
       variant: "danger",
     });
@@ -579,7 +594,7 @@ export default function DatabaseDetailPage() {
     // volume on disk — so it is asked for explicitly rather than assumed.
     if (!res.success && res.status === 409) {
       const forceOk = await showConfirm({
-        title: `Worker ${db.worker_id} is offline`,
+        title: `${workerLabel} is offline`,
         message:
           `The container and data volume cannot be destroyed while the worker is disconnected. Delete the record anyway? ${db.container_name} and ${db.volume_name} will be left on the worker and nothing in Lattice will point at them.`,
         confirmLabel: "Delete record anyway",
@@ -611,6 +626,28 @@ export default function DatabaseDetailPage() {
     [snapshots],
   );
 
+  const snapshotIds = useMemo(() => sortedSnapshots.map((s) => s.id), [sortedSnapshots]);
+  const snapSelection = useSelection(snapshotIds);
+  const bulk = useBulkAction();
+  const deleteSelectedSnapshots = async () => {
+    const res = await bulk.run({
+      items: sortedSnapshots.filter((s) => snapSelection.isSelected(s.id)),
+      verb: "Delete",
+      verbPast: "Deleted",
+      noun: "snapshot",
+      name: (s) => s.filename,
+      action: (s) => reqDeleteDatabaseSnapshot(s.id),
+      confirm: {
+        message: "The backup files are removed from their destination. This cannot be undone.",
+        variant: "danger",
+      },
+    });
+    if (res) {
+      snapSelection.clear();
+      loadSnapshots();
+    }
+  };
+
   const connectionString = useMemo(() => {
     if (!db) return "";
     if (credentials) return credentials.connection_string;
@@ -638,7 +675,6 @@ export default function DatabaseDetailPage() {
   }
 
   const isRunning = db.status === "running";
-  const isStopped = db.status === "stopped" || db.status === "error";
 
   return (
     <div className="py-6 space-y-6">
@@ -1135,9 +1171,43 @@ export default function DatabaseDetailPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
+                {canEdit(user) && snapSelection.count > 0 && (
+                  <div className="flex items-center justify-between rounded-md bg-surface-elevated px-3 py-2 mb-2 text-xs">
+                    <span className="text-secondary">
+                      {snapSelection.count} snapshot{snapSelection.count !== 1 ? "s" : ""} selected
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={snapSelection.clear}
+                        className="text-muted hover:text-primary cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        onClick={deleteSelectedSnapshots}
+                        disabled={!!bulk.running}
+                        className="inline-flex items-center gap-1.5 text-failed hover:underline cursor-pointer disabled:opacity-50"
+                      >
+                        <FontAwesomeIcon icon={faTrash} className="h-3 w-3" />
+                        Delete selected
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border-subtle">
+                      {canEdit(user) && (
+                        <th className="w-8 py-2 pl-3">
+                          <Checkbox
+                            label="Select all snapshots"
+                            checked={snapSelection.allSelected}
+                            indeterminate={snapSelection.someSelected}
+                            onChange={snapSelection.toggleAll}
+                            disabled={snapSelection.empty}
+                          />
+                        </th>
+                      )}
                       <th className="text-left py-2 px-3 text-xs font-medium text-muted uppercase tracking-wider">Filename</th>
                       <th className="text-left py-2 px-3 text-xs font-medium text-muted uppercase tracking-wider">Size</th>
                       <th className="text-left py-2 px-3 text-xs font-medium text-muted uppercase tracking-wider">Status</th>
@@ -1152,8 +1222,19 @@ export default function DatabaseDetailPage() {
                     {sortedSnapshots.map((snap) => (
                       <tr
                         key={snap.id}
-                        className="border-b border-border-subtle last:border-b-0 hover:bg-surface-elevated/50"
+                        className={`border-b border-border-subtle last:border-b-0 hover:bg-surface-elevated/50 ${snapSelection.isSelected(snap.id) ? "bg-info/5" : ""}`}
                       >
+                        {canEdit(user) && (
+                          <td className="py-2 pl-3">
+                            <Checkbox
+                              label={`Select ${snap.filename}`}
+                              checked={snapSelection.isSelected(snap.id)}
+                              onChange={(_, e) =>
+                                snapSelection.toggle(snap.id, { shiftKey: e.shiftKey })
+                              }
+                            />
+                          </td>
+                        )}
                         <td className="py-2 px-3 font-mono text-xs text-secondary max-w-[250px] truncate" title={snap.filename}>
                           {snap.filename}
                         </td>

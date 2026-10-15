@@ -252,7 +252,7 @@ export default function DeploymentDetailPage() {
           <p className="text-sm text-secondary mt-1">
             <Link
               href={`/stacks/${deployment.stack_id}`}
-              className="text-info hover:underline"
+              className="text-info underline decoration-info/40 underline-offset-2 hover:decoration-info"
             >
               {stackName ?? `Stack #${deployment.stack_id}`}
             </Link>{" "}
@@ -350,25 +350,45 @@ export default function DeploymentDetailPage() {
               </p>
             </div>
 
-            <div>
-              <p className="text-xs text-muted uppercase tracking-wider">
-                Live Progress
-              </p>
-              <p className="text-sm text-secondary mt-1">
-                {progressEntry?.status === "validating" && progressEntry.verifyCheck && progressEntry.verifyTotal
-                  ? `Verifying health: check ${progressEntry.verifyCheck}/${progressEntry.verifyTotal}`
-                  : liveMeta.attempt && liveMeta.maxRetries
-                    ? `Attempt ${liveMeta.attempt}/${liveMeta.maxRetries}`
-                    : "Attempt 1/3"}
-                {liveMeta.step ? ` • ${liveMeta.step}` : ""}
-              </p>
-              {liveMeta.message && (
-                <p className="text-xs text-muted mt-1">{liveMeta.message}</p>
-              )}
-              {isActive && (
+            {/* "Live progress: Attempt 1/3" used to show on every deployment,
+                including ones that finished days ago — a hard-coded fallback. */}
+            {isActive ? (
+              <div>
+                <p className="text-xs text-muted uppercase tracking-wider">
+                  Live Progress
+                </p>
+                <p className="text-sm text-secondary mt-1">
+                  {progressEntry?.status === "validating" && progressEntry.verifyCheck && progressEntry.verifyTotal
+                    ? `Verifying health: check ${progressEntry.verifyCheck}/${progressEntry.verifyTotal}`
+                    : liveMeta.attempt && liveMeta.maxRetries
+                      ? `Attempt ${liveMeta.attempt}/${liveMeta.maxRetries}`
+                      : "Starting…"}
+                  {liveMeta.step ? ` • ${liveMeta.step}` : ""}
+                </p>
+                {liveMeta.message && (
+                  <p className="text-xs text-muted mt-1">{liveMeta.message}</p>
+                )}
                 <p className="text-xs text-muted mt-1">{percent}% complete</p>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs text-muted uppercase tracking-wider">
+                  Duration
+                </p>
+                <p className="text-sm text-secondary mt-1">
+                  {deployment.started_at && deployment.completed_at
+                    ? (() => {
+                        const s = Math.round(
+                          (new Date(deployment.completed_at).getTime() -
+                            new Date(deployment.started_at).getTime()) /
+                            1000,
+                        );
+                        return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+                      })()
+                    : "—"}
+                </p>
+              </div>
+            )}
             <div>
               <p className="text-xs text-muted uppercase tracking-wider">
                 Triggered By
@@ -436,7 +456,11 @@ export default function DeploymentDetailPage() {
             </span>
           )}
         </div>
-        <div className="max-h-[400px] overflow-y-auto rounded-lg bg-background border border-border-subtle p-4 font-mono text-xs space-y-1">
+        <div
+          tabIndex={0}
+          role="log"
+          aria-label="Deployment logs"
+          className="max-h-[400px] overflow-y-auto rounded-lg bg-background border border-border-subtle p-4 font-mono text-xs space-y-1">
           {logs.length === 0 ? (
             <p className="text-muted text-center py-8">No logs yet</p>
           ) : (

@@ -18,6 +18,19 @@ import { formatDate, canEdit } from "@/lib/utils";
 import { useUser } from "@/store/hooks";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
+import { Modal } from "@/components/ui/modal";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActionBar } from "@/components/ui/bulk-action-bar";
+import { useSelection } from "@/hooks/useSelection";
+import { useBulkAction } from "@/hooks/useBulkAction";
+import { faTrash } from "@fortawesome/free-solid-svg-icons";
+
+const LOCALITY_LABELS: Record<string, string> = {
+  unknown: "Unknown",
+  same_host: "Same host",
+  same_fleet: "Same fleet",
+  offsite: "Off-site",
+};
 
 const TYPE_LABELS: Record<BackupDestinationType, string> = {
   s3: "S3",
@@ -94,6 +107,7 @@ export default function BackupDestinationsPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState<BackupDestinationType>("s3");
+  const [editLocality, setEditLocality] = useState("unknown");
   const [editConfig, setEditConfig] = useState<Record<string, string>>({});
   const [editSaving, setEditSaving] = useState(false);
 
@@ -187,6 +201,7 @@ export default function BackupDestinationsPage() {
     setEditId(dest.id);
     setEditName(dest.name);
     setEditType(dest.type);
+    setEditLocality(dest.locality ?? "unknown");
     // Pre-fill non-secret fields; secret fields stay blank (placeholder will show)
     const prefilled: Record<string, string> = {};
     for (const field of configFieldsByType[dest.type]) {
@@ -209,6 +224,7 @@ export default function BackupDestinationsPage() {
     const data: Parameters<typeof reqUpdateBackupDestination>[1] = {
       name: editName.trim(),
       type: editType,
+      locality: editLocality,
     };
     if (Object.keys(cleanConfig).length > 0) {
       data.config = cleanConfig;
@@ -227,8 +243,9 @@ export default function BackupDestinationsPage() {
   };
 
   const handleDelete = async (id: number) => {
+    const dest = destinations.find((d) => d.id === id);
     const confirmed = await showConfirm({
-      title: "Delete backup destination",
+      title: `Delete backup destination${dest ? ` "${dest.name}"` : ""}`,
       message:
         "This backup destination will be permanently removed. Any backup schedules using it may be affected.",
       confirmLabel: "Delete",
@@ -259,6 +276,15 @@ export default function BackupDestinationsPage() {
     () => workers.filter((w) => w.status === "online"),
     [workers],
   );
+
+  const visibleIds = useMemo(() => destinations.map((d) => d.id), [destinations]);
+  const selection = useSelection(visibleIds);
+  const bulk = useBulkAction();
+  const selected = useMemo(
+    () => destinations.filter((d) => selection.isSelected(d.id)),
+    [destinations, selection],
+  );
+  const editable = canEdit(user);
 
   // --- Render config fields helper ---
   const renderConfigFields = (
@@ -385,30 +411,102 @@ export default function BackupDestinationsPage() {
           </form>
         )}
 
+        {editable && (
+          <BulkActionBar
+            count={selection.count}
+            noun="destination"
+            onClear={selection.clear}
+            busy={bulk.running}
+            actions={[
+              {
+                label: "Delete",
+                icon: faTrash,
+                variant: "danger",
+                onClick: () =>
+                  bulk
+                    .run({
+                      items: selected,
+                      verb: "Delete",
+                      verbPast: "Deleted",
+                      noun: "destination",
+                      name: (d) => d.name,
+                      action: (d) => reqDeleteBackupDestination(d.id),
+                      confirm: {
+                        message:
+                          "Database snapshot schedules that write to them stop firing. Snapshots already stored there are not touched.",
+                        variant: "danger",
+                      },
+                    })
+                    .then((r) => {
+                      if (r) {
+                        const gone = new Set(r.succeeded.map((d) => d.id));
+                        setDestinations((prev) => prev.filter((d) => !gone.has(d.id)));
+                        selection.clear();
+                      }
+                    }),
+              },
+            ]}
+          />
+        )}
+
+        {/* Test target picker — was an absolutely-positioned dropdown inside
+            the table panel, which clipped it to the panel's height: with one
+            destination you could see only the first worker or two. */}
+        <Modal
+          open={testWorkerSelecting !== null}
+          onClose={() => setTestWorkerSelecting(null)}
+          title="Run the test from which worker?"
+          description="The worker writes, reads back and deletes a small file at the destination, so this also proves that worker can reach it."
+          footer={
+            <Button variant="ghost" size="sm" onClick={() => setTestWorkerSelecting(null)}>
+              Cancel
+            </Button>
+          }
+        >
+          <div className="grid grid-cols-2 gap-2">
+            {onlineWorkers.map((w) => (
+              <Button
+                key={w.id}
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  testWorkerSelecting !== null && handleTest(testWorkerSelecting, w.id)
+                }
+              >
+                {w.name}
+              </Button>
+            ))}
+          </div>
+        </Modal>
+
         {/* Destinations List */}
         <div className="panel">
-          <table className="w-full">
+          <table className="data-table">
             <thead>
-              <tr className="border-b border-border-subtle">
-                <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden sm:table-cell">
-                  Type
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden md:table-cell">
-                  Created
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-secondary uppercase tracking-wider">
-                  Actions
-                </th>
+              <tr>
+                {editable && (
+                  <th className="select-col">
+                    <Checkbox
+                      label="Select all destinations"
+                      checked={selection.allSelected}
+                      indeterminate={selection.someSelected}
+                      onChange={selection.toggleAll}
+                      disabled={selection.empty}
+                    />
+                  </th>
+                )}
+                <th>Name</th>
+                <th className="hidden sm:table-cell">Type</th>
+                <th className="hidden sm:table-cell">Location</th>
+                <th className="hidden md:table-cell">Created</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {destinations.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={6}
                     className="px-4 py-12 text-center text-sm text-muted"
                   >
                     No backup destinations configured
@@ -417,20 +515,39 @@ export default function BackupDestinationsPage() {
               ) : (
                 destinations.map((dest) => (
                   <React.Fragment key={dest.id}>
-                    <tr className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors">
+                    <tr
+                      className={`!cursor-default ${selection.isSelected(dest.id) ? "is-selected" : ""}`}
+                    >
+                      {editable && (
+                        <td className="select-col">
+                          <Checkbox
+                            label={`Select ${dest.name}`}
+                            checked={selection.isSelected(dest.id)}
+                            onChange={(_, e) =>
+                              selection.toggle(dest.id, { shiftKey: e.shiftKey })
+                            }
+                          />
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-sm font-medium text-primary">
                         {dest.name}
                       </td>
                       <td className="px-4 py-3 text-sm hidden sm:table-cell">
                         <TypeBadge type={dest.type} />
                       </td>
+                      <td
+                        className={`px-4 py-3 text-xs hidden sm:table-cell ${dest.locality === "offsite" ? "text-healthy" : dest.locality === "unknown" ? "text-muted" : "text-pending"}`}
+                        title="Counts toward the 3-2-1 posture only when Off-site"
+                      >
+                        {LOCALITY_LABELS[dest.locality] ?? dest.locality}
+                      </td>
                       <td className="px-4 py-3 text-sm text-muted hidden md:table-cell">
                         {formatDate(dest.inserted_at)}
                       </td>
-                      <td className="px-4 py-3 text-right space-x-1 sm:space-x-2">
+                      <td className="px-4 py-3 text-right whitespace-nowrap space-x-1 sm:space-x-2">
                         {canEdit(user) && (
                           <Button
-                            variant="ghost"
+                            variant="secondary"
                             size="sm"
                             onClick={() => startEdit(dest)}
                           >
@@ -438,47 +555,24 @@ export default function BackupDestinationsPage() {
                           </Button>
                         )}
                         {canEdit(user) && (
-                          <span className="relative inline-block">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={testingId === dest.id}
-                              onClick={() => {
-                                if (onlineWorkers.length === 0) {
-                                  toast.error("No online workers available to run test");
-                                  return;
-                                }
-                                if (onlineWorkers.length === 1) {
-                                  handleTest(dest.id, onlineWorkers[0].id);
-                                } else {
-                                  setTestWorkerSelecting(
-                                    testWorkerSelecting === dest.id ? null : dest.id,
-                                  );
-                                }
-                              }}
-                            >
-                              {testingId === dest.id ? "Testing..." : "Test"}
-                            </Button>
-                            {testWorkerSelecting === dest.id && (
-                              <>
-                                <div className="fixed inset-0 z-[5]" onClick={() => setTestWorkerSelecting(null)} />
-                                <div className="absolute right-0 top-full mt-1 z-10 bg-surface-elevated border border-border-strong rounded-lg shadow-lg py-1 min-w-[160px]">
-                                  <div className="px-3 py-1.5 text-xs font-medium text-secondary uppercase tracking-wider">
-                                    Select Worker
-                                  </div>
-                                  {onlineWorkers.map((w) => (
-                                    <button
-                                      key={w.id}
-                                      onClick={() => handleTest(dest.id, w.id)}
-                                      className="w-full text-left px-3 py-1.5 text-sm text-primary hover:bg-surface-active transition-colors cursor-pointer"
-                                    >
-                                      {w.name}
-                                    </button>
-                                  ))}
-                                </div>
-                              </>
-                            )}
-                          </span>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={testingId === dest.id}
+                            onClick={() => {
+                              if (onlineWorkers.length === 0) {
+                                toast.error("No online workers available to run test");
+                                return;
+                              }
+                              if (onlineWorkers.length === 1) {
+                                handleTest(dest.id, onlineWorkers[0].id);
+                              } else {
+                                setTestWorkerSelecting(dest.id);
+                              }
+                            }}
+                          >
+                            {testingId === dest.id ? "Testing..." : "Test"}
+                          </Button>
                         )}
                         {canEdit(user) && (
                           <Button
@@ -492,8 +586,8 @@ export default function BackupDestinationsPage() {
                       </td>
                     </tr>
                     {canEdit(user) && editId === dest.id && (
-                      <tr className="border-b border-border-subtle bg-background-alt">
-                        <td colSpan={4} className="px-4 py-4">
+                      <tr className="!cursor-default bg-background-alt">
+                        <td colSpan={6} className="px-4 py-4">
                           <p className="text-[11px] text-muted mb-3">
                             Leave fields blank to keep their current values. Only filled fields will be updated.
                           </p>
@@ -520,6 +614,26 @@ export default function BackupDestinationsPage() {
                                   <option value="s3">S3</option>
                                   <option value="google_drive">Google Drive</option>
                                   <option value="samba">Samba</option>
+                                </select>
+                              </div>
+                              <div className="flex flex-col gap-1.5">
+                                <label
+                                  htmlFor={`edit-locality-${dest.id}`}
+                                  className="text-xs font-medium text-secondary uppercase tracking-wider"
+                                >
+                                  Where does this live?
+                                </label>
+                                {/* Could only be set at creation before. */}
+                                <select
+                                  id={`edit-locality-${dest.id}`}
+                                  value={editLocality}
+                                  onChange={(e) => setEditLocality(e.target.value)}
+                                  className="form-select"
+                                >
+                                  <option value="unknown">Unknown — not counted as off-site</option>
+                                  <option value="same_host">Same host as the databases it backs up</option>
+                                  <option value="same_fleet">Same fleet / failure domain</option>
+                                  <option value="offsite">Off-site — a separate failure domain</option>
                                 </select>
                               </div>
                             </div>

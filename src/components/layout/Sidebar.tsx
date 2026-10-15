@@ -100,6 +100,15 @@ export function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProps) {
     return () => window.removeEventListener("keydown", handler);
   }, [onToggle]);
 
+  // On a short window the lower half of the nav (Backups → Settings) sits
+  // below the user footer; opening one of those pages left its highlighted
+  // item scrolled out of sight.
+  useEffect(() => {
+    document
+      .querySelector(".sidebar .nav-item.active")
+      ?.scrollIntoView({ block: "nearest" });
+  }, [pathname]);
+
   const isActive = (path: string) => {
     if (path === "/") return pathname === "/";
     return pathname.startsWith(path);
@@ -158,7 +167,9 @@ export function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProps) {
       )}
 
       {/* Nav */}
-      <div className="flex-1 overflow-y-auto py-1">
+      {/* The fade marks that the list scrolls: on short windows the last visible
+          item used to be cut in half by the footer with no hint there was more. */}
+      <div className="flex-1 overflow-y-auto py-1 sidebar-nav-scroll">
         {SIDEBAR_GROUPS.map((group) => (
           <div key={group.group} className="sidebar-section">
             {!collapsed && (

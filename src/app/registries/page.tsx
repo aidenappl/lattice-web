@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import type { Registry } from "@/types";
 import {
@@ -17,13 +17,19 @@ import { PageLoader } from "@/components/ui/loading";
 import { LoadError } from "@/components/ui/load-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatDate, canEdit } from "@/lib/utils";
+import { formatDate, canEdit, timeAgo } from "@/lib/utils";
 import { useUser } from "@/store/hooks";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { Alert } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActionBar } from "@/components/ui/bulk-action-bar";
+import { useSelection } from "@/hooks/useSelection";
+import { useBulkAction } from "@/hooks/useBulkAction";
+import { faPlug, faTrash } from "@fortawesome/free-solid-svg-icons";
 
 export default function RegistriesPage() {
   const user = useUser();
+  const editable = canEdit(user);
   const [registries, setRegistries] = useState<Registry[]>([]);
   const showConfirm = useConfirm();
   const [loading, setLoading] = useState(true);
@@ -161,11 +167,20 @@ export default function RegistriesPage() {
     setEditSaving(false);
   };
 
+  const visibleIds = useMemo(() => registries.map((r) => r.id), [registries]);
+  const selection = useSelection(visibleIds);
+  const bulk = useBulkAction();
+  const selected = useMemo(
+    () => registries.filter((r) => selection.isSelected(r.id)),
+    [registries, selection],
+  );
+
   const handleDelete = async (id: number) => {
+    const reg = registries.find((r) => r.id === id);
     const confirmed = await showConfirm({
-      title: "Delete registry",
+      title: `Delete registry${reg ? ` "${reg.name}"` : ""}`,
       message:
-        "This registry will be permanently removed. Any stacks using it may be affected.",
+        "Containers linked to it can no longer pull private images or be watched for new tags.",
       confirmLabel: "Delete",
       variant: "danger",
     });
@@ -372,36 +387,89 @@ export default function RegistriesPage() {
         </form>
       )}
 
-      {/* Registries List */}
+      {editable && (
+        <BulkActionBar
+          count={selection.count}
+          noun="registry"
+          nounPlural="registries"
+          onClear={selection.clear}
+          busy={bulk.running}
+          actions={[
+            {
+              label: "Test",
+              icon: faPlug,
+              onClick: () =>
+                bulk.run({
+                  items: selected,
+                  verb: "Test",
+                  verbPast: "Connected to",
+                  noun: "registry",
+                  nounPlural: "registries",
+                  name: (r) => r.name,
+                  action: (r) => reqTestRegistry(r.id),
+                }),
+            },
+            {
+              label: "Delete",
+              icon: faTrash,
+              variant: "danger",
+              onClick: () =>
+                bulk
+                  .run({
+                    items: selected,
+                    verb: "Delete",
+                    verbPast: "Deleted",
+                    noun: "registry",
+                    nounPlural: "registries",
+                    name: (r) => r.name,
+                    action: (r) => reqDeleteRegistry(r.id),
+                    confirm: {
+                      message:
+                        "Containers linked to them can no longer pull private images or be watched for new tags.",
+                      variant: "danger",
+                    },
+                  })
+                  .then((r) => {
+                    if (r) {
+                      selection.clear();
+                      load();
+                    }
+                  }),
+            },
+          ]}
+        />
+      )}
+
+      {/* Registries List — now the shared data-table, so its header matches
+          every other list instead of a one-off sans-serif style. */}
       <div className="panel">
-        <table className="w-full">
+        <table className="data-table">
           <thead>
-            <tr className="border-b border-border-subtle">
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden sm:table-cell">
-                URL
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden md:table-cell">
-                Type
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden lg:table-cell">
-                Auth
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider hidden md:table-cell">
-                Created
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-secondary uppercase tracking-wider">
-                Actions
-              </th>
+            <tr>
+              {editable && (
+                <th className="select-col">
+                  <Checkbox
+                    label="Select all registries"
+                    checked={selection.allSelected}
+                    indeterminate={selection.someSelected}
+                    onChange={selection.toggleAll}
+                    disabled={selection.empty}
+                  />
+                </th>
+              )}
+              <th>Name</th>
+              <th className="hidden sm:table-cell">URL</th>
+              <th className="hidden md:table-cell">Type</th>
+              <th className="hidden lg:table-cell">Auth</th>
+              <th className="hidden md:table-cell">Created</th>
+              <th className="text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {registries.length === 0 ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="px-4 py-12 text-center text-sm text-muted"
                 >
                   No registries configured
@@ -410,30 +478,51 @@ export default function RegistriesPage() {
             ) : (
               registries.map((reg) => (
                 <React.Fragment key={reg.id}>
-                  <tr className="border-b border-border-subtle last:border-0 hover:bg-surface-elevated transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium text-primary">
+                  <tr
+                    className={`!cursor-default ${selection.isSelected(reg.id) ? "is-selected" : ""}`}
+                  >
+                    {editable && (
+                      <td className="select-col">
+                        <Checkbox
+                          label={`Select ${reg.name}`}
+                          checked={selection.isSelected(reg.id)}
+                          onChange={(_, e) =>
+                            selection.toggle(reg.id, { shiftKey: e.shiftKey })
+                          }
+                        />
+                      </td>
+                    )}
+                    <td className="px-4 py-3 text-sm font-medium text-primary whitespace-nowrap">
                       {reg.name}
                     </td>
-                    <td className="px-4 py-3 text-sm text-secondary font-mono hidden sm:table-cell truncate max-w-[200px]">
-                      {reg.url}
+                    <td
+                      className="px-4 py-3 text-sm text-secondary font-mono hidden sm:table-cell truncate max-w-[260px]"
+                      title={reg.url}
+                    >
+                      {reg.url.replace(/^https?:\/\//, "")}
                     </td>
                     <td className="px-4 py-3 text-sm text-secondary hidden md:table-cell">
                       {reg.type}
                     </td>
                     <td className="px-4 py-3 text-sm text-secondary hidden lg:table-cell">
                       {reg.username ? (
-                        <span className="text-healthy">{reg.username}</span>
+                        <span className="font-mono text-secondary" title="Authenticates as this user">
+                          {reg.username}
+                        </span>
                       ) : (
                         <span className="text-muted">none</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-muted hidden md:table-cell">
-                      {formatDate(reg.inserted_at)}
+                    <td
+                      className="px-4 py-3 text-sm text-muted hidden md:table-cell whitespace-nowrap"
+                      title={formatDate(reg.inserted_at)}
+                    >
+                      {timeAgo(reg.inserted_at)}
                     </td>
-                    <td className="px-4 py-3 text-right space-x-1 sm:space-x-2">
+                    <td className="px-4 py-3 text-right whitespace-nowrap space-x-1 sm:space-x-2">
                       {canEdit(user) && (
                         <Button
-                          variant="ghost"
+                          variant="secondary"
                           size="sm"
                           onClick={() => startEdit(reg)}
                         >
@@ -442,7 +531,7 @@ export default function RegistriesPage() {
                       )}
                       {canEdit(user) && (
                         <Button
-                          variant="ghost"
+                          variant="secondary"
                           size="sm"
                           onClick={() => handleTestExisting(reg.id)}
                         >
@@ -469,7 +558,7 @@ export default function RegistriesPage() {
                   </tr>
                   {canEdit(user) && editId === reg.id && (
                     <tr className="border-b border-border-subtle bg-background-alt">
-                      <td colSpan={6} className="px-4 py-4">
+                      <td colSpan={7} className="px-4 py-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
                           <Input
                             id={`edit-name-${reg.id}`}

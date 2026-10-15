@@ -98,7 +98,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           />
           <UpdateBanner />
           <ConfirmProvider>
-            <div className="app-content">{children}</div>
+            <main id="main" className="app-content">{children}</main>
           </ConfirmProvider>
         </div>
       </div>

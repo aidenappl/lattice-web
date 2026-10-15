@@ -137,6 +137,12 @@ describe("fetchApi Monitor reporting", () => {
         const sentRefreshIds = () =>
             refresh.mock.calls.map((c) => (c[2]?.headers as Record<string, string> | undefined)?.["X-Request-ID"]);
 
+        it("does not try to refresh when the login itself is rejected", async () => {
+            const res = await run(fetchApi({ method: "POST", url: "/auth/login", adapter: playback([{ status: 401, data: { success: false, error_message: "invalid credentials" } }], []) }));
+            expect(res.status).toBe(401);
+            expect(refresh).not.toHaveBeenCalled();
+        });
+
         it("reports a 401 once at info, without retrying, with the id it sent", async () => {
             refresh.mockResolvedValue({ status: 401, headers: {}, data: { success: false, error: "unauthorized", error_code: 4010 } });
             const res = await run(fetchApi({ method: "GET", url: "/admin/stacks", adapter: playback([{ status: 401 }], []) }));

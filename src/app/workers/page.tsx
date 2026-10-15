@@ -1,24 +1,42 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Worker, VersionInfo } from "@/types";
 import {
   reqGetWorkers,
   reqCreateWorker,
   reqCreateWorkerToken,
   reqUpgradeRunner,
+  reqRebootWorker,
+  reqStopAllContainers,
+  reqStartAllContainers,
+  reqDeleteWorker,
 } from "@/services/workers.service";
 import { reqGetVersions } from "@/services/admin.service";
 import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { timeAgo } from "@/lib/utils";
+import { LoadError } from "@/components/ui/load-error";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActionBar } from "@/components/ui/bulk-action-bar";
+import { timeAgo, canEdit, isAdmin } from "@/lib/utils";
 import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
+import { useSelection } from "@/hooks/useSelection";
+import { useBulkAction } from "@/hooks/useBulkAction";
+import { useUser } from "@/store/hooks";
 import WorkerBadge from "@/components/ui/worker-badge";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowUp, faPlus } from "@fortawesome/free-solid-svg-icons";
+import {
+  faArrowUp,
+  faPlus,
+  faPowerOff,
+  faPlay,
+  faStop,
+  faTrash,
+} from "@fortawesome/free-solid-svg-icons";
 import toast from "react-hot-toast";
 
 // Optional: exposes each worker's hostname as a link to its metrics endpoint.
@@ -26,8 +44,14 @@ import toast from "react-hot-toast";
 const WORKER_METRICS_PORT = process.env.NEXT_PUBLIC_WORKER_METRICS_PORT;
 
 export default function WorkersPage() {
+  const router = useRouter();
+  const user = useUser();
+  const editable = canEdit(user);
+  const admin = isAdmin(user);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [search, setSearch] = useState("");
   const [latestRunner, setLatestRunner] = useState<string | null>(null);
   const [upgradingWorker, setUpgradingWorker] = useState<number | null>(null);
 
@@ -46,19 +70,44 @@ export default function WorkersPage() {
     document.title = "Lattice - Workers";
   }, []);
 
-  useEffect(() => {
-    const load = async () => {
-      const [workersRes, versionsRes] = await Promise.all([
-        reqGetWorkers(),
-        reqGetVersions(),
-      ]);
-      if (workersRes.success) setWorkers(workersRes.data ?? []);
-      if (versionsRes.success)
-        setLatestRunner(versionsRes.data?.runner?.latest ?? null);
-      setLoading(false);
-    };
-    load();
+  const load = useCallback(async () => {
+    const [workersRes, versionsRes] = await Promise.all([
+      reqGetWorkers(),
+      reqGetVersions(),
+    ]);
+    if (workersRes.success) {
+      setWorkers(workersRes.data ?? []);
+      setLoadError(false);
+    } else {
+      setLoadError(true);
+    }
+    if (versionsRes.success)
+      setLatestRunner(versionsRes.data?.runner?.latest ?? null);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return workers;
+    return workers.filter(
+      (w) =>
+        w.name.toLowerCase().includes(q) ||
+        w.hostname.toLowerCase().includes(q) ||
+        (w.ip_address ?? "").includes(q),
+    );
+  }, [workers, search]);
+  const visibleIds = useMemo(() => filtered.map((w) => w.id), [filtered]);
+  const selection = useSelection(visibleIds);
+  const bulk = useBulkAction();
+  const selected = useMemo(
+    () => filtered.filter((w) => selection.isSelected(w.id)),
+    [filtered, selection],
+  );
+  const onlineSelected = selected.filter((w) => w.status === "online");
 
   // Live updates via WebSocket
   const handleSocketEvent = useCallback((event: AdminSocketEvent) => {
@@ -112,6 +161,8 @@ export default function WorkersPage() {
       hostname: hostname.trim(),
     });
     if (!workerRes.success) {
+      // Used to return silently, leaving the form looking as if nothing happened.
+      toast.error(workerRes.error_message || "Failed to create worker");
       setSubmitting(false);
       return;
     }
@@ -163,16 +214,157 @@ export default function WorkersPage() {
             Manage your infrastructure workers
           </div>
         </div>
-        <Button
-          onClick={() => {
-            setShowForm(!showForm);
-            dismissCreated();
-          }}
-        >
-          <FontAwesomeIcon icon={faPlus} className="h-3 w-3" />
-          {showForm ? "Cancel" : "Add Worker"}
-        </Button>
+        {editable && (
+          <Button
+            variant={showForm ? "secondary" : "primary"}
+            onClick={() => {
+              setShowForm(!showForm);
+              dismissCreated();
+            }}
+          >
+            {!showForm && <FontAwesomeIcon icon={faPlus} className="h-3 w-3 mr-1.5" />}
+            {showForm ? "Cancel" : "Add Worker"}
+          </Button>
+        )}
       </div>
+
+      {workers.length > 0 && (
+        <div className="filters-bar">
+          <input
+            type="search"
+            aria-label="Search workers"
+            placeholder="Search by name, hostname or IP…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="form-input !w-full sm:!w-72 !h-8 !text-sm"
+          />
+          <span className="ml-auto text-xs text-muted whitespace-nowrap">
+            {workers.filter((w) => w.status === "online").length} of{" "}
+            {workers.length} online
+          </span>
+        </div>
+      )}
+
+      {editable && (
+        <BulkActionBar
+          count={selection.count}
+          noun="worker"
+          onClear={selection.clear}
+          busy={bulk.running}
+          actions={[
+            {
+              label: "Upgrade runner",
+              icon: faArrowUp,
+              hidden: !admin,
+              disabled: !latestRunner,
+              onClick: () =>
+                bulk
+                  .run({
+                    items: onlineSelected.filter(
+                      (w) => w.runner_version !== latestRunner,
+                    ),
+                    verb: "Upgrade",
+                    verbPast: "Sent upgrade to",
+                    noun: "worker",
+                    name: (w) => w.name,
+                    action: (w) => reqUpgradeRunner(w.id),
+                    confirm: {
+                      message: `Each online worker that is not on ${latestRunner} downloads it and restarts its runner. Containers keep running.`,
+                    },
+                  })
+                  .then((r) => {
+                    if (r === null && onlineSelected.every((w) => w.runner_version === latestRunner))
+                      toast("Every selected online worker is already up to date");
+                    if (r) setTimeout(load, 3000);
+                  }),
+            },
+            {
+              label: "Start containers",
+              icon: faPlay,
+              onClick: () =>
+                bulk
+                  .run({
+                    items: onlineSelected,
+                    verb: "Start all on",
+                    verbPast: "Started containers on",
+                    noun: "worker",
+                    name: (w) => w.name,
+                    action: (w) => reqStartAllContainers(w.id),
+                  })
+                  .then((r) => r && setTimeout(load, 2000)),
+            },
+            {
+              label: "Stop containers",
+              icon: faStop,
+              onClick: () =>
+                bulk
+                  .run({
+                    items: onlineSelected,
+                    verb: "Stop all on",
+                    verbPast: "Stopped containers on",
+                    noun: "worker",
+                    name: (w) => w.name,
+                    action: (w) => reqStopAllContainers(w.id),
+                    confirm: {
+                      title: `Stop every container on ${onlineSelected.length} worker${onlineSelected.length !== 1 ? "s" : ""}?`,
+                      message:
+                        "Every container on each worker is stopped, including databases and anything Lattice itself depends on.",
+                      variant: "danger",
+                    },
+                  })
+                  .then((r) => r && setTimeout(load, 2000)),
+            },
+            {
+              label: "Reboot",
+              icon: faPowerOff,
+              hidden: !admin,
+              onClick: () =>
+                bulk
+                  .run({
+                    items: onlineSelected,
+                    verb: "Reboot",
+                    verbPast: "Rebooted",
+                    noun: "worker",
+                    name: (w) => w.name,
+                    action: (w) => reqRebootWorker(w.id),
+                    confirm: {
+                      message:
+                        "Each machine reboots. Everything on it is unavailable until it comes back and its containers restart.",
+                      variant: "danger",
+                    },
+                    concurrency: 1,
+                  })
+                  .then((r) => r && setTimeout(load, 5000)),
+            },
+            {
+              label: "Delete",
+              icon: faTrash,
+              variant: "danger",
+              onClick: () =>
+                bulk
+                  .run({
+                    items: selected,
+                    verb: "Delete",
+                    verbPast: "Deleted",
+                    noun: "worker",
+                    name: (w) => w.name,
+                    action: (w) => reqDeleteWorker(w.id),
+                    confirm: {
+                      message:
+                        "Each worker is removed from Lattice and its tokens stop working. Containers already running on the machine are left alone.",
+                      variant: "danger",
+                    },
+                  })
+                  .then((r) => {
+                    if (r) {
+                      selection.clear();
+                      load();
+                    }
+                  }),
+            },
+          ]}
+        />
+      )}
 
       <div className="py-6">
         {/* Create form */}
@@ -271,10 +463,31 @@ WORKER_NAME=${createdWorker.name}`}
         )}
 
         {/* Workers table */}
+        {loadError && workers.length === 0 ? (
+          <LoadError
+            title="Failed to load workers"
+            message="Could not reach lattice-api to load the worker list."
+            onRetry={() => {
+              setLoading(true);
+              load();
+            }}
+          />
+        ) : (
         <div className="panel">
           <table className="data-table">
             <thead>
               <tr>
+                {editable && (
+                  <th className="select-col">
+                    <Checkbox
+                      label="Select all visible workers"
+                      checked={selection.allSelected}
+                      indeterminate={selection.someSelected}
+                      onChange={selection.toggleAll}
+                      disabled={selection.empty}
+                    />
+                  </th>
+                )}
                 <th>Name</th>
                 <th className="hidden sm:table-cell">Hostname</th>
                 <th>Status</th>
@@ -285,22 +498,44 @@ WORKER_NAME=${createdWorker.name}`}
               </tr>
             </thead>
             <tbody>
-              {workers.length === 0 ? (
+              {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="text-center text-sm text-muted !py-12"
                   >
-                    No workers found
+                    {workers.length === 0
+                      ? "No workers yet. Add one to start deploying stacks."
+                      : "No workers match this search"}
                   </td>
                 </tr>
               ) : (
-                workers.map((worker) => (
-                  <tr key={worker.id}>
-                    <td>
+                filtered.map((worker) => (
+                  <tr
+                    key={worker.id}
+                    // Rows already showed a pointer cursor but clicking one did
+                    // nothing unless you hit the name badge exactly.
+                    onClick={() => router.push(`/workers/${worker.id}`)}
+                    className={selection.isSelected(worker.id) ? "is-selected" : ""}
+                  >
+                    {editable && (
+                      <td className="select-col">
+                        <Checkbox
+                          label={`Select ${worker.name}`}
+                          checked={selection.isSelected(worker.id)}
+                          onChange={(_, e) =>
+                            selection.toggle(worker.id, { shiftKey: e.shiftKey })
+                          }
+                        />
+                      </td>
+                    )}
+                    <td onClick={(e) => e.stopPropagation()}>
                       <WorkerBadge id={worker.id} name={worker.name} />
                     </td>
-                    <td className="mono hidden sm:table-cell">
+                    <td
+                      className="mono hidden sm:table-cell"
+                      onClick={(e) => WORKER_METRICS_PORT && e.stopPropagation()}
+                    >
                       {WORKER_METRICS_PORT ? (
                         <Link
                           href={`http://${worker.hostname}:${WORKER_METRICS_PORT}`}
@@ -319,8 +554,8 @@ WORKER_NAME=${createdWorker.name}`}
                     <td>
                       <StatusBadge status={worker.status} />
                     </td>
-                    <td className="text-secondary hidden lg:table-cell">
-                      {worker.os ?? "-"} / {worker.arch ?? "-"}
+                    <td className="text-secondary hidden lg:table-cell whitespace-nowrap">
+                      {worker.os ?? "-"}/{worker.arch ?? "-"}
                     </td>
                     <td className="mono text-secondary hidden xl:table-cell">
                       {worker.docker_version ?? "-"}
@@ -372,7 +607,7 @@ WORKER_NAME=${createdWorker.name}`}
                         <span className="text-muted">-</span>
                       )}
                     </td>
-                    <td className="text-muted hidden sm:table-cell">
+                    <td className="text-muted hidden sm:table-cell whitespace-nowrap">
                       {worker.last_heartbeat_at
                         ? timeAgo(worker.last_heartbeat_at)
                         : "Never"}
@@ -383,6 +618,7 @@ WORKER_NAME=${createdWorker.name}`}
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   );
