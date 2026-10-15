@@ -32,6 +32,19 @@ export type OverviewData = {
     worker_metrics: WorkerMetricsSummary[] | null;
 };
 
+/** Query for GET /admin/audit-log. `from` / `to` are RFC 3339; `to` is exclusive. */
+export type AuditLogQuery = {
+    user_id?: number;
+    action?: string;
+    resource_type?: string;
+    resource_id?: number;
+    q?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+    offset?: number;
+};
+
 export type AuditLogEntry = {
     id: number;
     user_id: number | null;

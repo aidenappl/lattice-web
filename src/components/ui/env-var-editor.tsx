@@ -2,14 +2,20 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
+import {
+  faEye,
+  faEyeSlash,
+  faLock,
+  faLockOpen,
+} from "@fortawesome/free-solid-svg-icons";
 import { CodeEditor } from "./code-editor";
 
 // Stack-level variables are stored and returned in plain text, so the tab
 // used to print every DSN and password in full to anyone looking at the
 // screen (or a screenshot of it). Values whose key looks sensitive are
 // masked until revealed; they are still sent and saved unchanged.
-const SENSITIVE_KEY = /(PASS|SECRET|TOKEN|KEY|DSN|CREDENTIAL|PRIVATE|AUTH|COOKIE|SESSION|SALT|CERT)/i;
+const SENSITIVE_KEY =
+  /(PASS|SECRET|TOKEN|KEY|DSN|CREDENTIAL|PRIVATE|AUTH|COOKIE|SESSION|SALT|CERT)/i;
 
 export function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEY.test(key);
@@ -21,6 +27,12 @@ interface EnvVarEditorProps {
   highlightVar?: string;
   onClearHighlight?: () => void;
   referencedVars?: Set<string>;
+  /** Keys the API treats as secret: masked here and "***" for non-admins. */
+  secretKeys?: Set<string>;
+  /** Shows a lock toggle per row when given. */
+  onToggleSecret?: (key: string) => void;
+  /** Only admins may un-mark a secret (lattice-api returns 403 otherwise). */
+  canUnmarkSecrets?: boolean;
 }
 
 type Row = { key: string; value: string };
@@ -67,7 +79,19 @@ function isValidJson(raw: string): boolean {
   }
 }
 
-export function EnvVarEditor({ value, onChange, highlightVar, onClearHighlight, referencedVars }: EnvVarEditorProps) {
+export function EnvVarEditor({
+  value,
+  onChange,
+  highlightVar,
+  onClearHighlight,
+  referencedVars,
+  secretKeys,
+  onToggleSecret,
+  canUnmarkSecrets = true,
+}: EnvVarEditorProps) {
+  // Masked when declared secret, or when the name looks like one.
+  const isMasked = (key: string) =>
+    secretKeys?.has(key.trim()) || isSensitiveKey(key);
   const [jsonMode, setJsonMode] = useState(false);
   // Separate state for JSON mode draft (only committed on switch back)
   const [jsonDraft, setJsonDraft] = useState(value);
@@ -189,7 +213,8 @@ export function EnvVarEditor({ value, onChange, highlightVar, onClearHighlight, 
   // ── Unused count ──────────────────────────────────────────────────────────
 
   const unusedCount = referencedVars
-    ? rows.filter((r) => r.key.trim() && !referencedVars.has(r.key.trim())).length
+    ? rows.filter((r) => r.key.trim() && !referencedVars.has(r.key.trim()))
+        .length
     : 0;
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -210,7 +235,7 @@ export function EnvVarEditor({ value, onChange, highlightVar, onClearHighlight, 
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-4">
-          {!jsonMode && rows.some((r) => isSensitiveKey(r.key)) && (
+          {!jsonMode && rows.some((r) => isMasked(r.key)) && (
             <button
               type="button"
               onClick={() => setRevealAll((v) => !v)}
@@ -275,7 +300,10 @@ export function EnvVarEditor({ value, onChange, highlightVar, onClearHighlight, 
           )}
           <div>
             {rows.map((row, i) => {
-              const isUnused = referencedVars && row.key.trim() && !referencedVars.has(row.key.trim());
+              const isUnused =
+                referencedVars &&
+                row.key.trim() &&
+                !referencedVars.has(row.key.trim());
               return (
                 <div
                   key={i}
@@ -313,7 +341,7 @@ export function EnvVarEditor({ value, onChange, highlightVar, onClearHighlight, 
                   <div className="flex items-center border-r border-border-subtle min-w-0">
                     <input
                       type={
-                        isSensitiveKey(row.key) && !revealAll && !revealed.has(i)
+                        isMasked(row.key) && !revealAll && !revealed.has(i)
                           ? "password"
                           : "text"
                       }
@@ -327,29 +355,62 @@ export function EnvVarEditor({ value, onChange, highlightVar, onClearHighlight, 
                         isUnused ? "text-muted" : "text-secondary"
                       }`}
                     />
-                    {isSensitiveKey(row.key) && !revealAll && row.value && (
-                      <button
-                        type="button"
-                        onClick={() => toggleReveal(i)}
-                        className="px-2 text-dimmed hover:text-secondary transition-colors"
-                        aria-label={`${revealed.has(i) ? "Hide" : "Reveal"} ${row.key}`}
-                        title={revealed.has(i) ? "Hide" : "Reveal"}
-                      >
-                        <FontAwesomeIcon
-                          icon={revealed.has(i) ? faEyeSlash : faEye}
-                          className="h-3 w-3"
-                        />
-                      </button>
-                    )}
+                    {isMasked(row.key) &&
+                      !revealAll &&
+                      row.value &&
+                      row.value !== "***" && (
+                        <button
+                          type="button"
+                          onClick={() => toggleReveal(i)}
+                          className="px-2 text-dimmed hover:text-secondary transition-colors"
+                          aria-label={`${revealed.has(i) ? "Hide" : "Reveal"} ${row.key}`}
+                          title={revealed.has(i) ? "Hide" : "Reveal"}
+                        >
+                          <FontAwesomeIcon
+                            icon={revealed.has(i) ? faEyeSlash : faEye}
+                            className="h-3 w-3"
+                          />
+                        </button>
+                      )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeRow(i)}
-                    className="px-3 text-dimmed hover:text-failed transition-colors text-base leading-none"
-                    aria-label="Remove"
-                  >
-                    ×
-                  </button>
+                  <div className="flex items-center">
+                    {onToggleSecret &&
+                      row.key.trim() &&
+                      (() => {
+                        const secret = secretKeys?.has(row.key.trim()) ?? false;
+                        const locked = secret && !canUnmarkSecrets;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => onToggleSecret(row.key.trim())}
+                            disabled={locked}
+                            className={`pl-3 pr-1 transition-colors disabled:cursor-not-allowed ${secret ? "text-pending" : "text-dimmed hover:text-secondary"}`}
+                            aria-pressed={secret}
+                            aria-label={`${secret ? "Unmark" : "Mark"} ${row.key} as secret`}
+                            title={
+                              locked
+                                ? "Secret — only an admin can unmark it"
+                                : secret
+                                  ? "Secret: masked for non-admins. Click to unmark"
+                                  : "Mark as secret (masked for non-admins)"
+                            }
+                          >
+                            <FontAwesomeIcon
+                              icon={secret ? faLock : faLockOpen}
+                              className="h-3 w-3"
+                            />
+                          </button>
+                        );
+                      })()}
+                    <button
+                      type="button"
+                      onClick={() => removeRow(i)}
+                      className="px-3 text-dimmed hover:text-failed transition-colors text-base leading-none"
+                      aria-label={`Remove ${row.key || "variable"}`}
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
               );
             })}

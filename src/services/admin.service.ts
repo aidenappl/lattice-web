@@ -1,4 +1,4 @@
-import type { User, VersionInfo, OverviewData, FleetMetricsPoint, AuditLogEntry, WebhookConfig, GlobalEnvVar, HealthAnomaly, SearchResults, ApiToken } from "@/types";
+import type { User, VersionInfo, OverviewData, FleetMetricsPoint, AuditLogEntry, AuditLogQuery, WebhookConfig, GlobalEnvVar, HealthAnomaly, SearchResults, ApiToken } from "@/types";
 import { fetchApi } from "./api.service";
 
 export const reqGetOverview = () =>
@@ -19,10 +19,11 @@ export const reqGetAnomalies = () =>
         url: "/admin/anomalies",
     });
 
-export const reqGetAuditLog = () =>
+export const reqGetAuditLog = (params?: AuditLogQuery) =>
     fetchApi<AuditLogEntry[]>({
         method: "GET",
         url: "/admin/audit-log",
+        params,
     });
 
 export const reqGetUsers = () =>

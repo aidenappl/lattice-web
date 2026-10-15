@@ -20,7 +20,7 @@ export const reqCreateStack = (data: { name: string; description?: string; worke
         data,
     });
 
-export const reqUpdateStack = (id: number, data: Partial<{ name: string; description: string; worker_id: number; deployment_strategy: string; auto_deploy: boolean; env_vars: string; active: boolean; placement_constraints: string; status: string }>) =>
+export const reqUpdateStack = (id: number, data: Partial<{ name: string; description: string; worker_id: number; deployment_strategy: string; auto_deploy: boolean; env_vars: string; secret_env_keys: string; active: boolean; placement_constraints: string; status: string }>) =>
     fetchApi<Stack>({
         method: "PUT",
         url: `/admin/stacks/${id}`,
