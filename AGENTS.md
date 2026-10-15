@@ -144,7 +144,7 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 | `/databases` | `databases/page.tsx` | Managed database instance list with search; bulk start / stop / restart / delete |
 | `/databases/new` | `databases/new/page.tsx` | Provision a database instance (live host-port availability against the chosen worker) |
 | `/databases/[id]` | `databases/[id]/page.tsx` | DB instance detail: overview/snapshots/logs/history/settings tabs, failure banner, SQL console, credentials, start/stop/restart/remove-container, delete (Settings danger zone), restore |
-| `/networks` | `networks/page.tsx` | Compose networks / port-mapping overview across workers; "Remove all" for orphaned networks |
+| `/networks` | `networks/page.tsx` | Compose networks / port-mapping overview across workers; "Remove all" for orphaned networks. Global env vars (decrypted for admins) are fetched only when the Ports tab opens and a mapping references `${VAR}`; secret values are never substituted into the table |
 | `/registries` | `registries/page.tsx` | Docker registry config, test, repo/tag browsing; bulk test / delete |
 | `/env-vars` | `env-vars/page.tsx` | Global (cross-stack) environment variables, incl. secrets. Search, rename (create + delete: the API has no key update), `.env` import (`lib/dotenv.ts`) and export, bulk mark secret / mark plain / export / delete |
 | `/templates` | `templates/page.tsx` | Stack templates: view, use (asks stack name + worker), edit (saved as a new template and the old one deleted — the API has no template update), new from JSON, import a template or stack export, bulk download / delete |

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -52,20 +52,37 @@ export default function NetworksPage() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [cRes, sRes, wRes, gRes, nRes] = await Promise.all([
+    const [cRes, sRes, wRes, nRes] = await Promise.all([
       reqGetAllContainers(),
       reqGetStacks(),
       reqGetWorkers(),
-      reqGetGlobalEnvVars(),
       reqListAllNetworks(),
     ]);
     if (cRes.success) setContainers(cRes.data ?? []);
     if (sRes.success) setStacks(sRes.data ?? []);
     if (wRes.success) setWorkers(wRes.data ?? []);
-    if (gRes.success) setGlobalEnvVars(gRes.data ?? []);
     if (nRes.success) setNetworks(nRes.data ?? []);
     setLoading(false);
   }, []);
+
+  // Global env vars are only needed to resolve ${VAR} in port mappings on the
+  // Ports tab. The endpoint returns every global secret decrypted for admins,
+  // so fetch it only when that tab is open and a mapping actually references
+  // a variable — most mappings are literal.
+  const portsReferenceVars = containers.some((c) =>
+    parsePortMappings(c.port_mappings).some(
+      (p) => p.host_port?.includes("$") || p.container_port?.includes("$"),
+    ),
+  );
+  const globalsRequested = useRef(false);
+  useEffect(() => {
+    if (tab !== "ports" || !portsReferenceVars || globalsRequested.current)
+      return;
+    globalsRequested.current = true;
+    reqGetGlobalEnvVars().then((res) => {
+      if (res.success) setGlobalEnvVars(res.data ?? []);
+    });
+  }, [tab, portsReferenceVars]);
 
   useEffect(() => {
     document.title = "Lattice - Networks";
@@ -450,7 +467,8 @@ function PortsTab({
   // Build global env lookup
   const globalEnv: Record<string, string> = {};
   for (const gv of globalEnvVars) {
-    globalEnv[gv.key] = gv.value;
+    // Never print a secret into the ports table; leave its ${VAR} visible.
+    if (!gv.is_secret) globalEnv[gv.key] = gv.value;
   }
 
   // Resolve ${VAR} references in a string against env vars
