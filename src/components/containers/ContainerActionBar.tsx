@@ -34,8 +34,10 @@ export function ActionButton({
     <button
       onClick={onClick}
       disabled={disabled}
+      // The visible label is the accessible name; the longer title is only a
+      // tooltip. Using title as aria-label hid the label from speech control
+      // ("click Remove from Docker" matched nothing).
       title={title ?? label}
-      aria-label={title ?? label}
       className={`inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 h-8 text-sm font-medium transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${color}`}
     >
       {loading ? (
