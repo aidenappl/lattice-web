@@ -14,7 +14,7 @@ import {
   reqListRegistryTags,
 } from "@/services/registries.service";
 import { PageLoader } from "@/components/ui/loading";
-import { LoadError } from "@/components/ui/load-error";
+import { LoadError, loadErrorReason } from "@/components/ui/load-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate, canEdit, timeAgo } from "@/lib/utils";
@@ -33,7 +33,7 @@ export default function RegistriesPage() {
   const [registries, setRegistries] = useState<Registry[]>([]);
   const showConfirm = useConfirm();
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
 
   // Create form
@@ -69,12 +69,12 @@ export default function RegistriesPage() {
   const [editSaving, setEditSaving] = useState(false);
 
   const load = async () => {
-    setLoadError(false);
+    setLoadError(null);
     const res = await reqGetRegistries();
     if (res.success) {
       setRegistries(res.data ?? []);
     } else {
-      setLoadError(true);
+      setLoadError(loadErrorReason(res));
       toast.error(res.error_message || "Failed to load registries");
     }
     setLoading(false);
@@ -280,7 +280,8 @@ export default function RegistriesPage() {
       {loadError && registries.length === 0 ? (
         <LoadError
           title="Failed to load registries"
-          message="Could not reach lattice-api to load container registries."
+          message="Couldn't load container registries."
+            reason={loadError}
           onRetry={() => {
             setLoading(true);
             load();

@@ -947,6 +947,7 @@ html {
 .filters-bar {
   padding: 12px 28px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   border-bottom: 1px solid var(--border);
@@ -1356,6 +1357,14 @@ html {
   color: var(--text-muted);
   cursor: pointer;
   font-weight: 500;
+  /* Options are <button>s; drop the UA button chrome. */
+  background: none;
+  border: 0;
+  font-family: inherit;
+}
+.segmented-option:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 1px;
 }
 .segmented-option.active {
   background: var(--background);
@@ -2165,7 +2174,11 @@ html {
     display: none;
   }
   .kpi-label {
-    font-size: 9.5px;
+    font-size: 11px;
+    /* The 0.1em tracking and nowrap clipped "RUNNING CONTAINERS" and
+       "CPU · FLEET AVG" in the two-column KPI grid. */
+    letter-spacing: 0.04em;
+    white-space: normal;
   }
   .kpi-value {
     font-size: 18px;
@@ -2176,7 +2189,7 @@ html {
     gap: 4px;
   }
   .kpi-sub {
-    font-size: 10px;
+    font-size: 12px;
   }
   .btn {
     font-size: 12px;
@@ -2186,10 +2199,10 @@ html {
   .btn-sm {
     height: 26px;
     padding: 4px 8px;
-    font-size: 11px;
+    font-size: 12px;
   }
   .badge {
-    font-size: 9.5px;
+    font-size: 11px;
     padding: 2px 6px;
   }
   .page-header {
@@ -2219,14 +2232,14 @@ html {
     font-size: 15px;
   }
   .stack-stat-label {
-    font-size: 10px;
+    font-size: 11px;
   }
   .panel-header {
     padding: 8px 10px;
-    font-size: 11px;
+    font-size: 12px;
   }
   .data-table th {
-    font-size: 10px;
+    font-size: 11px;
     padding: 6px 8px;
   }
   .data-table td {
@@ -2311,3 +2324,40 @@ html {
     text-underline-offset: 3px;
   }
 }
+
+/* Phone text floor. The dashboard's dense 9–11px labels are fine on a
+   desktop screen and unreadable on a phone (the Vantage responsive check
+   flagged 94 of them on /stacks at 320px). Lift the arbitrary small sizes
+   used across components to 12px below Tailwind's sm breakpoint, and the
+   uppercase-tracked labels above to 11px. The topology board is a scaled
+   canvas and keeps its own sizes. Unlayered, so it beats the utilities. */
+@media (max-width: 639px) {
+  .text-\[9px\],
+  .text-\[10px\],
+  .text-\[11px\],
+  .event-src,
+  .event-ts,
+  .stack-chip,
+  .tab-item .count {
+    font-size: 12px;
+  }
+  /* Time, source and level fill a phone's width, which left the message
+     an ellipsis; give the message its own line. */
+  .event-line {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+  .event-msg {
+    flex-basis: 100%;
+  }
+  /* The hint wrapped the legend into a box covering the nodes; touch
+     users pinch and drag anyway. */
+  .topo-legend-hint {
+    display: none;
+  }
+  .topo-legend {
+    flex-wrap: wrap;
+    max-width: calc(100% - 24px);
+  }
+}
+

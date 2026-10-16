@@ -309,6 +309,18 @@ you touch a slice or a `lib/` helper, extend its sibling test.
 - **Tables:** use `.data-table` inside `.panel`. Such panels scroll sideways (`.panel:has(> .data-table)`)
   because column breakpoints are viewport-based and the sidebar eats ~260px — before that, the
   Actions column was clipped off-screen at 1280px. Rows that don't navigate get `!cursor-default`.
+- **Failed loads render `LoadError` with the reason.** List pages keep `loadError` as
+  `string | null` and set it with `loadErrorReason(res)` (`components/ui/load-error.tsx`): the API's
+  message and status, or "No response from lattice-api" for a request that never got one
+  (`error_code: -1`). Don't hard-code "Could not reach lattice-api" — the API often did answer.
+  While the error shows, headers say the list is unavailable instead of counting an empty array.
+- **Phone text floor.** Below 640px, `globals.css` lifts `text-[9px]`/`[10px]`/`[11px]` (and the
+  event stream, stack chips, tab counts) to 12px, and uppercase labels (`.kpi-label`, `.badge`,
+  table headers) to 11px with tighter tracking so they wrap instead of clipping. Desktop keeps the
+  dense sizes. Inline `style={{ fontSize }}` bypasses this, so prefer the classes.
+- **Clickable controls are `<button>`s.** The topology view switcher used `<div onClick>`; it is now a
+  `role="group"` of `aria-pressed` buttons (`.segmented-option` resets button chrome). Use the
+  same for any new segmented control.
 - **Colours come from tokens, never literals.** Use `bg-primary` / `text-background` / `text-pending` /
   `bg-pending/10` etc., not `bg-white`, `text-black` or `#hex` — the light theme is real, and the
   primary `Button` was white-on-near-white there until it moved to tokens (as were the code

@@ -1064,21 +1064,33 @@ export function TopologyBoard() {
   return (
     <div className="flex flex-col h-full select-none">
       {/* Header */}
+      {/* Wraps on narrow panels: the view tabs and zoom ran off the right
+          edge on phones and in the narrower dashboard columns. */}
       <div
         className="panel-header"
-        style={{ whiteSpace: "nowrap", minWidth: 0 }}
+        style={{ whiteSpace: "nowrap", minWidth: 0, flexWrap: "wrap", rowGap: 8 }}
       >
         <span>Topology</span>
-        <div className="panel-header-right">
-          <div className="segmented">
+        <div
+          className="panel-header-right"
+          style={{ minWidth: 0, maxWidth: "100%", flexWrap: "wrap", justifyContent: "flex-end", rowGap: 6 }}
+        >
+          <div
+            className="segmented"
+            role="group"
+            aria-label="Topology view"
+            style={{ maxWidth: "100%", overflowX: "auto" }}
+          >
             {VIEW_MODES.map((m) => (
-              <div
+              <button
+                type="button"
                 key={m.value}
                 className={`segmented-option ${viewMode === m.value ? "active" : ""}`}
+                aria-pressed={viewMode === m.value}
                 onClick={() => setViewMode(m.value)}
               >
                 {m.label}
-              </div>
+              </button>
             ))}
           </div>
           <span
@@ -1265,7 +1277,9 @@ export function TopologyBoard() {
             <span className="status-dot failed" />
             failed
           </span>
-          <span style={{ opacity: 0.4 }}>· scroll to zoom · drag to pan</span>
+          <span className="topo-legend-hint" style={{ opacity: 0.4 }}>
+            · scroll to zoom · drag to pan
+          </span>
         </div>
       </div>
     </div>

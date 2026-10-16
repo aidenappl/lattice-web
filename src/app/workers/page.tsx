@@ -20,7 +20,7 @@ import { PageLoader } from "@/components/ui/loading";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LoadError } from "@/components/ui/load-error";
+import { LoadError, loadErrorReason } from "@/components/ui/load-error";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BulkActionBar } from "@/components/ui/bulk-action-bar";
 import { timeAgo, canEdit, isAdmin } from "@/lib/utils";
@@ -70,7 +70,7 @@ export default function WorkersPage() {
   const admin = isAdmin(user);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [latestRunner, setLatestRunner] = useState<string | null>(null);
   const [upgradingWorker, setUpgradingWorker] = useState<number | null>(null);
@@ -113,9 +113,9 @@ export default function WorkersPage() {
     }
     if (workersRes.success) {
       setWorkers(workersRes.data ?? []);
-      setLoadError(false);
+      setLoadError(null);
     } else {
-      setLoadError(true);
+      setLoadError(loadErrorReason(workersRes));
     }
     if (versionsRes.success)
       setLatestRunner(versionsRes.data?.runner?.latest ?? null);
@@ -525,7 +525,8 @@ WORKER_NAME=${createdWorker.name}`}
         {loadError && workers.length === 0 ? (
           <LoadError
             title="Failed to load workers"
-            message="Could not reach lattice-api to load the worker list."
+            message="Couldn't load the worker list."
+            reason={loadError}
             onRetry={() => {
               setLoading(true);
               load();

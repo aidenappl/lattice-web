@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
-import { LoadError } from "@/components/ui/load-error";
+import { LoadError, loadErrorReason } from "@/components/ui/load-error";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -394,7 +394,7 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
   const showConfirm = useConfirm();
   const [webhooks, setWebhooks] = useState<WebhookConfig[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
@@ -405,12 +405,12 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
   const [error, setError] = useState("");
 
   const loadWebhooks = async () => {
-    setLoadError(false);
+    setLoadError(null);
     const res = await reqGetWebhooks();
     if (res.success) {
       setWebhooks(res.data ?? []);
     } else {
-      setLoadError(true);
+      setLoadError(loadErrorReason(res));
       toast.error(
         "error_message" in res ? res.error_message : "Failed to load webhooks",
       );
@@ -578,7 +578,8 @@ function WebhookSection({ adminUser }: { adminUser: boolean }) {
       {loadError && (
         <LoadError
           title="Failed to load webhooks"
-          message="Could not reach lattice-api to load webhook configuration."
+          message="Couldn't load webhook configuration."
+            reason={loadError}
           onRetry={() => {
             setLoading(true);
             loadWebhooks();
