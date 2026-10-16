@@ -270,7 +270,12 @@ you touch a slice or a `lib/` helper, extend its sibling test.
 - **`StoreProvider` boots the session.** `AppInitializer` calls `reqGetSelf()` on mount; on success
   it sets `is_logged`/`user`, starts proactive refresh, and (if `role === "pending"`) redirects to
   `/pending`. It gates the entire app behind a branded loading splash until ready, and **skips the
-  check on `/login`, `/unauthorized`, `/pending`** to avoid redirect loops.
+  check on `/login`, `/unauthorized`, `/pending`** to avoid redirect loops. **Only 401/403 sends the
+  user to `/login`.** A 5xx, a request with no response (`fetchApi` reports those as 500 with
+  `error_code: -1`, shown as "No response"), any other 4xx, or a 2xx with no user shows a
+  "Can't reach the Lattice API" screen with the message, status and request id, plus **Retry**
+  (re-runs the bootstrap) and **Sign in again**. An outage used to bounce users to a sign-in form
+  that couldn't work.
 - **Role gating is client-side helpers, not middleware.** `lib/utils.ts` exposes `isAdmin(user)`
   and `canEdit(user)` (editor/admin); `viewer` and `pending` are read-only. Roles:
   `admin | editor | viewer | pending`. **This is UX gating only — the API is the real
@@ -603,7 +608,7 @@ deliberately not `running`, which is green because it means a healthy container.
   | `server.request.error` | error | `onRequestError` — rendering, route handlers, server actions (Node runtime) |
   | `client.page.load` / `client.navigation` | info | Every load and client-side navigation, path only |
   | `auth.refresh.failed` | warn (401/403, 429, other 4xx) / error (5xx, no response) | `doRefresh` in `api.service.ts`, once per refresh after its retry: `status_code`, `error`, `error_code` (the API's, or axios's code on a network error), `error_message`, `attempts`, and the refresh call's own `X-Request-ID` |
-  | `session.bootstrap.failed` | warn (401) / error | `StoreProvider` when `reqGetSelf` fails (`status_code`, `error_code`, `request_id`) or throws (via `reportError`) before redirecting to `/login` |
+  | `session.bootstrap.failed` | warn (401) / error | `StoreProvider` when `reqGetSelf` fails (`status_code`, `error_code`, `request_id`), returns no user (`error: empty_self_response`), or throws (via `reportError`); before redirecting to `/login` (401/403) or showing the API-unreachable screen (everything else) |
   | `ws.reconnect` / `ws.unavailable` / `ws.reconnected` | info / warn then error / info | `useAdminSocket` via `lib/ws-reconnect.ts`: `ws.reconnect` for failures 1-4 (`attempt`, `close_code`, `was_clean`, `had_error`, `down_ms`), one `ws.unavailable` warn at 5 consecutive failures and one error at 20, then nothing until it reconnects; `ws.reconnected` (`failures`, `down_ms`) resets the count |
   | `ws.message_invalid` | warn, ≤1/min | An admin-socket frame that isn't JSON: `length` and the parse error, never the payload (`suppressed` = drops since the last one) |
   | `worker.stale` | warn, ≤1 per worker per 5 min | `useWorkerLiveness`: no heartbeat for 90 s with the admin socket up for longer than that (`worker_id`, `last_seen_ms_ago`). Not raised while the socket is down — that is `ws.*` — nor for 90 s after the tab resumes from a freeze/sleep (a staleness tick arriving >45 s late), when every worker would otherwise look silent for the length of the nap |
