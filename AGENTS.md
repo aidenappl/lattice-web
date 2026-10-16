@@ -587,7 +587,9 @@ deliberately not `running`, which is green because it means a healthy container.
   user (UID 1001), `EXPOSE 3000`, `PORT=3000`, `HOSTNAME=0.0.0.0`, `CMD ["node", "server.js"]` (the
   Next.js **standalone** `server.js`, distinct from the repo-root dev `server.js`).
 - **Healthcheck:** Docker `HEALTHCHECK` hits `GET /api/health` (`→ {status:"ok"}`) every 30 s. Keep
-  that route static and dependency-free.
+  that route static and dependency-free. It must target `127.0.0.1`, not `localhost`: the server binds
+  `0.0.0.0` (IPv4) and busybox `wget` tries `::1` first, so a `localhost` check is refused and the
+  container shows `unhealthy` forever (it did, through v1.8.3).
 - **Security headers** are set centrally in `next.config.ts` `headers()`: `X-Frame-Options: DENY`,
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
   `X-XSS-Protection`, `Permissions-Policy`, HSTS, and a **CSP** that tightens `connect-src` to the
