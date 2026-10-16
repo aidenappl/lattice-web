@@ -42,7 +42,10 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+# 127.0.0.1, not localhost: the server listens on 0.0.0.0 (IPv4 only), and
+# busybox wget resolves localhost to ::1 first, so the check was refused and
+# the container reported unhealthy forever.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO /dev/null http://localhost:3000/api/health || exit 1
+  CMD wget -qO /dev/null http://127.0.0.1:3000/api/health || exit 1
 
 CMD ["node", "server.js"]
