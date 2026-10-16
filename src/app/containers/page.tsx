@@ -14,7 +14,7 @@ import {
 } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
-import { LoadError } from "@/components/ui/load-error";
+import { LoadError, loadErrorReason } from "@/components/ui/load-error";
 import toast from "react-hot-toast";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -65,7 +65,7 @@ export default function ContainersPage() {
   const [stacks, setStacks] = useState<Stack[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Filters
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -84,9 +84,9 @@ export default function ContainersPage() {
     ]);
     if (cRes.success) {
       setContainers(cRes.data ?? []);
-      setLoadError(false);
+      setLoadError(null);
     } else {
-      setLoadError(true);
+      setLoadError(loadErrorReason(cRes));
       toast.error(cRes.error_message || "Failed to load containers");
     }
     if (sRes.success) setStacks(sRes.data ?? []);
@@ -223,8 +223,14 @@ export default function ContainersPage() {
         <div className="flex-1">
           <div className="page-title">Containers</div>
           <div className="page-subtitle">
-            {containers.length} container{containers.length !== 1 ? "s" : ""}{" "}
-            across all stacks
+            {loadError && containers.length === 0 ? (
+              "Container list unavailable"
+            ) : (
+              <>
+                {containers.length} container
+                {containers.length !== 1 ? "s" : ""} across all stacks
+              </>
+            )}
           </div>
         </div>
         <button onClick={load} className="btn btn-secondary">
@@ -357,7 +363,8 @@ export default function ContainersPage() {
       {loadError && containers.length === 0 ? (
         <LoadError
           title="Failed to load containers"
-          message="Could not reach lattice-api to load the container list."
+          message="Couldn't load the container list."
+            reason={loadError}
           onRetry={() => {
             setLoading(true);
             load();

@@ -14,7 +14,7 @@ import { parseDotEnv, toDotEnv, normaliseEnvKey } from "@/lib/dotenv";
 import { runBulk } from "@/lib/bulk";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { PageLoader, LoadingSpinner } from "@/components/ui/loading";
-import { LoadError } from "@/components/ui/load-error";
+import { LoadError, loadErrorReason } from "@/components/ui/load-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -55,7 +55,7 @@ export default function EnvVarsPage() {
   const [revealedIds, setRevealedIds] = useState<Set<number>>(new Set());
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [reloading, setReloading] = useState(false);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
@@ -70,12 +70,12 @@ export default function EnvVarsPage() {
 
   const loadEnvVars = useCallback(async (isReload = false) => {
     if (isReload) setReloading(true);
-    setLoadError(false);
+    setLoadError(null);
     const res = await reqGetGlobalEnvVars();
     if (res.success) {
       setEnvVars(res.data ?? []);
     } else {
-      setLoadError(true);
+      setLoadError(loadErrorReason(res));
       toast.error(res.error_message || "Failed to load environment variables");
     }
     setLoading(false);
@@ -581,7 +581,8 @@ export default function EnvVarsPage() {
         {loadError && envVars.length === 0 ? (
           <LoadError
             title="Failed to load environment variables"
-            message="Could not reach lattice-api to load global environment variables."
+            message="Couldn't load global environment variables."
+            reason={loadError}
             onRetry={() => {
               setLoading(true);
               loadEnvVars();

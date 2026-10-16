@@ -5,7 +5,7 @@ import Link from "next/link";
 import { reqGetAuditLog, reqGetUsers } from "@/services/admin.service";
 import type { AuditLogEntry, AuditLogQuery, User } from "@/types";
 import { PageLoader } from "@/components/ui/loading";
-import { LoadError } from "@/components/ui/load-error";
+import { LoadError, loadErrorReason } from "@/components/ui/load-error";
 import { Button } from "@/components/ui/button";
 import { formatDate, timeAgo } from "@/lib/utils";
 import { toCSV, downloadText } from "@/lib/csv";
@@ -56,7 +56,7 @@ export default function AuditLogPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -114,7 +114,7 @@ export default function AuditLogPage() {
   const load = useCallback(async () => {
     const seq = ++requestSeq.current;
     setRefreshing(true);
-    setLoadError(false);
+    setLoadError(null);
     const res = await reqGetAuditLog({ ...query, limit: PAGE_SIZE });
     if (seq !== requestSeq.current) return; // a newer filter won
     if (res.success) {
@@ -123,7 +123,7 @@ export default function AuditLogPage() {
       setHasMore(rows.length === PAGE_SIZE);
       remember(rows);
     } else {
-      setLoadError(true);
+      setLoadError(loadErrorReason(res));
       toast.error(res.error_message || "Failed to load audit log");
     }
     setLoading(false);
@@ -320,7 +320,8 @@ export default function AuditLogPage() {
         {loadError && entries.length === 0 ? (
           <LoadError
             title="Failed to load audit log"
-            message="Could not reach lattice-api to load the audit trail."
+            message="Couldn't load the audit trail."
+            reason={loadError}
             onRetry={load}
             retrying={refreshing}
           />

@@ -18,7 +18,7 @@ import {
 } from "@/services/stacks.service";
 import { reqGetWorkers } from "@/services/workers.service";
 import { PageLoader } from "@/components/ui/loading";
-import { LoadError } from "@/components/ui/load-error";
+import { LoadError, loadErrorReason } from "@/components/ui/load-error";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -51,7 +51,7 @@ export default function StacksPage() {
   const [containers, setContainers] = useState<Container[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterWorker, setFilterWorker] = useState("all");
@@ -70,9 +70,9 @@ export default function StacksPage() {
     ]);
     if (sRes.success) {
       setStacks(sRes.data ?? []);
-      setLoadError(false);
+      setLoadError(null);
     } else {
-      setLoadError(true);
+      setLoadError(loadErrorReason(sRes));
     }
     if (cRes.success) setContainers(cRes.data ?? []);
     if (wRes.success) setWorkers(wRes.data ?? []);
@@ -216,8 +216,14 @@ export default function StacksPage() {
         <div className="flex-1">
           <div className="page-title">Stacks</div>
           <div className="page-subtitle">
-            {stacks.length} stack{stacks.length !== 1 ? "s" : ""} ·{" "}
-            {containers.length} containers
+            {loadError && stacks.length === 0 ? (
+              "Stack list unavailable"
+            ) : (
+              <>
+                {stacks.length} stack{stacks.length !== 1 ? "s" : ""} ·{" "}
+                {containers.length} containers
+              </>
+            )}
           </div>
         </div>
         {editable && (
@@ -463,7 +469,8 @@ export default function StacksPage() {
         {loadError && stacks.length === 0 ? (
           <LoadError
             title="Failed to load stacks"
-            message="Could not reach lattice-api to load the stack list."
+            message="Couldn't load the stack list."
+            reason={loadError}
             onRetry={() => {
               setLoading(true);
               load().then(() => setLoading(false));

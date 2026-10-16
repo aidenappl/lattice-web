@@ -25,7 +25,7 @@ import { useConfirm } from "@/components/ui/confirm-modal";
 import { useSelection } from "@/hooks/useSelection";
 import { useBulkAction } from "@/hooks/useBulkAction";
 import { PageLoader } from "@/components/ui/loading";
-import { LoadError } from "@/components/ui/load-error";
+import { LoadError, loadErrorReason } from "@/components/ui/load-error";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -39,7 +39,7 @@ export default function AutomationsPage() {
   const user = useUser();
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [revealed, setRevealed] = useState<{ id: number; path: string } | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -54,9 +54,9 @@ export default function AutomationsPage() {
     const res = await reqGetAutomations();
     if (res.success) {
       setAutomations(res.data ?? []);
-      setLoadError(false);
+      setLoadError(null);
     } else {
-      setLoadError(true);
+      setLoadError(loadErrorReason(res));
       toast.error(res.error_message || "Failed to load automations");
     }
     setLoading(false);
@@ -250,7 +250,8 @@ export default function AutomationsPage() {
         {loadError && automations.length === 0 ? (
           <LoadError
             title="Failed to load automations"
-            message="Could not reach lattice-api to load automations."
+            message="Couldn't load automations."
+            reason={loadError}
             onRetry={() => {
               setLoading(true);
               load();

@@ -13,7 +13,7 @@ import { reqGetWorkers } from "@/services/workers.service";
 import type { StackImportPayload } from "@/types";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { PageLoader } from "@/components/ui/loading";
-import { LoadError } from "@/components/ui/load-error";
+import { LoadError, loadErrorReason } from "@/components/ui/load-error";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -58,7 +58,7 @@ export default function TemplatesPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [viewing, setViewing] = useState<Template | null>(null);
   const [using, setUsing] = useState<Template | null>(null);
@@ -75,12 +75,12 @@ export default function TemplatesPage() {
   }, []);
 
   const load = useCallback(async () => {
-    setLoadError(false);
+    setLoadError(null);
     const [res, wRes] = await Promise.all([reqGetTemplates(), reqGetWorkers()]);
     if (res.success) {
       setTemplates(res.data ?? []);
     } else {
-      setLoadError(true);
+      setLoadError(loadErrorReason(res));
       toast.error(res.error_message || "Failed to load templates");
     }
     if (wRes.success) setWorkers(wRes.data ?? []);
@@ -508,7 +508,8 @@ export default function TemplatesPage() {
         {loadError && templates.length === 0 ? (
           <LoadError
             title="Failed to load templates"
-            message="Could not reach lattice-api to load stack templates."
+            message="Couldn't load stack templates."
+            reason={loadError}
             onRetry={() => {
               setLoading(true);
               load();

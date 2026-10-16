@@ -11,7 +11,7 @@ import {
 } from "@/services/deployments.service";
 import { reqGetStacks } from "@/services/stacks.service";
 import { PageLoader } from "@/components/ui/loading";
-import { LoadError } from "@/components/ui/load-error";
+import { LoadError, loadErrorReason } from "@/components/ui/load-error";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -53,7 +53,7 @@ export default function DeploymentsPage() {
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [stacks, setStacks] = useState<Stack[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [stackFilter, setStackFilter] = useState<string>("all");
   const [hasMore, setHasMore] = useState(false);
@@ -83,9 +83,9 @@ export default function DeploymentsPage() {
       const rows = depRes.data ?? [];
       setDeployments(rows);
       setHasMore(rows.length === PAGE_SIZE);
-      setLoadError(false);
+      setLoadError(null);
     } else {
-      setLoadError(true);
+      setLoadError(loadErrorReason(depRes));
       toast.error(depRes.error_message || "Failed to load deployments");
     }
     if (stacksRes.success) setStacks(stacksRes.data ?? []);
@@ -242,7 +242,8 @@ export default function DeploymentsPage() {
         {loadError && deployments.length === 0 ? (
           <LoadError
             title="Failed to load deployments"
-            message="Could not reach lattice-api to load deployment history."
+            message="Couldn't load deployment history."
+            reason={loadError}
             onRetry={() => {
               setLoading(true);
               load();
