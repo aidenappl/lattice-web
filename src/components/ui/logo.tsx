@@ -24,6 +24,7 @@ export function Logo({ size = "md", className }: LogoProps) {
         alt="Lattice"
         width={px}
         height={px}
+        unoptimized
         className={cn("shrink-0 dark:hidden", className)}
         priority
       />
@@ -33,6 +34,7 @@ export function Logo({ size = "md", className }: LogoProps) {
         alt="Lattice"
         width={px}
         height={px}
+        unoptimized
         className={cn("shrink-0 hidden dark:block", className)}
         priority
       />
