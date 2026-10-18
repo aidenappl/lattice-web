@@ -331,6 +331,10 @@ you touch a slice or a `lib/` helper, extend its sibling test.
 - **Selects:** `.form-select` has a fixed height and no vertical padding so `!h-8` filter selects
   stay vertically centred. Size inputs in a filter bar with `!w-*` — `.form-input`'s `width: 100%`
   is unlayered CSS and beats plain Tailwind width utilities.
+- **`next/image` for local static icons is `unoptimized`** (`Logo`, `WorkerIcon`). The optimizer
+  (`/_next/image`) intermittently hung on these small PNGs until the proxy's 90s timeout — first
+  on the logo's 2x WebP variant (`f9169a8`), then on the worker icon (504s on `/automations`, Oct
+  2026). There is nothing to gain from optimizing them; add `unoptimized` to any new one.
 
 ## Domain & architecture
 
