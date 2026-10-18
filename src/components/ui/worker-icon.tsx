@@ -19,11 +19,15 @@ export function WorkerIcon({ size = "md", className }: WorkerIconProps) {
   const px = sizeMap[size];
   return (
     <>
+      {/* unoptimized, like Logo (f9169a8): these are small static PNGs, and
+          /_next/image intermittently hung on them until the proxy's 90s
+          timeout (504s on /automations, 2026-10-17). */}
       <Image
         src="/lattice-worker-dark.png"
         alt="Worker"
         width={px}
         height={px}
+        unoptimized
         className={cn("shrink-0 dark:hidden rounded-md", className)}
       />
       <Image
@@ -31,6 +35,7 @@ export function WorkerIcon({ size = "md", className }: WorkerIconProps) {
         alt="Worker"
         width={px}
         height={px}
+        unoptimized
         className={cn("shrink-0 hidden dark:block rounded-md", className)}
       />
     </>
