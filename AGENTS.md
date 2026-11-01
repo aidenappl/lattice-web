@@ -245,6 +245,16 @@ rendering: `lib/utils.test.ts`, `lib/deployment-progress.test.ts`, `lib/automati
 Redux slice (`authSlice`, `overviewSlice`, `workersSlice`, `stacksSlice`, `containersSlice`). When
 you touch a slice or a `lib/` helper, extend its sibling test.
 
+### Local dev ports, worktrees and Vantage
+
+`npm run dev:ssl` listens on `PORT` when it is set (default 3030) and, when the clone has no mkcert
+certificates of its own (a git worktree), uses the shared pair in `DEV_CERTS_DIR` or
+`~/.local/share/dev-certs` (`dev.pem` / `dev-key.pem`, covering `*.local.trailblaze.to` and
+`*.local.appleby.cloud`). `vantage.config.yaml` lists the prod and local URLs: a Vantage session opened
+with `env: "local"` (the default) starts this worktree's dev server on a free port, symlinking `.env`
+from the main checkout and running `npm ci` first if needed, so several agents can run the app from
+different worktrees at once; `env: "prod"` tophats https://lattice.appleby.cloud.
+
 ## How code is written here
 
 - **App Router, client-heavy.** Nearly every `page.tsx` is `"use client"`. Data is fetched
