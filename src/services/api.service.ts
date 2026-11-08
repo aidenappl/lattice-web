@@ -282,6 +282,19 @@ function getRefreshPromise(): Promise<RefreshResult | null> {
     return refreshPromise;
 }
 
+/**
+ * Refreshes the session through the same deduplicated path as the 401 handler,
+ * for callers that are not axios requests — the admin WebSocket, whose upgrade
+ * fails with a bare 1006 once the access cookie has expired in an idle tab.
+ * Resolves true when a new token was issued.
+ */
+export async function refreshSession(): Promise<boolean> {
+    const result = await getRefreshPromise();
+    if (!result) return false;
+    scheduleNextRefresh(result.expiresAt);
+    return true;
+}
+
 const handle401Response = async <T>(
     originalConfig: AxiosRequestConfig,
 ): Promise<ApiResponse<T> | null> => {

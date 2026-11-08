@@ -16,6 +16,17 @@ export type ReconnectEscalation = {
     stableAfterMs: number;
 };
 
+/**
+ * Delay before reconnect attempt `attempt` (1-based): full-jitter exponential
+ * backoff from 1s, capped at 30s. It was a flat 3s, so twenty failures in a
+ * minute escalated a short outage straight to `ws.unavailable` error, and every
+ * tab hit a restarting API in lockstep.
+ */
+export function reconnectDelay(attempt: number, random: () => number = Math.random): number {
+    const ceiling = Math.min(30_000, 1_000 * 2 ** Math.max(0, attempt - 1));
+    return Math.round(500 + random() * (ceiling - 500));
+}
+
 export const DEFAULT_ESCALATION: ReconnectEscalation = { warnAfter: 5, errorAfter: 20, stableAfterMs: 30_000 };
 
 /**

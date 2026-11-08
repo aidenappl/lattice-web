@@ -551,7 +551,13 @@ deliberately not `running`, which is green because it means a healthy container.
 
 - **Admin WebSocket** (`hooks/useAdminSocket.ts`): a **singleton** `WebSocket` to
   `${NEXT_PUBLIC_LATTICE_API→ws(s)}/ws/admin`, shared across all consumers via a subscriber `Set`,
-  with auto-reconnect (3 s backoff) while subscribers exist. Powers the dashboard event stream,
+  with auto-reconnect while subscribers exist: full-jitter exponential backoff from 1 s to 30 s
+  (`reconnectDelay`). A handshake that **never opened** is treated as an expired access cookie (an
+  idle tab stops the proactive refresh; the upgrade 401s and the browser shows only 1006), so it
+  calls `refreshSession()` (api.service, deduplicated with the 401 handler) before retrying. A
+  **hidden tab or offline browser parks** instead of failing — no reconnect attempts, no escalation —
+  and resumes on `visibilitychange` / `online`. The Nov 4–8 `ws.unavailable` events were overnight
+  idle tabs failing every 3 s. Powers the dashboard event stream,
   live worker liveness, deployment progress, and container-status updates. `sendAdminMessage` pushes
   messages the other way.
 - **Worker liveness** (`hooks/useWorkerLiveness.ts`): tracks online/offline from socket heartbeats

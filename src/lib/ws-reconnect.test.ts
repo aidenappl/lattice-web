@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ReconnectTracker } from "./ws-reconnect";
+import { ReconnectTracker, reconnectDelay } from "./ws-reconnect";
 
 describe("ReconnectTracker", () => {
     it("escalates once to warn and once to error, then goes quiet", () => {
@@ -93,5 +93,18 @@ describe("ReconnectTracker", () => {
         t.reset();
         t.opened(2);
         expect(t.stable(100_000)).toBeNull();
+    });
+});
+
+describe("reconnectDelay", () => {
+    it("grows exponentially and caps at 30s", () => {
+        expect(reconnectDelay(1, () => 1)).toBe(1_000);
+        expect(reconnectDelay(2, () => 1)).toBe(2_000);
+        expect(reconnectDelay(5, () => 1)).toBe(16_000);
+        expect(reconnectDelay(6, () => 1)).toBe(30_000);
+        expect(reconnectDelay(50, () => 1)).toBe(30_000);
+    });
+    it("never retries faster than 500ms", () => {
+        for (const n of [1, 3, 10]) expect(reconnectDelay(n, () => 0)).toBe(500);
     });
 });
