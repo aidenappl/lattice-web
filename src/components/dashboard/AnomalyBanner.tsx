@@ -68,6 +68,7 @@ export default function AnomalyBanner() {
     status_mismatch: "Mismatch",
     unmanaged_container: "Unmanaged",
     stale_state: "Stale",
+    low_disk: "Low disk",
   };
 
   const typeColors: Record<string, string> = {
@@ -76,6 +77,7 @@ export default function AnomalyBanner() {
     status_mismatch: "text-warning",
     unmanaged_container: "text-muted",
     stale_state: "text-warning",
+    low_disk: "text-destructive",
   };
 
   return (
@@ -90,17 +92,19 @@ export default function AnomalyBanner() {
           {visible.map((a) => (
             <div
               key={a.id}
-              className="flex items-center justify-between gap-3 bg-surface/50 rounded px-3 py-2"
+              className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 bg-surface/50 rounded px-3 py-2 min-w-0"
             >
-              <div className="flex items-center gap-3 min-w-0">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
                 <span
                   className={`text-[10px] font-semibold uppercase tracking-wider ${typeColors[a.type] ?? "text-muted"}`}
                 >
                   {typeLabels[a.type] ?? a.type}
                 </span>
-                <span className="text-sm font-mono truncate">
-                  {a.container_name}
-                </span>
+                {a.container_name && (
+                  <span className="text-sm font-mono truncate">
+                    {a.container_name}
+                  </span>
+                )}
                 <span className="text-xs text-muted hidden sm:inline">
                   on{" "}
                   <Link
@@ -110,11 +114,13 @@ export default function AnomalyBanner() {
                     {a.worker_name}
                   </Link>
                 </span>
-                <span className="text-xs text-muted hidden md:inline">
-                  — {a.message}
+                {/* A worker-level anomaly has no container: its message is the whole story. */}
+                <span className={`text-xs text-muted ${a.container_name ? "hidden md:inline" : "basis-full sm:basis-auto"}`}>
+                  {a.container_name ? "— " : ""}
+                  {a.message}
                 </span>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                 {(a.type === "orphaned_container" ||
                   a.type === "unmanaged_container") &&
                   a.container_name && (

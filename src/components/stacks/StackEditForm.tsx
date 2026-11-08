@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Stack, Worker } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { IMAGE_PRUNE_DEFAULT_KEEP, pruneChoices, pruneLabel } from "@/lib/disk";
 
 interface StackEditFormProps {
   stack: Stack;
@@ -15,6 +16,7 @@ interface StackEditFormProps {
     strategy: string;
     auto_deploy: boolean;
     placement_constraints: string;
+    image_prune_keep?: number;
   }) => Promise<void>;
   onCancel: () => void;
 }
@@ -39,6 +41,9 @@ export function StackEditForm({
     stack.auto_deploy,
   );
   const [editPlacementConstraints, setEditPlacementConstraints] = useState(stack.placement_constraints ?? "");
+  // Older APIs don't send it: hide the control rather than save a guess.
+  const pruneSupported = stack.image_prune_keep !== undefined;
+  const [editPruneKeep, setEditPruneKeep] = useState(stack.image_prune_keep ?? IMAGE_PRUNE_DEFAULT_KEEP);
   const [savingStack, setSavingStack] = useState(false);
 
   const handleSave = async () => {
@@ -50,6 +55,7 @@ export function StackEditForm({
       strategy: editStackStrategy,
       auto_deploy: editStackAutoDeploy,
       placement_constraints: editPlacementConstraints.trim(),
+      ...(pruneSupported && editPruneKeep !== stack.image_prune_keep ? { image_prune_keep: editPruneKeep } : {}),
     });
     setSavingStack(false);
   };
@@ -148,6 +154,29 @@ export function StackEditForm({
           />
           <p className="text-[10px] text-muted">JSON key-value pairs that the target worker&apos;s labels must match</p>
         </div>
+        {pruneSupported && (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="edit-stack-prune" className="text-xs font-medium text-secondary uppercase tracking-wider">
+              Image Cleanup
+            </label>
+            <select
+              id="edit-stack-prune"
+              aria-describedby="edit-stack-prune-help"
+              value={editPruneKeep}
+              onChange={(e) => setEditPruneKeep(Number(e.target.value))}
+              className="h-9 w-full sm:w-72 rounded-lg border border-border-strong bg-surface-elevated px-3 text-sm text-primary cursor-pointer focus:border-border-emphasis focus:outline-none"
+            >
+              {pruneChoices(editPruneKeep).map((k) => (
+                <option key={k} value={k}>
+                  {pruneLabel(k)}
+                </option>
+              ))}
+            </select>
+            <p id="edit-stack-prune-help" className="text-[10px] text-muted">
+              After a successful deploy, the worker removes this stack&apos;s images that no container uses, keeping the newest ones per repository so a rollback starts without a pull. Images in use, other stacks&apos; and database images are never removed.
+            </p>
+          </div>
+        )}
         <div className="flex gap-2">
           <Button
             size="sm"
