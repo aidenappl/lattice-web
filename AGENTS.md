@@ -106,7 +106,7 @@ src/
     StoreProvider.tsx       # singleton store + AppInitializer (boots session via reqGetSelf, gates render)
     slices/                 # authSlice, overviewSlice, workersSlice, stacksSlice, containersSlice (+ *.test.ts)
   hooks/                    # cross-cutting hooks (usePoll, useBackoffPoll, useAdminSocket, useContainerLogs, useSelection + useBulkAction for list bulk actions, …)
-  lib/                      # utils.ts (cn, isAdmin, canEdit, formatBytes, dropStaleSamples, …), version.ts, disk.ts (free-disk + low-disk thresholds, image prune choices), deployment-progress.ts, automations.ts, ws-reconnect.ts, sso.ts (silent SSO, return_to, sign-out), bulk.ts (runBulk/summarizeBulk), dotenv.ts (.env import/export), csv.ts (toCSV/downloadText) (+ *.test.ts), monitor-server.ts (server-side Monitor)
+  lib/                      # utils.ts (cn, isAdmin, canEdit, formatBytes, dropStaleSamples, …), version.ts, disk.ts (free-disk + low-disk thresholds shared by workers and the control plane, control-plane path labels, image prune choices), deployment-progress.ts, automations.ts, ws-reconnect.ts, sso.ts (silent SSO, return_to, sign-out), bulk.ts (runBulk/summarizeBulk), dotenv.ts (.env import/export), csv.ts (toCSV/downloadText) (+ *.test.ts), monitor-server.ts (server-side Monitor)
   types/                    # domain types; index.ts re-exports all + ApiResponse/ApiSuccess/ApiError/SearchResults/ApiToken
   test/setup.ts             # Vitest + jest-dom setup
 ```
@@ -127,7 +127,7 @@ Every page is a client route rendered inside `DashboardLayout`. Dynamic segments
 
 | Route | File | What it does |
 |-------|------|--------------|
-| `/` | `page.tsx` | Dashboard: topology board (nodes are keyboard-operable: Tab to focus, Enter opens, Space selects), KPI row w/ sparklines, live event stream, fleet resource charts, anomaly/failing-stack banners. Anomaly rows stack on narrow screens; worker-level anomalies (`low_disk`, lattice-api ≥ #28: under 10% or 5 GB free) have no container and show their message in full |
+| `/` | `page.tsx` | Dashboard: topology board (nodes are keyboard-operable: Tab to focus, Enter opens, Space selects), KPI row w/ sparklines, live event stream, fleet resource charts, anomaly/failing-stack banners. Anomaly rows stack on narrow screens; worker-level anomalies (`low_disk`, lattice-api ≥ #28: under 10% or 5 GB free) have no container and show their message in full; `control_plane_low_disk` (APL-121, lattice-api ≥ #34: worker_id 0, one per control-plane path) shares the Low disk label and says "on control plane" without a worker link. A **Disk** panel (`components/dashboard/DiskPanel.tsx`) under the bottom grid lists the control-plane paths from `GET /admin/health` `control_plane_disk` (root fs, compose dir, MariaDB data; refetched every minute, "unavailable" when the sample has an `error`, a hint when the API is older) next to every worker's free disk, all judged by `lib/disk.ts` (`sampleFree` / `diskFree`) |
 | `/login` | `login/page.tsx` | Dual auth: local email/password (`reqLogin`) **+** SSO button (fetches `/auth/sso/config`, links to `login_url`), silent SSO first (`lib/sso.ts`). Redirects to `return_to` if already authed |
 | `/pending` | `pending/page.tsx` | Landing for users with `role: "pending"` (account awaiting approval) |
 | `/unauthorized` | `unauthorized/page.tsx` | Landing when a grant is revoked / `error_code 4003` |

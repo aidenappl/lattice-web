@@ -69,6 +69,7 @@ export default function AnomalyBanner() {
     unmanaged_container: "Unmanaged",
     stale_state: "Stale",
     low_disk: "Low disk",
+    control_plane_low_disk: "Low disk",
   };
 
   const typeColors: Record<string, string> = {
@@ -78,6 +79,7 @@ export default function AnomalyBanner() {
     unmanaged_container: "text-muted",
     stale_state: "text-warning",
     low_disk: "text-destructive",
+    control_plane_low_disk: "text-destructive",
   };
 
   return (
@@ -107,12 +109,17 @@ export default function AnomalyBanner() {
                 )}
                 <span className="text-xs text-muted hidden sm:inline">
                   on{" "}
-                  <Link
-                    href={`/workers/${a.worker_id}`}
-                    className="underline hover:text-primary"
-                  >
-                    {a.worker_name}
-                  </Link>
+                  {/* The control plane is not a worker (worker_id 0): no page to link. */}
+                  {a.type === "control_plane_low_disk" ? (
+                    <span className="text-primary">control plane</span>
+                  ) : (
+                    <Link
+                      href={`/workers/${a.worker_id}`}
+                      className="underline hover:text-primary"
+                    >
+                      {a.worker_name}
+                    </Link>
+                  )}
                 </span>
                 {/* A worker-level anomaly has no container: its message is the whole story. */}
                 <span className={`text-xs text-muted ${a.container_name ? "hidden md:inline" : "basis-full sm:basis-auto"}`}>
