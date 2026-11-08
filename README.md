@@ -93,8 +93,8 @@ breaks** — use `dev:ssl` for anything involving login.
 
 - **Real-time dashboard** — custom SVG topology, fleet KPIs with sparklines, live event stream, fleet resource charts, anomaly/failing-stack banners
 - **Dual authentication** — local email/password + SSO (OAuth2), with role-gated UI (admin/editor/viewer/pending)
-- **Worker management** — live metrics (CPU/memory/disk/network), volumes, networks, tokens, reboot/upgrade
-- **Stack management** — create/import, deploy, compose YAML editor, env vars, deploy tokens, dependency graph
+- **Worker management** — live metrics (CPU/memory/disk/network, with free disk and a low-disk warning), volumes, networks, tokens, reboot/upgrade
+- **Stack management** — create/import, deploy, post-deploy image cleanup (keep N previous images), compose YAML editor, env vars, deploy tokens, dependency graph
 - **Container management** — full lifecycle (start/stop/kill/restart/pause/unpause/remove/recreate), live logs, health, terminal
 - **Deployment tracking** — live progress, approve/rollback
 - **Databases** — managed DB instances: provision, credentials, snapshots, start/stop/restart/remove, restore

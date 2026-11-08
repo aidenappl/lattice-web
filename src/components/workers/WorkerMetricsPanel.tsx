@@ -1,5 +1,6 @@
 "use client";
 
+import { diskFree, formatFree } from "@/lib/disk";
 import Link from "next/link";
 import type { WorkerMetrics } from "@/types";
 import { formatDisk, formatBytes, formatUptime, barColor, sparkColor, timeAgo } from "@/lib/utils";
@@ -151,6 +152,7 @@ export default function WorkerMetricsPanel({
     latestMetric.memory_used_mb != null && latestMetric.memory_total_mb
       ? (latestMetric.memory_used_mb / latestMetric.memory_total_mb) * 100
       : 0;
+  const diskFreeNow = diskFree(latestMetric.disk_used_mb, latestMetric.disk_total_mb);
   const diskPercent =
     latestMetric.disk_used_mb != null && latestMetric.disk_total_mb
       ? (latestMetric.disk_used_mb / latestMetric.disk_total_mb) * 100
@@ -257,6 +259,14 @@ export default function WorkerMetricsPanel({
                   )
                 : "-"}
             </p>
+            {diskFreeNow && (
+              <p
+                className={`text-[10px] font-medium ${diskFreeNow.low ? "text-destructive" : "text-dimmed"}`}
+              >
+                {diskFreeNow.low ? "Low: " : ""}
+                {formatFree(diskFreeNow)}
+              </p>
+            )}
           </div>
 
           {/* Network gauge */}

@@ -7,6 +7,8 @@ export type Stack = {
     deployment_strategy: "rolling" | "blue-green" | "canary";
     auto_deploy: boolean;
     placement_constraints: string | null;
+    /** Post-deploy image prune: previous images kept per repository, -1 = off (APL-86). Absent from older APIs. */
+    image_prune_keep?: number;
     env_vars: string | null;
     /** JSON array of env_vars keys whose values the API masks ("***") for non-admins. */
     secret_env_keys?: string | null;

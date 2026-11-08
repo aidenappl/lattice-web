@@ -55,7 +55,7 @@ export function Alert({
       )}
     >
       <span className={cn("mt-0.5 h-2 w-2 rounded-full shrink-0", v.dot)} />
-      <span className="text-subtle flex-1 text-xs leading-relaxed">
+      <span className="text-subtle flex-1 min-w-0 text-xs leading-relaxed">
         {children}
       </span>
       {onDismiss && (

@@ -431,6 +431,7 @@ export default function StackDetailPage() {
     strategy: string;
     auto_deploy: boolean;
     placement_constraints: string;
+    image_prune_keep?: number;
   }) => {
     const res = await reqUpdateStack(id, {
       name: data.name,
@@ -439,6 +440,7 @@ export default function StackDetailPage() {
       deployment_strategy: data.strategy,
       auto_deploy: data.auto_deploy,
       placement_constraints: data.placement_constraints || undefined,
+      image_prune_keep: data.image_prune_keep,
     });
     if (res.success) {
       setStack(res.data);

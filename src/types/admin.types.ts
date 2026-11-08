@@ -75,7 +75,7 @@ export type FleetMetricsPoint = {
 
 export type HealthAnomaly = {
     id: string;
-    type: "orphaned_container" | "missing_container" | "status_mismatch" | "unmanaged_container" | "stale_state";
+    type: "orphaned_container" | "missing_container" | "status_mismatch" | "unmanaged_container" | "stale_state" | "low_disk";
     worker_id: number;
     worker_name: string;
     container_name?: string;
