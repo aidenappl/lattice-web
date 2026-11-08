@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { monitor, reportWarnRateLimited } from "@/services/monitor.service";
-import { ReconnectTracker, type ReconnectReport } from "@/lib/ws-reconnect";
+import { ReconnectTracker, reconnectDelay, type ReconnectReport } from "@/lib/ws-reconnect";
+import { refreshSession } from "@/services/api.service";
 
 export type AdminSocketEvent = {
     type: string;
@@ -30,6 +31,12 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let intentionalClose = false;
 let sawError = false;
 let openSince: number | null = null;
+// Whether the current socket ever opened. A handshake that never opens is how
+// an expired access cookie looks from here: the upgrade is refused with a 401
+// and the browser reports only close code 1006.
+let opened = false;
+// Set while reconnecting is paused for a hidden tab or an offline browser.
+let parked = false;
 
 /** When the shared socket last opened, or null while it is not open. */
 export function adminSocketOpenSince(): number | null {
@@ -61,11 +68,13 @@ function connect() {
     const url = getWsUrl();
     if (isDev) console.log("[AdminSocket] connecting to", url);
 
+    opened = false;
     ws = new WebSocket(url);
 
     ws.onopen = () => {
         if (isDev) console.log("[AdminSocket] connected");
         openSince = Date.now();
+        opened = true;
         reconnects.opened(openSince);
         clearStableTimer();
         stableTimer = setTimeout(() => {
@@ -103,15 +112,58 @@ function connect() {
         sawError = false;
         openSince = null;
         clearStableTimer();
-        if (intentionalClose) return;
-        if (isDev) console.log(`[AdminSocket] closed (code=${e.code}), reconnecting in 3s…`);
-        if (subscribers.size > 0) {
-            emitReport(
-                reconnects.failed({ close_code: e.code, was_clean: e.wasClean, had_error: hadError }),
-            );
-            reconnectTimer = setTimeout(connect, 3000);
+        if (intentionalClose || subscribers.size === 0) return;
+        ws = null;
+        // A hidden tab or an offline browser is expected to lose its socket:
+        // wait for it to come back instead of failing, and escalating, all
+        // night (the ws.unavailable events of Nov 4–8 were idle tabs).
+        if (shouldPark()) {
+            parked = true;
+            reconnects.reset();
+            return;
         }
+        emitReport(reconnects.failed({ close_code: e.code, was_clean: e.wasClean, had_error: hadError }));
+        scheduleReconnect(!opened);
     };
+}
+
+function shouldPark(): boolean {
+    return (typeof document !== "undefined" && document.hidden) ||
+        (typeof navigator !== "undefined" && navigator.onLine === false);
+}
+
+/**
+ * Reconnects with backoff. A handshake that never opened is most likely an
+ * expired access cookie (an idle tab stops the proactive refresh), so refresh
+ * the session first; a failed refresh is reported by api.service and the
+ * reconnect goes ahead regardless.
+ */
+function scheduleReconnect(neverOpened: boolean): void {
+    const delay = reconnectDelay(reconnects.consecutiveFailures);
+    if (isDev) console.log(`[AdminSocket] reconnecting in ${delay}ms`);
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        if (!neverOpened) {
+            connect();
+            return;
+        }
+        void refreshSession()
+            .catch(() => false)
+            .then(() => {
+                if (subscribers.size > 0 && !parked) connect();
+            });
+    }, delay);
+}
+
+function resume(): void {
+    if (!parked || shouldPark() || subscribers.size === 0) return;
+    parked = false;
+    ensureConnected();
+}
+
+if (typeof window !== "undefined") {
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("online", resume);
 }
 
 function ensureConnected() {
