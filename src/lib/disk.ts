@@ -1,5 +1,6 @@
-// Worker disk figures. The thresholds mirror lattice-api's low_disk anomaly
-// (healthscan/low_disk.go): a worker is low on disk under either.
+// Disk figures for workers and the control-plane host. The thresholds mirror
+// lattice-api's low_disk and control_plane_low_disk anomalies (hostdisk.LowFreePct
+// / LowFreeMB, aliased as healthscan.LOW_DISK_*): a disk is low under either.
 export const LOW_DISK_FREE_PCT = 10;
 export const LOW_DISK_FREE_MB = 5 * 1024;
 
@@ -12,6 +13,19 @@ export function diskFree(usedMB: number | null | undefined, totalMB: number | nu
     const freePct = (freeMB / totalMB) * 100;
     return { freeMB, freePct, low: freePct < LOW_DISK_FREE_PCT || freeMB < LOW_DISK_FREE_MB };
 }
+
+/** A control-plane sample (free/total) judged by the same rule; null when unreadable. */
+export function sampleFree(s: { free_mb: number; total_mb: number; error?: string }): DiskFree | null {
+    if (s.error) return null;
+    return diskFree(s.total_mb - s.free_mb, s.total_mb);
+}
+
+/** What each control-plane sample measures, for people. */
+export const CONTROL_PLANE_DISK_LABELS: Record<string, string> = {
+    root: "Host disk",
+    compose: "Compose dir",
+    mariadb: "MariaDB data",
+};
 
 export function formatFree({ freeMB, freePct }: DiskFree): string {
     const size = freeMB >= 1024 ? `${(freeMB / 1024).toFixed(1)} GB` : `${Math.round(freeMB)} MB`;

@@ -265,12 +265,14 @@ type MeterProps = {
   value: number;
   width?: number;
   className?: string;
+  /** Overrides the colour picked from value, e.g. "bad" for a disk that is low by free GB. */
+  tone?: "ok" | "warn" | "bad";
 };
 
-export function Meter({ value, width = 80, className }: MeterProps) {
+export function Meter({ value, width = 80, className, tone }: MeterProps) {
   const clamped = Math.max(0, Math.min(100, value));
   const cls =
-    clamped < 60 ? "ok" : clamped < 85 ? "warn" : "bad";
+    tone ?? (clamped < 60 ? "ok" : clamped < 85 ? "warn" : "bad");
 
   return (
     <div className={`meter ${className ?? ""}`} style={{ width }}>

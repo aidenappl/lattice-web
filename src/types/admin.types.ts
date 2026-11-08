@@ -75,13 +75,32 @@ export type FleetMetricsPoint = {
 
 export type HealthAnomaly = {
     id: string;
-    type: "orphaned_container" | "missing_container" | "status_mismatch" | "unmanaged_container" | "stale_state" | "low_disk";
+    type: "orphaned_container" | "missing_container" | "status_mismatch" | "unmanaged_container" | "stale_state" | "low_disk" | "control_plane_low_disk";
     worker_id: number;
     worker_name: string;
     container_name?: string;
     message: string;
     detected_at: string;
     details?: Record<string, unknown>;
+};
+
+/** One control-plane path's free space, from lattice-api's hostdisk (APL-121). */
+export type ControlPlaneDiskSample = {
+    label: "root" | "compose" | "mariadb" | string;
+    path: string;
+    total_mb: number;
+    free_mb: number;
+    free_pct: number;
+    low: boolean;
+    sampled_at: string;
+    error?: string;
+};
+
+/** GET /admin/health. control_plane_disk is absent on an API older than APL-121. */
+export type AdminHealth = {
+    status: "ok" | "degraded";
+    db: "ok" | "error";
+    control_plane_disk?: ControlPlaneDiskSample[];
 };
 
 export type GlobalEnvVar = {

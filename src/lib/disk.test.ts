@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diskFree, formatFree, pruneChoices, pruneLabel } from "./disk";
+import { diskFree, formatFree, pruneChoices, pruneLabel, sampleFree } from "./disk";
 
 describe("diskFree", () => {
     const cases: [string, number | null, number | null, boolean | null][] = [
@@ -36,5 +36,16 @@ describe("prune setting", () => {
         expect(pruneLabel(0)).toMatch(/re-pull/);
         expect(pruneLabel(2)).toBe("Keep 2 previous (default)");
         expect(pruneLabel(5)).toBe("Keep 5 previous");
+    });
+});
+
+describe("sampleFree", () => {
+    it("judges a control-plane sample by the worker rule", () => {
+        expect(sampleFree({ free_mb: 30 * 1024, total_mb: 61 * 1024 })?.low).toBe(false);
+        expect(sampleFree({ free_mb: 4 * 1024, total_mb: 61 * 1024 })?.low).toBe(true);
+        expect(sampleFree({ free_mb: 6 * 1024, total_mb: 500 * 1024 })?.low).toBe(true);
+    });
+    it("is null for an unreadable path", () => {
+        expect(sampleFree({ free_mb: 0, total_mb: 0, error: "no such container" })).toBeNull();
     });
 });

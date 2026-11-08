@@ -26,6 +26,7 @@ import { FleetResourcePanel } from "@/components/dashboard/FleetResourcePanel";
 import { RecentActivityPanel } from "@/components/dashboard/RecentActivityPanel";
 import { FailingStacksBanner } from "@/components/dashboard/FailingStacksBanner";
 import AnomalyBanner from "@/components/dashboard/AnomalyBanner";
+import { DiskPanel } from "@/components/dashboard/DiskPanel";
 import { ResizableSplit } from "@/components/ui/ResizableSplit";
 import type {
   WorkerLatestMetrics,
@@ -392,6 +393,9 @@ export default function DashboardPage() {
         />
         <RecentActivityPanel entries={auditLog} />
       </div>
+
+      {/* Free disk: the control-plane host (APL-121) next to every worker */}
+      <DiskPanel workerMetrics={overview?.worker_metrics ?? null} />
     </div>
   );
 }
