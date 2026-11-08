@@ -105,7 +105,7 @@ src/
     hooks.ts                # useAppDispatch/useAppSelector + useAuth/useAuthStatus/useUser
     StoreProvider.tsx       # singleton store + AppInitializer (boots session via reqGetSelf, gates render)
     slices/                 # authSlice, overviewSlice, workersSlice, stacksSlice, containersSlice (+ *.test.ts)
-  hooks/                    # cross-cutting hooks (usePoll, useAdminSocket, useContainerLogs, useSelection + useBulkAction for list bulk actions, …)
+  hooks/                    # cross-cutting hooks (usePoll, useBackoffPoll, useAdminSocket, useContainerLogs, useSelection + useBulkAction for list bulk actions, …)
   lib/                      # utils.ts (cn, isAdmin, canEdit, formatBytes, dropStaleSamples, …), version.ts, deployment-progress.ts, automations.ts, ws-reconnect.ts, sso.ts (silent SSO, return_to, sign-out), bulk.ts (runBulk/summarizeBulk), dotenv.ts (.env import/export), csv.ts (toCSV/downloadText) (+ *.test.ts), monitor-server.ts (server-side Monitor)
   types/                    # domain types; index.ts re-exports all + ApiResponse/ApiSuccess/ApiError/SearchResults/ApiToken
   test/setup.ts             # Vitest + jest-dom setup
@@ -558,6 +558,10 @@ deliberately not `running`, which is green because it means a healthy container.
   with a staleness timeout.
 - **Polling fallback** (`hooks/usePoll.ts`): generic interval polling with auto-cleanup for views
   that aren't socket-driven.
+- **Backoff polling** (`hooks/useBackoffPoll.ts`): for polls that hit slow endpoints (container logs).
+  The callback returns `Promise<boolean>`; runs never overlap, the delay doubles after a failure
+  (capped at 5 min) and resets on success, and polling pauses while `document.hidden`. Prefer it
+  over `usePoll` for any request that can time out.
 - **Container logs** (`hooks/useContainerLogs.ts`): combines a REST fetch with WebSocket streaming,
   client-side filtering (stdout/stderr/lifecycle), and download.
 - **Version checking** (`hooks/useVersionCheck.tsx` + `UpdateBanner` / `RunnerUpgradePanel`):
