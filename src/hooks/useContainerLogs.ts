@@ -23,7 +23,8 @@ export interface ContainerLogsState {
     setLogLimit: (limit: LogLimit) => void;
     streamFilter: string;
     setStreamFilter: (filter: string) => void;
-    loadLogs: (containerId: number, stream?: string, limit?: number) => Promise<void>;
+    /** Resolves true on success. Skips (resolving false) while a previous load is still in flight. */
+    loadLogs: (containerId: number, stream?: string, limit?: number, opts?: { skipIfBusy?: boolean }) => Promise<boolean>;
     handleDownloadVisible: (containerName: string) => void;
     handleDownloadLastRun: (containerName: string) => void;
     handleDownloadAll: (containerId: number, containerName: string) => Promise<void>;
@@ -46,14 +47,24 @@ export function useContainerLogs(): ContainerLogsState {
     // Monotonic request id — guards against out-of-order responses clobbering
     // newer logs (e.g. a slow request resolving after a newer one).
     const loadSeqRef = useRef(0);
+    // Whether a loadLogs request is in flight — lets pollers avoid stacking
+    // requests behind a slow endpoint.
+    const inFlightRef = useRef(false);
 
     useEffect(() => {
         logLimitRef.current = logLimit;
     }, [logLimit]);
 
     const loadLogs = useCallback(
-        async (containerId: number, stream?: string, limit?: number) => {
+        async (
+            containerId: number,
+            stream?: string,
+            limit?: number,
+            opts?: { skipIfBusy?: boolean },
+        ): Promise<boolean> => {
+            if (opts?.skipIfBusy && inFlightRef.current) return false;
             const seq = ++loadSeqRef.current;
+            inFlightRef.current = true;
             setLogsLoading(true);
             setLogsError(null);
             const params: { limit: number; stream?: string } = {
@@ -63,14 +74,17 @@ export function useContainerLogs(): ContainerLogsState {
             const [logRes, lcRes] = await Promise.all([
                 reqGetContainerLogs(containerId, params),
                 reqGetLifecycleLogs(containerId, { limit: params.limit }),
-            ]);
+            ]).finally(() => {
+                if (seq === loadSeqRef.current) inFlightRef.current = false;
+            });
+            const ok = logRes.success || lcRes.success;
             // A newer loadLogs superseded this one — discard the stale result.
-            if (seq !== loadSeqRef.current) return;
+            if (seq !== loadSeqRef.current) return ok;
             const dbLogs = logRes.success ? (logRes.data ?? []) : [];
             const lcLogs = lcRes.success
                 ? (lcRes.data ?? []).map(lifecycleToContainerLog)
                 : [];
-            if (logRes.success || lcRes.success) {
+            if (ok) {
                 const seen = new Set<string>();
                 const unique = [...dbLogs, ...lcLogs].filter((l) => {
                     const key = `${l.recorded_at}|${l.message}`;
@@ -84,6 +98,7 @@ export function useContainerLogs(): ContainerLogsState {
                 setLogsError(errMsg ?? "Failed to load logs");
             }
             setLogsLoading(false);
+            return ok;
         },
         [],
     );

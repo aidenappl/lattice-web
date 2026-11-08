@@ -35,6 +35,7 @@ import { useAdminSocket, AdminSocketEvent } from "@/hooks/useAdminSocket";
 import { useWorkerLiveness } from "@/hooks/useWorkerLiveness";
 import { useContainerLogs } from "@/hooks/useContainerLogs";
 import { usePoll } from "@/hooks/usePoll";
+import { useBackoffPoll } from "@/hooks/useBackoffPoll";
 import { WorkerOfflineBanner } from "@/components/ui/worker-offline-banner";
 import { Alert } from "@/components/ui/alert";
 import { useConfirm } from "@/components/ui/confirm-modal";
@@ -146,6 +147,12 @@ export default function ContainerDetailPage() {
     loadLogs(id, streamFilter);
   }, [id, streamFilter, loadLogs]);
 
+  // Background log poll: never overlaps an in-flight request
+  const pollLogs = useCallback(
+    () => loadLogs(id, streamFilter, undefined, { skipIfBusy: true }),
+    [id, streamFilter, loadLogs],
+  );
+
   // WebSocket: refresh on events matching this container
   const handleSocketEvent = useCallback(
     (event: AdminSocketEvent) => {
@@ -213,14 +220,12 @@ export default function ContainerDetailPage() {
     loadLogsForContainer();
   }, [loadContainer, loadLogsForContainer]);
 
-  // 10s polling via usePoll
-  usePoll(
-    useCallback(() => {
-      loadContainer();
-      if (tab === "logs") loadLogsForContainer();
-    }, [loadContainer, loadLogsForContainer, tab]),
-    10000,
-  );
+  // 10s container polling via usePoll
+  usePoll(loadContainer, 10000);
+
+  // Logs poll every 10s on the logs tab, backing off exponentially after
+  // failures (timeouts) and pausing while the browser tab is hidden
+  useBackoffPoll(pollLogs, 10000, tab === "logs");
 
   const router = useRouter();
   const handleDelete = async () => {
