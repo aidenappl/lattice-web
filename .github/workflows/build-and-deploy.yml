@@ -139,6 +139,8 @@ jobs:
             type=ref,event=branch
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
+            # The release version (vX.Y.Z), so lattice_update_web {version} can pin and roll back (APL-122).
+            type=raw,value=${{ needs.resolve-version.outputs.version }},enable=${{ needs.resolve-version.outputs.is_release == 'true' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
