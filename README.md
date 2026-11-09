@@ -133,7 +133,7 @@ the `lattice-csrf` cookie back as an `X-CSRF-Token` header. Full detail in [`AGE
 
 Not Vercel. CI (`.github/workflows/build-and-deploy.yml`) builds a multi-stage `node:20-alpine`
 standalone image (non-root `nextjs` user, port 3000, `wget /api/health` healthcheck) and pushes it
-to `registry.appleby.cloud/lattice-web:latest` — registry creds and `NEXT_PUBLIC_LATTICE_API` are
+to `registry.appleby.cloud/lattice-web` (`:latest`, `:main-<sha>`, and `:vX.Y.Z` on releases) — registry creds and `NEXT_PUBLIC_LATTICE_API` are
 injected from **Keyring** via `keyring-actions`. It runs on the fleet via **Lattice/Portainer**.
 Because `NEXT_PUBLIC_*` is baked at build time, changing the API URL requires a rebuild.
 

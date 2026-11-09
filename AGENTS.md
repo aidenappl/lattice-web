@@ -599,9 +599,11 @@ deliberately not `running`, which is green because it means a healthy container.
 
 - **Deployment target: self-hosted Docker, NOT Vercel.** CI
   (`.github/workflows/build-and-deploy.yml`) builds a multi-stage image and pushes it to the private
-  registry (`registry.appleby.cloud/lattice-web:latest`). Version is
+  registry as `:latest`, `:main` and `:main-<sha>`, plus `:vX.Y.Z` on a release build (APL-122). Version is
   resolved from the commit (`[release-patch|minor|major]` tags cut a GitHub release; otherwise the
-  short SHA), injected as `NEXT_PUBLIC_APP_VERSION`. Registry creds + `NEXT_PUBLIC_LATTICE_API` come
+  short SHA), injected as `NEXT_PUBLIC_APP_VERSION`. The `vX.Y.Z` tag is what lets
+  `lattice_update_web {version: "vX.Y.Z"}` pin or roll back by version; releases before v1.8.10
+  only have their `main-<sha>` tag. Registry creds + `NEXT_PUBLIC_LATTICE_API` come
   from **Keyring** via `keyring-actions`.
 - **CI stops at the registry — it does NOT deploy.** Unlike every other web app in the ecosystem,
   this repo has **no `Deploy to Lattice` step** and there is **no Lattice-managed container** for it
@@ -616,9 +618,11 @@ deliberately not `running`, which is green because it means a healthy container.
   or the endpoint directly. `WEB_SERVICE_NAME` defaults to `lattice-web`.
   So after a green CI run the new image sits in the registry until someone triggers that update —
   a push alone changes nothing in production.
-  ⚠️ Production compose **must** use `image: registry.appleby.cloud/lattice-web:latest`, not
+  ⚠️ Production compose **must** pull an image,
+  `image: ${REGISTRY_URL:-registry.appleby.cloud}/lattice-web:${LATTICE_WEB_TAG:-latest}`, not
   `build: ../lattice-web`; with `build:` the pull is a no-op and self-update silently does nothing
-  (see the comment at `lattice-api/docker-compose.yml:41-43`).
+  (see the comment at `lattice-api/docker-compose.yml:41-43`). `LATTICE_WEB_TAG` lives in the
+  compose `.env` and is written by a versioned `lattice_update_web`.
 - **Container:** `node:20-alpine`, two-stage build, `output: "standalone"`, non-root `nextjs`
   user (UID 1001), `EXPOSE 3000`, `PORT=3000`, `HOSTNAME=0.0.0.0`, `CMD ["node", "server.js"]` (the
   Next.js **standalone** `server.js`, distinct from the repo-root dev `server.js`).
