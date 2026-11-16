@@ -585,6 +585,19 @@ deliberately not `running`, which is green because it means a healthy container.
 
 ## Operations
 
+### Lattice releases
+
+A push to `main` is a **release** only when the head commit message (the merge subject) contains
+`[release-patch]`, `[release-minor]` or `[release-major]`: CI bumps the latest `vX.Y.Z` tag, tags the
+image with it and creates the GitHub release. Without a marker CI still builds and pushes a
+SHA-tagged image, but `create-release` is skipped and nothing is released.
+
+**Merged but unreleased is not shipped.** lattice-web ships through Lattice self-update by version (`lattice_update_web {version}`), so an unreleased merge never reaches lattice.appleby.cloud. Since HV-138 the resolve-version job says so: a main
+push without a marker gets a `::warning::` annotation ("Built <sha> but no release was cut: the merge
+subject had no [release-patch|minor|major]. Nothing will deploy by version.") and the same text in
+the run's job summary. If you see it and meant to ship, land a follow-up commit or merge whose
+subject carries the marker.
+
 - **CI runners:** every GitHub Actions job runs on `[self-hosted, lattice-worker]` — a
   single-use runner started by `aidenappl/gh-runner-broker` on the CI host (`aplb-actions`,
   10.15.10.78), with the toolchain and shared Go/npm caches provisioned by
@@ -744,6 +757,9 @@ dev check          # optional but recommended: eslint + prettier --check + tsc -
 - CI enforces the first two: `build-and-deploy.yml` has a **`test` job** (`npx tsc --noEmit` +
   `npm test`) that `build-and-push` depends on, so a type error or a failing test blocks the image
   entirely — nothing is published.
+- **Every PR into `main` runs `pr-check.yml`** (APL-112): `npm ci`, `npx vitest run`,
+  `npx tsc --noEmit` and a full `npx next build` (placeholder `NEXT_PUBLIC_LATTICE_API`, no secrets),
+  on the same runners as build-and-deploy (`LATTICE_CI_RUNS_ON`). It must be green before merge.
 - **Commit messages reach the shell.** The `resolve-version` job reads the message to detect
   `[release-*]`. It takes it via a `env: MSG:` binding *on purpose*: interpolated inline as
   `MSG="${{ github.event.head_commit.message }}"`, a message containing a quote or paren is pasted
