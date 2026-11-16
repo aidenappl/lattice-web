@@ -137,6 +137,11 @@ to `registry.appleby.cloud/lattice-web` (`:latest`, `:main-<sha>`, and `:vX.Y.Z`
 injected from **Keyring** via `keyring-actions`. It runs on the fleet via **Lattice/Portainer**.
 Because `NEXT_PUBLIC_*` is baked at build time, changing the API URL requires a rebuild.
 
+Pull requests into `main` run **PR check** (`.github/workflows/pr-check.yml`: tests, typecheck,
+`next build`). Only a merge whose subject carries `[release-patch|minor|major]` is a release; any
+other main push builds an image, warns "no release was cut" in the run, and ships nothing (see
+AGENTS.md, "Lattice releases").
+
 ## Contributing & further reading
 
 - **[`AGENTS.md`](./AGENTS.md)** — the authoritative deep reference: full page map, service map,
